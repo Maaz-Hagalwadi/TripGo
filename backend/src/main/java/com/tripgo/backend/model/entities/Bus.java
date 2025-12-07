@@ -7,6 +7,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -41,8 +42,14 @@ public class Bus {
     @Column(name = "total_seats", nullable = false)
     private Integer totalSeats;
 
-    @Column(columnDefinition = "jsonb")
-    private String amenities;
+    @ManyToMany
+    @JoinTable(
+            name = "bus_amenities",
+            joinColumns = @JoinColumn(name = "bus_id"),
+            inverseJoinColumns = @JoinColumn(name = "amenity_id")
+    )
+    private List<AmenityMaster> amenities;
+
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

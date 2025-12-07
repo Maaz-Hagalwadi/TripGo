@@ -11,7 +11,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 @Entity
-@Table(name = "bookings")//mmmdm
+@Table(name = "bookings")
 @Getter
 @Setter
 @NoArgsConstructor
