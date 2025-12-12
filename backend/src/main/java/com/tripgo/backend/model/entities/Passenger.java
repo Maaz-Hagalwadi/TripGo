@@ -20,8 +20,7 @@ public class Passenger {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
-
-    // Optional: user can store saved passenger profiles
+    
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
     private User user;
