@@ -3,6 +3,8 @@ package com.tripgo.backend.service.impl;
 import com.tripgo.backend.dto.request.LoginRequest;
 import com.tripgo.backend.dto.request.RegisterRequest;
 import com.tripgo.backend.dto.response.AuthResponse;
+import com.tripgo.backend.exception.BadRequestException;
+import com.tripgo.backend.exception.ResourceNotFoundException;
 import com.tripgo.backend.model.entities.Role;
 import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.model.enums.RoleType;
@@ -15,6 +17,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import com.tripgo.backend.security.service.CustomUserDetails;
+
 
 import java.util.Set;
 
@@ -32,15 +36,15 @@ public class AuthenticationService {
     public AuthResponse register(RegisterRequest request) {
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email already in use");
+            throw new BadRequestException("Email already in use");
         }
 
         if (userRepository.existsByPhone(request.getPhone())) {
-            throw new RuntimeException("Phone already in use");
+            throw new BadRequestException("Phone already in use");
         }
 
         Role userRole = roleRepository.findByName(RoleType.ROLE_USER)
-                .orElseThrow(() -> new RuntimeException("ROLE_USER not found"));
+                .orElseThrow(() -> new BadRequestException("ROLE_USER not found"));
 
         User user = User.builder()
                 .firstName(request.getFirstName())
@@ -93,7 +97,7 @@ public class AuthenticationService {
         User user = userRepository.findByEmailOrPhone(
                 request.getEmailOrPhone(),
                 request.getEmailOrPhone()
-        ).orElseThrow(() -> new RuntimeException("User not found"));
+        ).orElseThrow(() -> new BadRequestException("User not found"));
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
@@ -111,29 +115,30 @@ public class AuthenticationService {
     public AuthResponse refreshToken(String refreshToken) {
 
         if (!jwtTokenProvider.validateToken(refreshToken)) {
-            throw new RuntimeException("Invalid or expired refresh token");
+            throw new BadRequestException("Invalid or expired refresh token");
         }
 
-        // extract email from refresh token
         String username = jwtTokenProvider.getUsernameFromToken(refreshToken);
 
         User user = userRepository.findByEmailOrPhone(username, username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // manually create an Authentication object
-        UsernamePasswordAuthenticationToken auth =
-                new UsernamePasswordAuthenticationToken(username, null,
-                        user.getRoles().stream()
-                                .map(r -> new org.springframework.security.core.authority.SimpleGrantedAuthority(r.getName().name()))
-                                .toList()
+        // 👉 Wrap User into CustomUserDetails
+        CustomUserDetails userDetails = new CustomUserDetails(user);
+
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(
+                        userDetails,
+                        null,
+                        userDetails.getAuthorities()
                 );
 
-        // generate new access token
-        String newAccessToken = jwtTokenProvider.generateAccessToken(auth);
+        String newAccessToken = jwtTokenProvider.generateAccessToken(authentication);
 
         return AuthResponse.builder()
                 .accessToken(newAccessToken)
-                .refreshToken(refreshToken) // SAME refresh token is returned
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
                 .userId(user.getId().toString())
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())
@@ -142,6 +147,7 @@ public class AuthenticationService {
                 .roles(user.getRoles().stream().map(r -> r.getName().name()).toList())
                 .build();
     }
+
 
 
 }

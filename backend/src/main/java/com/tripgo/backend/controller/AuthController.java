@@ -29,6 +29,11 @@ public class AuthController {
         return ResponseEntity.ok(response);
     }
 
+    @GetMapping("/test")
+    public String testApi(){
+        return "Successfully validated with api";
+    }
+
     @PostMapping("/refresh-token")
     public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
         AuthResponse response = authService.refreshToken(request.getRefreshToken());
