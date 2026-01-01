@@ -3,6 +3,7 @@ package com.tripgo.backend.security.jwt;
 import com.tripgo.backend.security.service.CustomUserDetailsService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -28,18 +29,36 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                                     FilterChain filterChain)
             throws ServletException, IOException {
 
-        String authHeader = request.getHeader("Authorization");
-
         String token = null;
         String username = null;
 
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            token = authHeader.substring(7);
-
-            username = jwtTokenProvider.getUsernameFromToken(token);
+        // 1️⃣ FIRST: Try to get JWT from cookie
+        if (request.getCookies() != null) {
+            for (Cookie cookie : request.getCookies()) {
+                if ("ACCESS_TOKEN".equals(cookie.getName())) {
+                    token = cookie.getValue();
+                    break;
+                }
+            }
         }
 
-        if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+        // 2️⃣ OPTIONAL FALLBACK: Authorization header (Postman / mobile)
+        if (token == null) {
+            String authHeader = request.getHeader("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                token = authHeader.substring(7);
+            }
+        }
+
+        // 3️⃣ Validate token & authenticate
+        if (token != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+
+            try {
+                username = jwtTokenProvider.getUsernameFromToken(token);
+            } catch (Exception e) {
+                filterChain.doFilter(request, response);
+                return;
+            }
 
             UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
 
