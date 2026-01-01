@@ -1,5 +1,6 @@
 package com.tripgo.backend.security.config;
 
+import com.tripgo.backend.security.OAuth2SuccessHandler;
 import com.tripgo.backend.security.jwt.JwtAuthenticationEntryPoint;
 import com.tripgo.backend.security.jwt.JwtAuthenticationFilter;
 import com.tripgo.backend.security.service.CustomUserDetailsService;
@@ -26,6 +27,7 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CustomUserDetailsService customUserDetailsService;
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
+    private final OAuth2SuccessHandler oAuth2SuccessHandler;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http)throws Exception {
@@ -36,10 +38,13 @@ public class SecurityConfig {
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth->auth
-                        .requestMatchers("/auth/**","/error").permitAll()
+                        .requestMatchers("/auth/**","/error","/login/**","/login/oauth2/**").permitAll()
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+                .oauth2Login(oauth -> oauth
+                        .successHandler(oAuth2SuccessHandler)
+                );
         return http.build();
     }
 
