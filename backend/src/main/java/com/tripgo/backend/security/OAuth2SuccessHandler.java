@@ -7,6 +7,7 @@ import com.tripgo.backend.security.service.CustomUserDetails;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.core.user.OAuth2User;
@@ -30,11 +31,10 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
 
         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
 
-        // 🔹 Extract details from Google
+        // 1️⃣ Extract user details
         String email = oAuth2User.getAttribute("email");
         String fullName = oAuth2User.getAttribute("name");
 
-        // 🔹 Split name safely
         String firstName;
         String lastName;
 
@@ -46,7 +46,7 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
             firstName = fullName;
         }
 
-        // 🔹 Find or create user
+        // 2️⃣ Find or create Tripgo user
         User user = userRepository.findByEmail(email)
                 .orElseGet(() -> userRepository.save(
                         User.builder()
@@ -55,11 +55,11 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
                                 .firstName(firstName)
                                 .lastName(lastName)
                                 .isEmailVerified(true)
-                                .password(null) // OAuth users don't have passwords
+                                .password(null)
                                 .build()
                 ));
 
-        // 🔹 Convert to Spring Security principal
+        // 3️⃣ Create Authentication for JWT
         CustomUserDetails userDetails = new CustomUserDetails(user);
 
         Authentication authToken =
@@ -69,11 +69,21 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
                         userDetails.getAuthorities()
                 );
 
+        // 4️⃣ Generate JWT
         String accessToken = jwtTokenProvider.generateAccessToken(authToken);
 
+        // 5️⃣ Store JWT in HTTP-only cookie
+        ResponseCookie accessTokenCookie = ResponseCookie.from("ACCESS_TOKEN", accessToken)
+                .httpOnly(true)
+                .secure(false)           // ⚠️ true in production (HTTPS)
+                .path("/")
+                .maxAge(15 * 60)
+                .sameSite("Strict")
+                .build();
 
-        response.sendRedirect(
-                "http://localhost:3000/oauth2/success?token=" + accessToken
-        );
+        response.addHeader("Set-Cookie", accessTokenCookie.toString());
+
+        // 6️⃣ Redirect to frontend
+        response.sendRedirect("http://localhost:3000");
     }
 }
