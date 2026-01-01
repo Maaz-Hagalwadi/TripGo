@@ -31,7 +31,6 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
 
         OAuth2User oAuth2User = (OAuth2User) authentication.getPrincipal();
 
-        // 1️⃣ Extract user details
         String email = oAuth2User.getAttribute("email");
         String fullName = oAuth2User.getAttribute("name");
 
@@ -46,7 +45,6 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
             firstName = fullName;
         }
 
-        // 2️⃣ Find or create Tripgo user
         User user = userRepository.findByEmail(email)
                 .orElseGet(() -> userRepository.save(
                         User.builder()
@@ -75,7 +73,7 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
         // 5️⃣ Store JWT in HTTP-only cookie
         ResponseCookie accessTokenCookie = ResponseCookie.from("ACCESS_TOKEN", accessToken)
                 .httpOnly(true)
-                .secure(false)           // ⚠️ true in production (HTTPS)
+                .secure(false)
                 .path("/")
                 .maxAge(15 * 60)
                 .sameSite("Strict")
