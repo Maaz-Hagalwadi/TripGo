@@ -4,9 +4,11 @@ import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.repository.UserRepository;
 import com.tripgo.backend.security.jwt.JwtTokenProvider;
 import com.tripgo.backend.security.service.CustomUserDetails;
+import com.tripgo.backend.security.service.RefreshTokenService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -15,13 +17,16 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-
 @Component
 @RequiredArgsConstructor
 public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
 
     private final JwtTokenProvider jwtTokenProvider;
     private final UserRepository userRepository;
+    private final RefreshTokenService refreshTokenService;
+
+    @Value("${app.jwt.refresh-token-expiration}")
+    private long refreshTokenExpirationMs;
 
     @Override
     public void onAuthenticationSuccess(
@@ -34,16 +39,13 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
         String email = oAuth2User.getAttribute("email");
         String fullName = oAuth2User.getAttribute("name");
 
-        String firstName;
-        String lastName;
+        String firstName = fullName != null && fullName.contains(" ")
+                ? fullName.substring(0, fullName.indexOf(" "))
+                : fullName;
 
-        if (fullName != null && fullName.contains(" ")) {
-            firstName = fullName.substring(0, fullName.indexOf(" "));
-            lastName = fullName.substring(fullName.indexOf(" ") + 1);
-        } else {
-            lastName = "";
-            firstName = fullName;
-        }
+        String lastName = fullName != null && fullName.contains(" ")
+                ? fullName.substring(fullName.indexOf(" ") + 1)
+                : "";
 
         User user = userRepository.findByEmail(email)
                 .orElseGet(() -> userRepository.save(
@@ -57,7 +59,6 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
                                 .build()
                 ));
 
-        // 3️⃣ Create Authentication for JWT
         CustomUserDetails userDetails = new CustomUserDetails(user);
 
         Authentication authToken =
@@ -67,21 +68,39 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
                         userDetails.getAuthorities()
                 );
 
-        // 4️⃣ Generate JWT
+        if (response.isCommitted()) {
+            return;
+        }
+
+        // 🔹 Generate tokens
         String accessToken = jwtTokenProvider.generateAccessToken(authToken);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(authToken);
 
-        // 5️⃣ Store JWT in HTTP-only cookie
-        ResponseCookie accessTokenCookie = ResponseCookie.from("ACCESS_TOKEN", accessToken)
-                .httpOnly(true)
-                .secure(false)
-                .path("/")
-                .maxAge(15 * 60)
-                .sameSite("Strict")
-                .build();
+        // 🔹 Store refresh token in DB
+        refreshTokenService.createRefreshToken(user, refreshToken);
 
-        response.addHeader("Set-Cookie", accessTokenCookie.toString());
+        // 🔹 Access token cookie
+        response.addHeader("Set-Cookie",
+                ResponseCookie.from("ACCESS_TOKEN", accessToken)
+                        .httpOnly(true)
+                        .secure(false)
+                        .path("/")
+                        .maxAge(15 * 60)
+                        .sameSite("Strict")
+                        .build().toString()
+        );
 
-        // 6️⃣ Redirect to frontend
+        // 🔹 Refresh token cookie (VERY IMPORTANT)
+        response.addHeader("Set-Cookie",
+                ResponseCookie.from("REFRESH_TOKEN", refreshToken)
+                        .httpOnly(true)
+                        .secure(false)
+                        .path("/auth/refresh")
+                        .maxAge(refreshTokenExpirationMs / 1000)
+                        .sameSite("Strict")
+                        .build().toString()
+        );
+
         response.sendRedirect("http://localhost:3000");
     }
 }
