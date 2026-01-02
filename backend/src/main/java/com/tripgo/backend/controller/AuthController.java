@@ -6,6 +6,7 @@ import com.tripgo.backend.dto.request.RegisterRequest;
 import com.tripgo.backend.dto.response.AuthResponse;
 import com.tripgo.backend.model.entities.RefreshToken;
 import com.tripgo.backend.model.entities.User;
+import com.tripgo.backend.repository.RefreshTokenRepository;
 import com.tripgo.backend.security.jwt.JwtTokenProvider;
 import com.tripgo.backend.security.service.CustomUserDetails;
 import com.tripgo.backend.security.service.RefreshTokenService;
@@ -29,6 +30,7 @@ public class AuthController {
     private final AuthenticationService authService;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenService refreshTokenService;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
@@ -94,6 +96,44 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(HttpServletRequest request,
+                                       HttpServletResponse response) {
+
+        String refreshToken = getCookieValue(request, "REFRESH_TOKEN");
+
+        // 🔹 Revoke refresh token ONLY if present
+        if (refreshToken != null) {
+            refreshTokenRepository
+                    .findByTokenAndRevokedFalse(refreshToken)
+                    .ifPresent(refreshTokenService::revokeToken);
+        }
+
+        // 🔹 Clear ACCESS_TOKEN cookie
+        response.addHeader("Set-Cookie",
+                ResponseCookie.from("ACCESS_TOKEN", "")
+                        .httpOnly(true)
+                        .path("/")
+                        .maxAge(0)
+                        .sameSite("Strict")
+                        .build().toString()
+        );
+
+        // 🔹 Clear REFRESH_TOKEN cookie
+        response.addHeader("Set-Cookie",
+                ResponseCookie.from("REFRESH_TOKEN", "")
+                        .httpOnly(true)
+                        .path("/auth/refresh")
+                        .maxAge(0)
+                        .sameSite("Strict")
+                        .build().toString()
+        );
+
+        return ResponseEntity.ok().build();
+    }
+
+
+
     private String extractCookie(HttpServletRequest request, String name) {
         if (request.getCookies() == null) {
             throw new RuntimeException("No cookies found");
@@ -105,6 +145,18 @@ public class AuthController {
         }
         throw new RuntimeException("Cookie not found");
     }
+
+    private String getCookieValue(HttpServletRequest request, String name) {
+        if (request.getCookies() == null) return null;
+
+        for (Cookie cookie : request.getCookies()) {
+            if (name.equals(cookie.getName())) {
+                return cookie.getValue();
+            }
+        }
+        return null;
+    }
+
 
 
 }
