@@ -5,12 +5,14 @@ import com.tripgo.backend.dto.request.RegisterRequest;
 import com.tripgo.backend.dto.response.AuthResponse;
 import com.tripgo.backend.exception.BadRequestException;
 import com.tripgo.backend.exception.ResourceNotFoundException;
+import com.tripgo.backend.model.entities.EmailVerificationToken;
 import com.tripgo.backend.model.entities.Role;
 import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.model.enums.RoleType;
 import com.tripgo.backend.repository.RoleRepository;
 import com.tripgo.backend.repository.UserRepository;
 import com.tripgo.backend.security.jwt.JwtTokenProvider;
+import com.tripgo.backend.security.service.EmailVerificationService;
 import com.tripgo.backend.security.service.RefreshTokenService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +39,8 @@ public class AuthenticationService {
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenService refreshTokenService;
+    private final EmailVerificationService emailVerificationService;
+    private final EmailService emailService;
 
     @Value("${app.jwt.access-token-expiration}")
     private long accessTokenExpirationMs;
@@ -60,6 +64,12 @@ public class AuthenticationService {
 
         CustomUserDetails userDetails =
                 (CustomUserDetails) authentication.getPrincipal();
+
+        User user = userDetails.getUser();
+
+        if (!user.isEmailVerified()) {
+            throw new RuntimeException("Please verify your email before login");
+        }
 
         // 🔹 Generate tokens
         String accessToken = jwtTokenProvider.generateAccessToken(authentication);
@@ -115,9 +125,18 @@ public class AuthenticationService {
                 .phone(request.getPhone())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .roles(Set.of(userRole))
+                .isEmailVerified(false)
                 .build();
 
         userRepository.save(user);
+
+        EmailVerificationToken token =
+                emailVerificationService.createToken(user);
+
+        emailService.sendVerificationEmail(
+                user.getEmail(),
+                "http://localhost:8080/auth/verify-email?token=" + token.getToken()
+        );
 
         // Auto-login using email
         Authentication auth = authenticationManager.authenticate(

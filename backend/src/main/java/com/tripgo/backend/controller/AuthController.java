@@ -4,11 +4,14 @@ import com.tripgo.backend.dto.request.LoginRequest;
 import com.tripgo.backend.dto.request.RefreshTokenRequest;
 import com.tripgo.backend.dto.request.RegisterRequest;
 import com.tripgo.backend.dto.response.AuthResponse;
+import com.tripgo.backend.model.entities.EmailVerificationToken;
 import com.tripgo.backend.model.entities.RefreshToken;
 import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.repository.RefreshTokenRepository;
+import com.tripgo.backend.repository.UserRepository;
 import com.tripgo.backend.security.jwt.JwtTokenProvider;
 import com.tripgo.backend.security.service.CustomUserDetails;
+import com.tripgo.backend.security.service.EmailVerificationService;
 import com.tripgo.backend.security.service.RefreshTokenService;
 import com.tripgo.backend.service.impl.AuthenticationService;
 import jakarta.servlet.http.Cookie;
@@ -33,12 +36,15 @@ public class AuthController {
     private final JwtTokenProvider jwtTokenProvider;
     private final RefreshTokenService refreshTokenService;
     private final RefreshTokenRepository refreshTokenRepository;
+    private final EmailVerificationService emailVerificationService;
+    private final UserRepository userRepository;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
-        AuthResponse response = authService.register(request);
-        return ResponseEntity.ok(response);
+    public ResponseEntity<String> register(@Valid @RequestBody RegisterRequest request) {
+        authService.register(request);
+        return ResponseEntity.ok("Registration successful. Please verify your email.");
     }
+
 
     @PostMapping("/login")
     public ResponseEntity<Map<String, String>> login(@Valid @RequestBody LoginRequest request,
@@ -141,6 +147,23 @@ public class AuthController {
 
         return ResponseEntity.ok().build();
     }
+
+    @GetMapping("/verify-email")
+    public ResponseEntity<String> verifyEmail(@RequestParam String token) {
+
+        EmailVerificationToken verificationToken =
+                emailVerificationService.validateToken(token);
+
+        User user = verificationToken.getUser();
+
+        user.setEmailVerified(true);
+        userRepository.save(user);
+
+        emailVerificationService.markUsed(verificationToken);
+
+        return ResponseEntity.ok("Email verified successfully");
+    }
+
 
 
 
