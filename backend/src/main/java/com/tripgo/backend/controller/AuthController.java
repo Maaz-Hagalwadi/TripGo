@@ -3,8 +3,10 @@ package com.tripgo.backend.controller;
 import com.tripgo.backend.dto.request.LoginRequest;
 import com.tripgo.backend.dto.request.RefreshTokenRequest;
 import com.tripgo.backend.dto.request.RegisterRequest;
+import com.tripgo.backend.dto.request.ResetPasswordRequest;
 import com.tripgo.backend.dto.response.AuthResponse;
 import com.tripgo.backend.model.entities.EmailVerificationToken;
+import com.tripgo.backend.model.entities.PasswordResetToken;
 import com.tripgo.backend.model.entities.RefreshToken;
 import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.repository.RefreshTokenRepository;
@@ -14,6 +16,8 @@ import com.tripgo.backend.security.service.CustomUserDetails;
 import com.tripgo.backend.security.service.EmailVerificationService;
 import com.tripgo.backend.security.service.RefreshTokenService;
 import com.tripgo.backend.service.impl.AuthenticationService;
+import com.tripgo.backend.service.impl.EmailService;
+import com.tripgo.backend.service.impl.PasswordResetService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -23,8 +27,10 @@ import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
 import java.util.Map;
 
 @RestController
@@ -38,6 +44,9 @@ public class AuthController {
     private final RefreshTokenRepository refreshTokenRepository;
     private final EmailVerificationService emailVerificationService;
     private final UserRepository userRepository;
+    private final PasswordResetService passwordResetService;
+    private final EmailService emailService;
+    private final PasswordEncoder passwordEncoder;
 
     @PostMapping("/register")
     public ResponseEntity<String> register(@Valid @RequestBody RegisterRequest request) {
@@ -163,6 +172,59 @@ public class AuthController {
 
         return ResponseEntity.ok("Email verified successfully");
     }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Void> forgotPassword(@RequestParam String email) {
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        PasswordResetToken token = passwordResetService.createToken(user);
+
+        emailService.sendVerificationEmail(
+                user.getEmail(),
+                "http://localhost:8080/auth/reset-password?token=" + token.getToken()
+        );
+
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Void> resetPassword(
+            @RequestBody ResetPasswordRequest request) {
+
+        PasswordResetToken resetToken =
+                passwordResetService.validateToken(request.getToken());
+
+        User user = resetToken.getUser();
+        if (user.getPassword() == null) {
+            throw new RuntimeException("Password reset not allowed for OAuth users");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        passwordResetService.markUsed(resetToken);
+
+        refreshTokenService.revokeAllForUser(user);
+
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/reset-password")
+    public void validateResetToken(@RequestParam String token,
+                                   HttpServletResponse response) throws IOException {
+
+        // Validate token (no password change here)
+        passwordResetService.validateToken(token);
+
+        // Redirect to frontend reset-password page
+        response.sendRedirect(
+                "http://localhost:3000/reset-password?token=" + token
+        );
+    }
+
+
 
 
 
