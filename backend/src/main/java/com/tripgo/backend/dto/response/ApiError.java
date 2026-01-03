@@ -1,4 +1,4 @@
-package com.tripgo.backend.exception;
+package com.tripgo.backend.dto.response;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

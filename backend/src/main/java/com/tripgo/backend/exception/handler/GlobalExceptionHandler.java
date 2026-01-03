@@ -1,6 +1,7 @@
 package com.tripgo.backend.exception.handler;
 
-import com.tripgo.backend.exception.ApiError;
+import com.tripgo.backend.dto.response.ApiError;
+import com.tripgo.backend.exception.BadRequestException;
 import com.tripgo.backend.exception.BadRequestException;
 import com.tripgo.backend.exception.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
