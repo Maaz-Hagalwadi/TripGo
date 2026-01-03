@@ -22,6 +22,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -39,10 +41,16 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        AuthResponse response = authService.login(request);
-        return ResponseEntity.ok(response);
+    public ResponseEntity<Map<String, String>> login(@Valid @RequestBody LoginRequest request,
+                                      HttpServletResponse response) {
+
+        authService.login(request, response);
+        return ResponseEntity.ok(
+                Map.of("message", "Login successful")
+        );
+
     }
+
 
     @GetMapping("/test")
     public String testApi(){
@@ -50,7 +58,7 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<Void> refresh(HttpServletRequest request,
+    public ResponseEntity<Map<String, String>> refresh(HttpServletRequest request,
                                         HttpServletResponse response) {
 
         String refreshToken = extractCookie(request, "REFRESH_TOKEN");
@@ -93,7 +101,9 @@ public class AuthController {
                         .build().toString()
         );
 
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(
+                Map.of("message", "Token refreshed")
+        );
     }
 
     @PostMapping("/logout")

@@ -11,8 +11,13 @@ import com.tripgo.backend.model.enums.RoleType;
 import com.tripgo.backend.repository.RoleRepository;
 import com.tripgo.backend.repository.UserRepository;
 import com.tripgo.backend.security.jwt.JwtTokenProvider;
+import com.tripgo.backend.security.service.RefreshTokenService;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.ResponseCookie;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,6 +36,63 @@ public class AuthenticationService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
+    private final RefreshTokenService refreshTokenService;
+
+    @Value("${app.jwt.access-token-expiration}")
+    private long accessTokenExpirationMs;
+
+    @Value("${app.jwt.refresh-token-expiration}")
+    private long refreshTokenExpirationMs;
+
+    public void login(LoginRequest request, HttpServletResponse response) {
+        Authentication authentication;
+        try {
+             authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.getEmailOrPhone(),
+                            request.getPassword()
+                    )
+            );
+        } catch (BadCredentialsException ex) {
+            //invalid username/password
+            throw new BadCredentialsException("Invalid email or password");
+        }
+
+        CustomUserDetails userDetails =
+                (CustomUserDetails) authentication.getPrincipal();
+
+        // 🔹 Generate tokens
+        String accessToken = jwtTokenProvider.generateAccessToken(authentication);
+        String refreshToken = jwtTokenProvider.generateRefreshToken(authentication);
+
+        // 🔹 Store refresh token in DB
+        refreshTokenService.createRefreshToken(
+                userDetails.getUser(),
+                refreshToken
+        );
+
+        // 🔹 Set ACCESS_TOKEN cookie
+        response.addHeader("Set-Cookie",
+                ResponseCookie.from("ACCESS_TOKEN", accessToken)
+                        .httpOnly(true)
+                        .secure(false) // true in prod
+                        .path("/")
+                        .maxAge(accessTokenExpirationMs / 1000)
+                        .sameSite("Strict")
+                        .build().toString()
+        );
+
+        // 🔹 Set REFRESH_TOKEN cookie
+        response.addHeader("Set-Cookie",
+                ResponseCookie.from("REFRESH_TOKEN", refreshToken)
+                        .httpOnly(true)
+                        .secure(false)
+                        .path("/auth/refresh")
+                        .maxAge(refreshTokenExpirationMs / 1000)
+                        .sameSite("Strict")
+                        .build().toString()
+        );
+    }
 
 
     public AuthResponse register(RegisterRequest request) {
@@ -67,37 +129,6 @@ public class AuthenticationService {
 
         String accessToken = jwtTokenProvider.generateAccessToken(auth);
         String refreshToken = jwtTokenProvider.generateRefreshToken(auth);
-
-        return AuthResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .tokenType("Bearer")
-                .userId(user.getId().toString())
-                .firstName(user.getFirstName())
-                .lastName(user.getLastName())
-                .email(user.getEmail())
-                .phone(user.getPhone())
-                .roles(user.getRoles().stream().map(r -> r.getName().name()).toList())
-                .build();
-    }
-
-    // 🔥 LOGIN USER
-    public AuthResponse login(LoginRequest request) {
-
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getEmailOrPhone(),
-                        request.getPassword()
-                )
-        );
-
-        String accessToken = jwtTokenProvider.generateAccessToken(authentication);
-        String refreshToken = jwtTokenProvider.generateRefreshToken(authentication);
-
-        User user = userRepository.findByEmailOrPhone(
-                request.getEmailOrPhone(),
-                request.getEmailOrPhone()
-        ).orElseThrow(() -> new BadRequestException("User not found"));
 
         return AuthResponse.builder()
                 .accessToken(accessToken)
