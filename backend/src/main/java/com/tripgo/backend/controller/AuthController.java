@@ -216,6 +216,7 @@ public class AuthController {
                                    HttpServletResponse response) throws IOException {
 
         // Validate token (no password change here)
+        System.out.println(token);
         passwordResetService.validateToken(token);
 
         // Redirect to frontend reset-password page
