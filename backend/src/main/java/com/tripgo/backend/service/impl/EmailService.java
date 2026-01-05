@@ -16,7 +16,6 @@ public class EmailService {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(toEmail);
         message.setSubject("Verify your Tripgo account");
-        System.out.println("Wlecommmemeee");
         message.setText(
                 "Welcome to Tripgo!\n\n" +
                         "Please verify your email by clicking the link below:\n" +
