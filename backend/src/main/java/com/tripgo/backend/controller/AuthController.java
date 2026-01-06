@@ -250,7 +250,7 @@ public class AuthController {
                 return cookie.getValue();
             }
         }
-      
+        return null;
     }
 
 
