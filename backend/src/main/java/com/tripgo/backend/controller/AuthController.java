@@ -216,7 +216,7 @@ public class AuthController {
                                    HttpServletResponse response) throws IOException {
 
         // Validate token (no password change here)
-        
+
         passwordResetService.validateToken(token);
 
         // Redirect to frontend reset-password page
@@ -250,7 +250,7 @@ public class AuthController {
                 return cookie.getValue();
             }
         }
-        return null;
+      
     }
 
 
