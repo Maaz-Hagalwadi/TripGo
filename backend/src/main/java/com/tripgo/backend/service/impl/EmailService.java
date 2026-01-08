@@ -30,17 +30,16 @@ public class EmailService {
     /**
      * For OPERATOR onboarding flow
      */
-    public void sendOperatorVerificationEmail(String toEmail, String verificationLink) {
+    public void sendOperatorVerificationEmail(String to, String verificationLink) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(to);
+        message.setSubject("Verify your Operator Account - Tripgo");
+        message.setText("Welcome Operator!\n\n" +
+                "Please verify your account:\n" +
+                verificationLink + "\n\n" +
+                "Your account is currently under review.");
 
-        String subject = "Verify your TripGo Operator Account";
-
-        String body =
-                "Welcome to TripGo Operator Onboarding!\n\n" +
-                        "Please verify your operator account using the link below:\n\n" +
-                        verificationLink + "\n\n" +
-                        "After verification, your account will be reviewed by our admin team.\n";
-
-        sendEmail(toEmail, subject, body);
+        mailSender.send(message);
     }
 
     /**
