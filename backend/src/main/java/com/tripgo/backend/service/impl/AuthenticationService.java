@@ -62,14 +62,23 @@ public class AuthenticationService {
             throw new BadCredentialsException("Invalid email or password");
         }
 
+
+
         CustomUserDetails userDetails =
                 (CustomUserDetails) authentication.getPrincipal();
 
         User user = userDetails.getUser();
 
+        System.out.println("RAW PW: " + request.getPassword());
+        System.out.println("DB PW: " + user.getPassword());
+        System.out.println("MATCH: " + passwordEncoder.matches(request.getPassword(), user.getPassword()));
+
+
         if (!user.isEmailVerified()) {
             throw new RuntimeException("Please verify your email before login");
         }
+
+
 
         // 🔹 Generate tokens
         String accessToken = jwtTokenProvider.generateAccessToken(authentication);

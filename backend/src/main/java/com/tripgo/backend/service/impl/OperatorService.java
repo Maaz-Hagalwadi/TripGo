@@ -2,6 +2,7 @@ package com.tripgo.backend.service.impl;
 
 import com.tripgo.backend.dto.request.OperatorRegistrationRequest;
 import com.tripgo.backend.dto.response.OperatorRegistrationResponse;
+import com.tripgo.backend.model.entities.EmailVerificationToken;
 import com.tripgo.backend.model.entities.Operator;
 import com.tripgo.backend.model.entities.Role;
 import com.tripgo.backend.model.entities.User;
@@ -10,6 +11,7 @@ import com.tripgo.backend.model.enums.RoleType;
 import com.tripgo.backend.repository.OperatorRepository;
 import com.tripgo.backend.repository.RoleRepository;
 import com.tripgo.backend.repository.UserRepository;
+import com.tripgo.backend.security.service.EmailVerificationService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,6 +27,8 @@ public class OperatorService {
     private final OperatorRepository operatorRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmailVerificationService emailVerificationService;
+    private final EmailService emailService;
 
     @Transactional
     public OperatorRegistrationResponse register(OperatorRegistrationRequest req) {
@@ -58,11 +62,21 @@ public class OperatorService {
                         .build()
         );
 
+        // ➕ GENERATE EMAIL VERIFICATION TOKEN
+        EmailVerificationToken token =
+                emailVerificationService.createToken(user);
+
+        // ➕ SEND VERIFICATION EMAIL
+        emailService.sendOperatorVerificationEmail(
+                user.getEmail(),
+                "http://localhost:8080/auth/verify-email?token=" + token.getToken()
+        );
+
         return new OperatorRegistrationResponse(
                 user.getId(),
                 operator.getId(),
                 operator.getStatus().name(),
-                "Operator registered. Awaiting admin approval."
+                "Operator registered. Please verify email."
         );
     }
 }
