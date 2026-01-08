@@ -1,5 +1,6 @@
 package com.tripgo.backend.model.entities;
 
+import com.tripgo.backend.model.enums.OperatorStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -34,6 +35,11 @@ public class Operator {
     private String contactPhone;
 
     private String address;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status")
+    private OperatorStatus status;
+
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
