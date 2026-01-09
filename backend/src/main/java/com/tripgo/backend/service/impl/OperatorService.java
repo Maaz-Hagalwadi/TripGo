@@ -46,6 +46,8 @@ public class OperatorService {
                         .contactPhone(req.contactPhone())
                         .address(req.address())
                         .status(OperatorStatus.PENDING)
+                        .shortName(req.shortName())
+                        .contactEmail(req.email())
                         .build()
         );
 

@@ -9,6 +9,7 @@ import com.tripgo.backend.model.entities.EmailVerificationToken;
 import com.tripgo.backend.model.entities.PasswordResetToken;
 import com.tripgo.backend.model.entities.RefreshToken;
 import com.tripgo.backend.model.entities.User;
+import com.tripgo.backend.model.enums.RoleType;
 import com.tripgo.backend.repository.RefreshTokenRepository;
 import com.tripgo.backend.repository.UserRepository;
 import com.tripgo.backend.security.jwt.JwtTokenProvider;
@@ -164,6 +165,16 @@ public class AuthController {
                 emailVerificationService.validateToken(token);
 
         User user = verificationToken.getUser();
+        boolean isOperator = user.getRoles().stream()
+                .anyMatch(r -> r.getName() == RoleType.ROLE_OPERATOR);
+
+
+        // notify admins only for operators
+        if (isOperator) {
+            String adminEmail = "tripgo.admin@gmail.com"; // from env later
+            emailService.notifyAdminsOperatorVerification(user.getOperator());
+        }
+
 
         user.setEmailVerified(true);
         userRepository.save(user);

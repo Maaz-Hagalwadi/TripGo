@@ -8,6 +8,8 @@ public record OperatorRegistrationRequest(
         String password,
         String operatorName,
         String contactPhone,
+        String shortName,
+        String contactEmail,
         String address
 ) {}
 

@@ -6,6 +6,7 @@ import com.tripgo.backend.dto.response.AuthResponse;
 import com.tripgo.backend.exception.BadRequestException;
 import com.tripgo.backend.exception.ResourceNotFoundException;
 import com.tripgo.backend.model.entities.EmailVerificationToken;
+import com.tripgo.backend.model.entities.Operator;
 import com.tripgo.backend.model.entities.Role;
 import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.model.enums.RoleType;
@@ -28,6 +29,8 @@ import com.tripgo.backend.security.service.CustomUserDetails;
 
 
 import java.util.Set;
+
+import static com.tripgo.backend.model.enums.OperatorStatus.*;
 
 @Service
 @RequiredArgsConstructor
@@ -72,6 +75,21 @@ public class AuthenticationService {
 
         if (!user.isEmailVerified()) {
             throw new RuntimeException("Please verify your email before login");
+        }
+
+        boolean isOperator = user.getRoles().stream()
+                .anyMatch(r -> r.getName() == RoleType.ROLE_OPERATOR);
+
+
+        if (isOperator) {
+            Operator op = user.getOperator();
+            if (op != null) {
+                switch (op.getStatus()) {
+                    case PENDING -> throw new RuntimeException("Operator account is awaiting admin approval");
+                    case REJECTED -> throw new RuntimeException("Your operator application was rejected");
+                    case APPROVED -> {} // allowed
+                }
+            }
         }
 
 
