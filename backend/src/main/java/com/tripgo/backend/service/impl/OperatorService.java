@@ -67,10 +67,11 @@ public class OperatorService {
         EmailVerificationToken token =
                 emailVerificationService.createToken(user);
 
-        emailService.sendOperatorVerificationEmail(
-                user.getEmail(),
-                "http://localhost:8080/auth/verify-email?token=" + token.getToken()
-        );
+        String verificationLink =
+                "http://localhost:8080/auth/verify-email?token=" + token.getToken();
+
+        emailService.sendOperatorVerificationEmail(user, verificationLink);
+
 
         return new OperatorRegistrationResponse(
                 user.getId(),

@@ -156,10 +156,12 @@ public class AuthenticationService {
         EmailVerificationToken token =
                 emailVerificationService.createToken(user);
 
-        emailService.sendVerificationEmail(
-                user.getEmail(),
-                "http://localhost:8080/auth/verify-email?token=" + token.getToken()
-        );
+        String verificationLink =
+                "http://localhost:8080/auth/verify-email?token=" + token.getToken();
+
+        emailService.sendVerificationEmail(user, verificationLink);
+
+
 
         // Auto-login using email
         Authentication auth = authenticationManager.authenticate(

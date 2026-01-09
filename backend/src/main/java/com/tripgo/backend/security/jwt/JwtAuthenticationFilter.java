@@ -31,6 +31,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         String token = null;
         String username = null;
+        String path = request.getServletPath();
+        if (path.startsWith("/auth/") || path.startsWith("/operators/")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
 
         // 1️⃣ FIRST: Try to get JWT from cookie
         if (request.getCookies() != null) {

@@ -43,7 +43,11 @@ public class SecurityConfig {
                                 "/error",
                                 "/login/**",
                                 "/login/oauth2/**",
-                                "/operators/register").permitAll()
+                                "/operators/register",
+                                "/auth/verify-email",
+                                "/auth/forgot-password",
+                                "/auth/reset-password")
+                        .permitAll()
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

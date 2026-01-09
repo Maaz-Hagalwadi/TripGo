@@ -55,18 +55,12 @@ public class AuthController {
         return ResponseEntity.ok("Registration successful. Please verify your email.");
     }
 
-
     @PostMapping("/login")
     public ResponseEntity<Map<String, String>> login(@Valid @RequestBody LoginRequest request,
                                       HttpServletResponse response) {
-
         authService.login(request, response);
-        return ResponseEntity.ok(
-                Map.of("message", "Login successful")
-        );
-
+        return ResponseEntity.ok(Map.of("message", "Login successful"));
     }
-
 
     @GetMapping("/test")
     public String testApi(){
@@ -78,21 +72,13 @@ public class AuthController {
                                         HttpServletResponse response) {
 
         String refreshToken = extractCookie(request, "REFRESH_TOKEN");
-
-        RefreshToken storedToken =
-                refreshTokenService.validateRefreshToken(refreshToken);
-
+        RefreshToken storedToken = refreshTokenService.validateRefreshToken(refreshToken);
         User user = storedToken.getUser();
 
-        // 🔁 Rotation
         refreshTokenService.revokeToken(storedToken);
 
-        Authentication auth =
-                new UsernamePasswordAuthenticationToken(
-                        new CustomUserDetails(user),
-                        null,
-                        new CustomUserDetails(user).getAuthorities()
-                );
+        Authentication auth = new UsernamePasswordAuthenticationToken(
+                new CustomUserDetails(user), null, new CustomUserDetails(user).getAuthorities());
 
         String newAccessToken = jwtTokenProvider.generateAccessToken(auth);
         String newRefreshToken = jwtTokenProvider.generateRefreshToken(auth);
@@ -101,59 +87,30 @@ public class AuthController {
 
         response.addHeader("Set-Cookie",
                 ResponseCookie.from("ACCESS_TOKEN", newAccessToken)
-                        .httpOnly(true)
-                        .path("/")
-                        .maxAge(15 * 60)
-                        .sameSite("Strict")
-                        .build().toString()
-        );
+                        .httpOnly(true).path("/").maxAge(15 * 60).sameSite("Strict").build().toString());
 
         response.addHeader("Set-Cookie",
                 ResponseCookie.from("REFRESH_TOKEN", newRefreshToken)
-                        .httpOnly(true)
-                        .path("/auth/refresh")
-                        .maxAge(7 * 24 * 60 * 60)
-                        .sameSite("Strict")
-                        .build().toString()
-        );
+                        .httpOnly(true).path("/auth/refresh").maxAge(7 * 24 * 60 * 60).sameSite("Strict").build().toString());
 
-        return ResponseEntity.ok(
-                Map.of("message", "Token refreshed")
-        );
+        return ResponseEntity.ok(Map.of("message", "Token refreshed"));
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(HttpServletRequest request,
-                                       HttpServletResponse response) {
+    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
 
         String refreshToken = getCookieValue(request, "REFRESH_TOKEN");
 
-        // 🔹 Revoke refresh token ONLY if present
         if (refreshToken != null) {
-            refreshTokenRepository
-                    .findByTokenAndRevokedFalse(refreshToken)
+            refreshTokenRepository.findByTokenAndRevokedFalse(refreshToken)
                     .ifPresent(refreshTokenService::revokeToken);
         }
 
-        // 🔹 Clear ACCESS_TOKEN cookie
         response.addHeader("Set-Cookie",
-                ResponseCookie.from("ACCESS_TOKEN", "")
-                        .httpOnly(true)
-                        .path("/")
-                        .maxAge(0)
-                        .sameSite("Strict")
-                        .build().toString()
-        );
+                ResponseCookie.from("ACCESS_TOKEN", "").httpOnly(true).path("/").maxAge(0).sameSite("Strict").build().toString());
 
-        // 🔹 Clear REFRESH_TOKEN cookie
         response.addHeader("Set-Cookie",
-                ResponseCookie.from("REFRESH_TOKEN", "")
-                        .httpOnly(true)
-                        .path("/auth/refresh")
-                        .maxAge(0)
-                        .sameSite("Strict")
-                        .build().toString()
-        );
+                ResponseCookie.from("REFRESH_TOKEN", "").httpOnly(true).path("/auth/refresh").maxAge(0).sameSite("Strict").build().toString());
 
         return ResponseEntity.ok().build();
     }
@@ -161,24 +118,17 @@ public class AuthController {
     @GetMapping("/verify-email")
     public ResponseEntity<String> verifyEmail(@RequestParam String token) {
 
-        EmailVerificationToken verificationToken =
-                emailVerificationService.validateToken(token);
-
+        EmailVerificationToken verificationToken = emailVerificationService.validateToken(token);
         User user = verificationToken.getUser();
         boolean isOperator = user.getRoles().stream()
                 .anyMatch(r -> r.getName() == RoleType.ROLE_OPERATOR);
 
-
-        // notify admins only for operators
         if (isOperator) {
-            String adminEmail = "tripgo.admin@gmail.com"; // from env later
             emailService.notifyAdminsOperatorVerification(user.getOperator());
         }
 
-
         user.setEmailVerified(true);
         userRepository.save(user);
-
         emailVerificationService.markUsed(verificationToken);
 
         return ResponseEntity.ok("Email verified successfully");
@@ -192,54 +142,35 @@ public class AuthController {
 
         PasswordResetToken token = passwordResetService.createToken(user);
 
-        emailService.sendVerificationEmail(
-                user.getEmail(),
-                "http://localhost:8080/auth/reset-password?token=" + token.getToken()
-        );
+        emailService.sendResetPassword(user,
+                "http://localhost:8080/auth/reset-password?token=" + token.getToken());
 
         return ResponseEntity.ok().build();
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<Void> resetPassword(
-            @RequestBody ResetPasswordRequest request) {
+    public ResponseEntity<Void> resetPassword(@RequestBody ResetPasswordRequest request) {
 
-        PasswordResetToken resetToken =
-                passwordResetService.validateToken(request.getToken());
-
+        PasswordResetToken resetToken = passwordResetService.validateToken(request.getToken());
         User user = resetToken.getUser();
+        
         if (user.getPassword() == null) {
             throw new RuntimeException("Password reset not allowed for OAuth users");
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
-
         passwordResetService.markUsed(resetToken);
-
         refreshTokenService.revokeAllForUser(user);
 
         return ResponseEntity.ok().build();
     }
 
     @GetMapping("/reset-password")
-    public void validateResetToken(@RequestParam String token,
-                                   HttpServletResponse response) throws IOException {
-
-        // Validate token (no password change here)
-
+    public void validateResetToken(@RequestParam String token, HttpServletResponse response) throws IOException {
         passwordResetService.validateToken(token);
-
-        // Redirect to frontend reset-password page
-        response.sendRedirect(
-                "http://localhost:3000/reset-password?token=" + token
-        );
+        response.sendRedirect("http://localhost:3000/reset-password?token=" + token);
     }
-
-
-
-
-
 
     private String extractCookie(HttpServletRequest request, String name) {
         if (request.getCookies() == null) {
@@ -255,7 +186,6 @@ public class AuthController {
 
     private String getCookieValue(HttpServletRequest request, String name) {
         if (request.getCookies() == null) return null;
-
         for (Cookie cookie : request.getCookies()) {
             if (name.equals(cookie.getName())) {
                 return cookie.getValue();
@@ -263,7 +193,4 @@ public class AuthController {
         }
         return null;
     }
-
-
-
 }
