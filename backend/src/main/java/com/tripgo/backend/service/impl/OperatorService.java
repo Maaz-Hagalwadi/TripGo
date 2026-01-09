@@ -30,7 +30,7 @@ public class OperatorService {
     private final EmailVerificationService emailVerificationService;
     private final EmailService emailService;
 
-    @Transactional
+
     public OperatorRegistrationResponse register(OperatorRegistrationRequest req) {
 
         if (userRepository.existsByEmail(req.email())) {
@@ -62,11 +62,9 @@ public class OperatorService {
                         .build()
         );
 
-        // ➕ GENERATE EMAIL VERIFICATION TOKEN
         EmailVerificationToken token =
                 emailVerificationService.createToken(user);
 
-        // ➕ SEND VERIFICATION EMAIL
         emailService.sendOperatorVerificationEmail(
                 user.getEmail(),
                 "http://localhost:8080/auth/verify-email?token=" + token.getToken()

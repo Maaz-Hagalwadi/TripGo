@@ -17,7 +17,7 @@ public class OperatorController {
     private final OperatorService operatorService;
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody OperatorRegistrationRequest request) {
+    public ResponseEntity<?> register(@RequestBody OperatorRegistrationRequest request) throws Exception {
         return ResponseEntity.ok(operatorService.register(request));
     }
 }
