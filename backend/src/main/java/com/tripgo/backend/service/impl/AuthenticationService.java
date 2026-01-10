@@ -159,7 +159,7 @@ public class AuthenticationService {
         String verificationLink =
                 "http://localhost:8080/auth/verify-email?token=" + token.getToken();
 
-        emailService.sendVerificationEmail(user, verificationLink);
+        emailService.sendUserVerificationEmail(user, verificationLink);
 
 
 

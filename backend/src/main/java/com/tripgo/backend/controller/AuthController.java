@@ -142,7 +142,7 @@ public class AuthController {
 
         PasswordResetToken token = passwordResetService.createToken(user);
 
-        emailService.sendResetPassword(user,
+        emailService.sendResetPasswordEmail(user,
                 "http://localhost:8080/auth/reset-password?token=" + token.getToken());
 
         return ResponseEntity.ok().build();
