@@ -171,7 +171,6 @@ public class AuthenticationService {
                 )
         );
 
-        System.out.println("hey");
 
         String accessToken = jwtTokenProvider.generateAccessToken(auth);
         String refreshToken = jwtTokenProvider.generateRefreshToken(auth);
