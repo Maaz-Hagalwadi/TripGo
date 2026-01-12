@@ -1,15 +1,32 @@
 <!DOCTYPE html>
-<html>
-<body style="font-family: Arial;">
-<h3>Operator Verification Completed</h3>
-
-<p>Operator: <b>${operatorName}</b></p>
-<p>Email: ${operatorEmail}</p>
-
-<p>The operator is awaiting admin approval.</p>
-
-<a href="${adminUrl}" style="background:#3366cc;color:#fff;padding:8px 12px;text-decoration:none;border-radius:4px;">
-    Review Operator
-</a>
+<html xmlns:th="http://www.thymeleaf.org">
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #ff6600;">Operator Pending Approval</h2>
+        
+        <p>A new operator has completed email verification and is awaiting approval:</p>
+        
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p><strong>Operator Name:</strong> <span th:text="${operatorName}">Operator</span></p>
+            <p><strong>Email:</strong> <span th:text="${operatorEmail}">email@example.com</span></p>
+        </div>
+        
+        <p>Please review and approve/reject this operator application.</p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a th:href="${adminUrl}" 
+               style="background: #007bff; 
+                      color: white; 
+                      padding: 12px 30px; 
+                      text-decoration: none; 
+                      border-radius: 5px; 
+                      display: inline-block;
+                      font-weight: bold;">
+                Review in Admin Dashboard
+            </a>
+        </div>
+        
+        <p>TripGo Admin System</p>
+    </div>
 </body>
 </html>

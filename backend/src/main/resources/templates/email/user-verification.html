@@ -1,12 +1,15 @@
 <!DOCTYPE html>
-<html>
+<html xmlns:th="http://www.thymeleaf.org">
 <body style="font-family: Arial;">
 <h3>Welcome to TripGo!</h3>
 
-<p>Please verify your email:</p>
+<p>Hello <span th:text="${firstName}">User</span>,</p>
+<p>Please verify your email by clicking the button below:</p>
 
-<a href="${verificationLink}" style="background:#ff6600;padding:10px;color:#fff;text-decoration:none;border-radius:4px;">
+<a th:href="${verificationLink}" style="background:#ff6600;padding:10px;color:#fff;text-decoration:none;border-radius:4px;">
     Verify Email
 </a>
+
+<p>This link will expire in 24 hours.</p>
 </body>
 </html>

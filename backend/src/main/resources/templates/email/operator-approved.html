@@ -1,21 +1,33 @@
 <!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8"/>
-    <title>Operator Approved</title>
-</head>
-<body style="font-family: Arial, sans-serif;">
-<h2>🎉 Congratulations ${operatorName}!</h2>
-
-<p>Your operator account has been approved.</p>
-
-<p>You can now login and manage your buses, schedules, pricing, and tickets.</p>
-
-<a href="${loginUrl}"
-   style="display:inline-block;background:#ff6600;color:#fff;padding:10px 18px;text-decoration:none;border-radius:4px;">
-    Login to TripGo
-</a>
-
-<p style="margin-top: 30px;">Thanks,<br/>TripGo Team</p>
+<html xmlns:th="http://www.thymeleaf.org">
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #28a745;">Congratulations <span th:text="${operatorName}">Operator</span>!</h2>
+        
+        <p>Your operator account has been approved.</p>
+        
+        <p>You can now login and manage your buses, schedules, pricing, and tickets.</p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+            <a th:href="${loginUrl}" 
+               style="background: #28a745; 
+                      color: white; 
+                      padding: 12px 30px; 
+                      text-decoration: none; 
+                      border-radius: 5px; 
+                      display: inline-block;
+                      font-weight: bold;">
+                Login to TripGo
+            </a>
+        </div>
+        
+        <p>Thanks,<br>
+        TripGo Team</p>
+        
+        <hr style="margin-top: 30px; border: none; border-top: 1px solid #eee;">
+        <p style="font-size: 12px; color: #666;">
+            Welcome to the TripGo operator network! Start managing your fleet today.
+        </p>
+    </div>
 </body>
 </html>
