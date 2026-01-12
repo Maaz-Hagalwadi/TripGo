@@ -125,7 +125,7 @@ public class EmailService {
             helper.setText(html, true);
 
             mailSender.send(message);
-
+            System.out.println("Email sent to " + to);
         } catch (Exception e) {
             throw new RuntimeException("Failed to send email to " + to, e);
         }
