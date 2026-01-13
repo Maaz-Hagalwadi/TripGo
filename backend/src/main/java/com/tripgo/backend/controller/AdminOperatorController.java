@@ -30,6 +30,7 @@ public class AdminOperatorController {
         return ResponseEntity.ok("Operator approved");
     }
 
+    //RJECT
     @PostMapping("/{id}/reject")
     public ResponseEntity<String> reject(@PathVariable UUID id) {
         Operator op = operatorRepository.findById(id)
