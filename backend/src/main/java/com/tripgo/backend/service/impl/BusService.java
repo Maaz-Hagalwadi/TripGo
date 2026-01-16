@@ -2,6 +2,7 @@ package com.tripgo.backend.service.impl;
 
 
 import com.tripgo.backend.dto.request.CreateBusRequest;
+import com.tripgo.backend.dto.request.UpdateBusRequest;
 import com.tripgo.backend.dto.response.AmenityDTO;
 import com.tripgo.backend.dto.response.BusResponse;
 import com.tripgo.backend.model.entities.AmenityMaster;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.UUID;
 
 
 @Service
@@ -50,7 +52,7 @@ public class BusService {
     }
 
     public List<BusResponse> list(User user) {
-        List<Bus> buses = busRepository.findByOperator(user.getOperator());
+        List<Bus> buses = busRepository.findByOperatorAndActiveTrue(user.getOperator());
         return buses.stream().map(this::toResponse).toList();
     }
 
@@ -73,4 +75,55 @@ public class BusService {
                         .toList()
         );
     }
+
+
+    public BusResponse get(UUID id, User user) {
+        Bus bus = busRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Bus not found"));
+
+        if (!bus.getOperator().getId().equals(user.getOperator().getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        return toResponse(bus);
+    }
+
+    public BusResponse update(UUID id, UpdateBusRequest req, User user) {
+
+        Bus bus = busRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Bus not found"));
+
+        if (!bus.getOperator().getId().equals(user.getOperator().getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        List<AmenityMaster> amenities = amenityRepository.findAllById(req.amenityIds());
+
+        bus.setName(req.name());
+        bus.setBusCode(req.busCode());
+        bus.setVehicleNumber(req.vehicleNumber());
+        bus.setModel(req.model());
+        bus.setBusType(req.busType());
+        bus.setTotalSeats(req.totalSeats());
+        bus.setAmenities(amenities);
+
+        busRepository.save(bus);
+
+        return toResponse(bus);
+    }
+
+    public void delete(UUID id, User user) {
+        Bus bus = busRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Bus not found"));
+
+        if (!bus.getOperator().getId().equals(user.getOperator().getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        bus.setActive(false);
+        busRepository.save(bus);
+    }
+
+
+
 }

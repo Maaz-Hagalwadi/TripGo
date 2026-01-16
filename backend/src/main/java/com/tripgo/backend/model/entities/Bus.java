@@ -54,6 +54,10 @@ public class Bus {
     private List<AmenityMaster> amenities;
 
 
+    @Column(name = "active")
+    private boolean active = true;
+
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
