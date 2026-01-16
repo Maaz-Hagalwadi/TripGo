@@ -13,6 +13,7 @@ import com.tripgo.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Comparator;
 import java.util.List;
 
 
@@ -35,6 +36,7 @@ public class BusService {
         Bus bus = busRepository.save(
                 Bus.builder()
                         .operator(user.getOperator())
+                        .name(req.name())
                         .busCode(req.busCode())
                         .vehicleNumber(req.vehicleNumber())
                         .model(req.model())
@@ -55,12 +57,14 @@ public class BusService {
     private BusResponse toResponse(Bus bus) {
         return new BusResponse(
                 bus.getId(),
+                bus.getName(),
                 bus.getBusCode(),
                 bus.getVehicleNumber(),
                 bus.getModel(),
                 bus.getBusType(),
                 bus.getTotalSeats(),
                 bus.getAmenities().stream()
+                        .sorted(Comparator.comparing(AmenityMaster::getCode))
                         .map(a -> new AmenityDTO(
                                 a.getId(),
                                 a.getCode(),

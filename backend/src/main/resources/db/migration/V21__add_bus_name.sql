@@ -1,0 +1,2 @@
+ALTER TABLE buses
+ADD COLUMN bus_name VARCHAR(255) NOT NULL DEFAULT 'Unnamed Bus';

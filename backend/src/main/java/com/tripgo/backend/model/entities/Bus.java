@@ -23,6 +23,9 @@ public class Bus {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @Column(name = "bus_name", nullable = false)
+    private String name;
+
     @ManyToOne
     @JoinColumn(name = "operator_id")
     private Operator operator;

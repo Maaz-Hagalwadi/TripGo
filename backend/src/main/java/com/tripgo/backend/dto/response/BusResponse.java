@@ -7,6 +7,7 @@ import java.util.UUID;
 
 public record BusResponse(
         UUID id,
+        String name,
         String busCode,
         String vehicleNumber,
         String model,
