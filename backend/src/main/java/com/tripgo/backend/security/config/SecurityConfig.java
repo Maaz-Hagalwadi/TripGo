@@ -48,6 +48,8 @@ public class SecurityConfig {
                                 "/auth/forgot-password",
                                 "/auth/reset-password")
                         .permitAll()
+                        .requestMatchers("/operator/**").hasRole("OPERATOR")
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

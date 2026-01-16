@@ -1,5 +1,6 @@
 package com.tripgo.backend.model.entities;
 
+import com.tripgo.backend.model.enums.RoleType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -67,4 +68,9 @@ public class User {
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
     private Set<Role> roles = new HashSet<>();
+
+    public boolean hasRole(RoleType role) {
+        return roles.stream().anyMatch(r -> r.getName() == role);
+    }
+
 }
