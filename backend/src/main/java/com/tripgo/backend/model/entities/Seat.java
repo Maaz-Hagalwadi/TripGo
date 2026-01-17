@@ -1,6 +1,7 @@
 package com.tripgo.backend.model.entities;
 
 import com.tripgo.backend.util.JsonConverter;
+import com.vladmihalcea.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Type;
@@ -38,7 +39,7 @@ public class Seat {
     private String seatType; // SLEEPER, SEATER, LOWER, UPPER
 
     @Column(name = "seat_position", columnDefinition = "jsonb")
-    @Convert(converter = JsonConverter.class)
+    @Type(JsonType.class)
     private Map<String, Object> seatPosition;
 
     @Column(name = "is_window")
