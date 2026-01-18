@@ -45,6 +45,9 @@ public class Bus {
     @Column(name = "total_seats", nullable = false)
     private Integer totalSeats;
 
+    @OneToMany(mappedBy = "bus", fetch = FetchType.LAZY)
+    private List<Seat> seats;
+
     @ManyToMany
     @JoinTable(
             name = "bus_amenities",
@@ -65,4 +68,5 @@ public class Bus {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private Instant updatedAt;
+
 }

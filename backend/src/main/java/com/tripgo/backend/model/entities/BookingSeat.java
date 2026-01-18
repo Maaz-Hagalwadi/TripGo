@@ -40,4 +40,11 @@ public class BookingSeat {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "passenger_id")
     private Passenger passenger;
+
+    @Column(name = "from_stop")
+    private String fromStop;
+
+    @Column(name = "to_stop")
+    private String toStop;
+
 }
