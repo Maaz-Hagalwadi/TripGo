@@ -22,8 +22,8 @@ public class Route {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @ManyToOne
-    @JoinColumn(name = "operator_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "operator_id" , nullable = false)
     private Operator operator;
 
     @Column(nullable = false)
