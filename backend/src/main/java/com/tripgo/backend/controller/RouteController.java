@@ -6,6 +6,7 @@ import com.tripgo.backend.dto.request.CreateRouteRequest;
 import com.tripgo.backend.dto.request.CreateScheduleRequest;
 import com.tripgo.backend.dto.response.RouteResponse;
 import com.tripgo.backend.dto.response.FareResponse;
+import com.tripgo.backend.dto.response.RouteScheduleResponse;
 import com.tripgo.backend.dto.response.SegmentResponse;
 import com.tripgo.backend.model.entities.*;
 import com.tripgo.backend.repository.RouteRepository;
@@ -61,7 +62,7 @@ public class RouteController {
     }
 
     @PostMapping("/{routeId}/schedule")
-    public RouteSchedule createSchedule(@PathVariable UUID routeId,
+    public RouteScheduleResponse createSchedule(@PathVariable UUID routeId,
                                         @RequestBody CreateScheduleRequest req) {
         return routeService.createSchedule(routeId, req);
     }
