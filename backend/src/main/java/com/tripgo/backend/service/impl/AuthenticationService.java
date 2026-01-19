@@ -35,7 +35,7 @@ import static com.tripgo.backend.model.enums.OperatorStatus.*;
 @Service
 @RequiredArgsConstructor
 public class AuthenticationService {
-//mkl
+
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
