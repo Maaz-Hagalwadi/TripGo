@@ -6,6 +6,7 @@ import com.tripgo.backend.dto.request.CreateRouteRequest;
 import com.tripgo.backend.dto.request.CreateScheduleRequest;
 import com.tripgo.backend.dto.response.RouteResponse;
 import com.tripgo.backend.dto.response.FareResponse;
+import com.tripgo.backend.dto.response.RouteScheduleResponse;
 import com.tripgo.backend.dto.response.SegmentResponse;
 import com.tripgo.backend.model.entities.*;
 import com.tripgo.backend.repository.*;
@@ -139,7 +140,7 @@ public class RouteService {
         );
     }
 
-    public RouteSchedule createSchedule(UUID routeId, CreateScheduleRequest req) {
+    public RouteScheduleResponse createSchedule(UUID routeId, CreateScheduleRequest req) {
         Route route = routeRepository.findById(routeId)
                 .orElseThrow(() -> new RuntimeException("Route not found"));
 
@@ -155,7 +156,17 @@ public class RouteService {
                 .active(true)
                 .build();
 
-        return scheduleRepository.save(schedule);
+        schedule = scheduleRepository.save(schedule);
+
+        return new RouteScheduleResponse(
+                schedule.getId(),
+                routeId,  // Use parameter to avoid lazy loading
+                req.busId(),  // Use parameter to avoid lazy loading
+                req.departureTime(),
+                req.arrivalTime(),
+                req.frequency(),
+                true
+        );
     }
 
     public List<RouteResponse> listRoutes(User user) {
