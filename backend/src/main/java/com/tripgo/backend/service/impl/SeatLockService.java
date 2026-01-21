@@ -32,7 +32,8 @@ public class SeatLockService {
                     .findByRouteScheduleIdAndSeatNumber(schedule.getId(), seatNumber)
                     .filter(lock -> lock.getExpiresAt().isAfter(Instant.now()))
                     .isPresent();
-
+            /// kkll;
+        //;;
             if (alreadyLocked) {
                 throw new RuntimeException("Seat " + seatNumber + " is locked");
             }
