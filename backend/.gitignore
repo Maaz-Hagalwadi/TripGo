@@ -32,3 +32,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Configuration Files ###
+application.yml
+application.properties
+.DS_Store
