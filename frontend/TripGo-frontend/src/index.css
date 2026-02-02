@@ -1,14 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Global styles */
+:root {
+  --primary-color: #00d4ff;
+  --background-dark: #050505;
+}
+
 body {
   font-family: "Plus Jakarta Sans", sans-serif;
   background-color: #050505;
 }
 
-/* Scrollbar */
+.glow-accent {
+  background: radial-gradient(circle at center, rgba(0, 212, 255, 0.15) 0%, transparent 70%);
+}
+
+input::placeholder {
+  color: #94a3b8 !important;
+}
+
 ::-webkit-scrollbar {
   width: 8px;
 }
@@ -21,10 +34,4 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #444;
-}
-
-/* Placeholder color fix */
-input::placeholder {
-  color: #E0E0E0;
-  opacity: 1;
 }
