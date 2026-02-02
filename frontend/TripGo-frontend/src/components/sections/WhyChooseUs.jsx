@@ -1,6 +1,19 @@
+import { useState, useEffect } from 'react';
 import FeatureCard from '../ui/FeatureCard';
 
 const WhyChooseUs = () => {
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
   const features = [
     {
       icon: "shield",
@@ -29,7 +42,7 @@ const WhyChooseUs = () => {
           </p>
         </div>
         
-        <div className="grid grid-cols-3 gap-8">
+        <div className={isMobile ? "grid grid-cols-1 gap-8" : "grid grid-cols-3 gap-8"}>
           {features.map((feature, index) => (
             <FeatureCard
               key={index}
