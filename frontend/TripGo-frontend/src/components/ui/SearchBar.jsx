@@ -1,5 +1,19 @@
+import { useState, useEffect } from 'react';
+
 const SearchBar = () => {
   const today = new Date().toISOString().split('T')[0];
+  const [isMobile, setIsMobile] = useState(false);
+  
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+    
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
   
   const handleDateIconClick = () => {
     document.getElementById('dateInput').showPicker();
@@ -7,7 +21,7 @@ const SearchBar = () => {
 
   return (
     <div className="bg-charcoal/90 border border-white/10 p-2 md:p-6 rounded-2xl shadow-2xl w-full mx-auto backdrop-blur-xl">
-      <div className="grid grid-cols-4 gap-4 items-end">
+      <div className={isMobile ? "grid grid-cols-1 gap-4 items-end" : "grid grid-cols-4 gap-4 items-end"}>
         <div className="flex flex-col text-left px-2">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-[0.1em] mb-2 ml-1">From</span>
           <div className="relative">

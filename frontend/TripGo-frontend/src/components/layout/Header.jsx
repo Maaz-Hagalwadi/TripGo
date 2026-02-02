@@ -14,7 +14,7 @@ const Header = () => {
           </div>
           
           {/* Navigation - Center */}
-          <nav className="flex items-center gap-10">
+          <nav className="hidden md:flex items-center gap-10">
             <a className="text-sm font-bold text-primary" href="#">Home</a>
             <a className="text-sm font-semibold text-slate-400 hover:text-white transition-colors" href="#">My Bookings</a>
             <a className="text-sm font-semibold text-slate-400 hover:text-white transition-colors" href="#">Support</a>
@@ -22,10 +22,10 @@ const Header = () => {
           
           {/* Auth Buttons - Right */}
           <div className="flex items-center gap-3">
-            <button className="bg-white/10 hover:bg-white/20 text-white px-6 py-2.5 rounded-full text-sm font-bold transition-all">
+            <button className="bg-white/10 hover:bg-white/20 text-white px-3 md:px-6 py-2.5 rounded-full text-xs md:text-sm font-bold transition-all">
               Login
             </button>
-            <button className="bg-primary hover:bg-primary/90 text-black px-6 py-2.5 rounded-full text-sm font-bold transition-all">
+            <button className="bg-primary hover:bg-primary/90 text-black px-3 md:px-6 py-2.5 rounded-full text-xs md:text-sm font-bold transition-all">
               Register
             </button>
           </div>
