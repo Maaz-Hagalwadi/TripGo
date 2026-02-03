@@ -46,7 +46,9 @@ public class SecurityConfig {
                                 "/operators/register",
                                 "/auth/verify-email",
                                 "/auth/forgot-password",
-                                "/auth/reset-password")
+                                "/auth/reset-password",
+                                "/admin/operators/*/approve",
+                                "/admin/operators/*/reject")
                         .permitAll()
                         .requestMatchers("/operator/**").hasRole("OPERATOR")
                         .requestMatchers("/admin/**").hasRole("ADMIN")

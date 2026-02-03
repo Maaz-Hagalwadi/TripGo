@@ -116,22 +116,26 @@ public class AuthController {
     }
 
     @GetMapping("/verify-email")
-    public ResponseEntity<String> verifyEmail(@RequestParam String token) {
+    public void verifyEmail(@RequestParam String token, HttpServletResponse response) throws IOException {
 
-        EmailVerificationToken verificationToken = emailVerificationService.validateToken(token);
-        User user = verificationToken.getUser();
-        boolean isOperator = user.getRoles().stream()
-                .anyMatch(r -> r.getName() == RoleType.ROLE_OPERATOR);
+        try {
+            EmailVerificationToken verificationToken = emailVerificationService.validateToken(token);
+            User user = verificationToken.getUser();
+            boolean isOperator = user.getRoles().stream()
+                    .anyMatch(r -> r.getName() == RoleType.ROLE_OPERATOR);
 
-        if (isOperator) {
-            emailService.notifyAdminsOperatorVerification(user.getOperator());
+            if (isOperator) {
+                emailService.notifyAdminsOperatorVerification(user.getOperator());
+            }
+
+            user.setEmailVerified(true);
+            userRepository.save(user);
+            emailVerificationService.markUsed(verificationToken);
+
+            response.sendRedirect("http://localhost:5174/verify-email?status=success");
+        } catch (Exception e) {
+            response.sendRedirect("http://localhost:5174/verify-email?status=error&message=" + e.getMessage());
         }
-
-        user.setEmailVerified(true);
-        userRepository.save(user);
-        emailVerificationService.markUsed(verificationToken);
-
-        return ResponseEntity.ok("Email verified successfully");
     }
 
     @PostMapping("/forgot-password")

@@ -64,20 +64,38 @@ public class EmailService {
 
     @Async
     public void notifyAdminsOperatorVerification(Operator op) {
+        System.out.println("🔍 DEBUG: Starting admin notification for operator: " + op.getName());
+        
         List<User> admins = userRepository.findAllAdmins();
+        System.out.println("🔍 DEBUG: Found " + admins.size() + " admin users");
+        
+        if (admins.isEmpty()) {
+            System.out.println("❌ ERROR: No admin users found in database!");
+            return;
+        }
+        
         User opUser = userRepository.findByOperator(op).orElseThrow();
+        System.out.println("🔍 DEBUG: Operator user email: " + opUser.getEmail());
 
         for (User admin : admins) {
-            sendTemplate(
-                    admin.getEmail(),
-                    "Operator Pending Approval",
-                    "operator-pending",
-                    Map.of(
-                            "operatorName", op.getName(),
-                            "operatorEmail", opUser.getEmail(),
-                            "adminUrl", "https://tripgo.com/admin/operators"
-                    )
-            );
+            System.out.println("📧 DEBUG: Sending email to admin: " + admin.getEmail());
+            try {
+                sendTemplate(
+                        admin.getEmail(),
+                        "Operator Pending Approval",
+                        "operator-pending",
+                        Map.of(
+                                "operatorName", op.getName(),
+                                "operatorEmail", opUser.getEmail(),
+                                "approveUrl", "http://localhost:8080/admin/operators/" + op.getId() + "/approve",
+                                "rejectUrl", "http://localhost:8080/admin/operators/" + op.getId() + "/reject",
+                                "adminUrl", "http://localhost:5174/admin/operators"
+                        )
+                );
+                System.out.println("✅ DEBUG: Email sent successfully to " + admin.getEmail());
+            } catch (Exception e) {
+                System.out.println("❌ ERROR: Failed to send email to " + admin.getEmail() + ": " + e.getMessage());
+            }
         }
     }
 
