@@ -24,26 +24,49 @@ const MobileLoginLayout = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    email: '',
+    emailOrPhone: '',
     password: ''
   });
   const [errors, setErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
 
-  const validateForm = () => {
-    const newErrors = {};
-    
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email is invalid';
+  const loginUser = async (formData) => {
+    try {
+      const response = await fetch('http://localhost:8080/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          emailOrPhone: formData.emailOrPhone,
+          password: formData.password
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Login successful:', data);
+        setErrors({ success: 'Login successful! Redirecting...' });
+        setTimeout(() => navigate('/'), 1500);
+      } else {
+        const errorData = await response.json();
+        console.log('Login error:', errorData);
+        
+        if (errorData.error === 'INVALID_CREDENTIALS') {
+          setErrors({ general: 'Invalid email/phone or password' });
+        } else if (errorData.error === 'EMAIL_NOT_VERIFIED') {
+          setErrors({ general: 'Please verify your email before login' });
+        } else if (errorData.error === 'OPERATOR_PENDING') {
+          setErrors({ general: 'Operator account is awaiting admin approval' });
+        } else if (errorData.error === 'OPERATOR_REJECTED') {
+          setErrors({ general: 'Your operator application was rejected' });
+        } else {
+          setErrors({ general: errorData.message || 'Login failed' });
+        }
+      }
+    } catch (error) {
+      console.error('Network error:', error);
+      setErrors({ general: 'Network error. Please try again.' });
     }
-    
-    if (!formData.password.trim()) {
-      newErrors.password = 'Password is required';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
   };
 
   const handleInputChange = (e) => {
@@ -52,14 +75,28 @@ const MobileLoginLayout = () => {
       ...prev,
       [name]: value
     }));
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (validateForm()) {
-      console.log('Login data:', formData);
+    setErrors({});
+    
+    if (!formData.emailOrPhone.trim()) {
+      setErrors({ emailOrPhone: 'Email or phone is required' });
+      return;
     }
-    return false;
+    if (!formData.password.trim()) {
+      setErrors({ password: 'Password is required' });
+      return;
+    }
+    
+    setIsLoading(true);
+    await loginUser(formData);
+    setIsLoading(false);
   };
 
   const handleClickShowPassword = () => {
@@ -134,17 +171,43 @@ const MobileLoginLayout = () => {
               </Typography>
             </Box>
 
+            {errors.success && (
+              <Box sx={{ 
+                p: 2, 
+                mb: 2, 
+                bgcolor: 'rgba(76, 175, 80, 0.1)', 
+                border: '1px solid rgba(76, 175, 80, 0.3)', 
+                borderRadius: 2,
+                color: '#4caf50'
+              }}>
+                <Typography variant="body2">{errors.success}</Typography>
+              </Box>
+            )}
+            
+            {errors.general && (
+              <Box sx={{ 
+                p: 2, 
+                mb: 2, 
+                bgcolor: 'rgba(244, 67, 54, 0.1)', 
+                border: '1px solid rgba(244, 67, 54, 0.3)', 
+                borderRadius: 2,
+                color: '#f44336'
+              }}>
+                <Typography variant="body2">{errors.general}</Typography>
+              </Box>
+            )}
+
             <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <TextField
                 fullWidth
                 required
-                name="email"
-                type="email"
-                placeholder="name@company.com"
-                value={formData.email}
+                name="emailOrPhone"
+                type="text"
+                placeholder="name@company.com or phone"
+                value={formData.emailOrPhone}
                 onChange={handleInputChange}
-                error={!!errors.email}
-                helperText={errors.email}
+                error={!!errors.emailOrPhone}
+                helperText={errors.emailOrPhone}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -200,6 +263,7 @@ const MobileLoginLayout = () => {
                 type="submit"
                 fullWidth
                 variant="contained"
+                disabled={isLoading}
                 sx={{
                   bgcolor: '#00d4ff',
                   color: 'black',
@@ -210,9 +274,13 @@ const MobileLoginLayout = () => {
                   '&:hover': {
                     bgcolor: '#00b8e6',
                   },
+                  '&:disabled': {
+                    bgcolor: 'rgba(0,212,255,0.5)',
+                    color: 'black'
+                  }
                 }}
               >
-                Sign In
+                {isLoading ? 'Signing In...' : 'Sign In'}
               </Button>
             </Box>
 
