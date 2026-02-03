@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import TripGoIcon from '../../assets/icons/TripGoIcon';
 
 const DesktopForm = () => {
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     fullName: '',
@@ -153,7 +155,12 @@ const DesktopForm = () => {
             </button>
             <p className="text-center mt-3 text-slate-400">
               Already have an account? 
-              <a className="text-primary hover:underline font-bold ml-1" href="#">Log In</a>
+              <button 
+                onClick={() => navigate('/login')}
+                className="text-primary hover:underline font-bold ml-1"
+              >
+                Log In
+              </button>
             </p>
           </div>
         </div>

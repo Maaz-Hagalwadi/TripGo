@@ -6,17 +6,13 @@ import {
   TextField, 
   Button, 
   Typography, 
-  Checkbox, 
-  FormControlLabel, 
   InputAdornment, 
   IconButton,
   Divider,
   ThemeProvider
 } from '@mui/material';
 import { 
-  Person, 
   Email, 
-  Phone, 
   Lock, 
   Visibility, 
   VisibilityOff 
@@ -24,24 +20,17 @@ import {
 import TripGoIcon from '../../assets/icons/TripGoIcon';
 import { darkTheme } from '../../theme/darkTheme';
 
-const MobileLayout = () => {
+const MobileLoginLayout = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    fullName: '',
     email: '',
-    phone: '',
-    password: '',
-    agreeToTerms: false
+    password: ''
   });
   const [errors, setErrors] = useState({});
 
   const validateForm = () => {
     const newErrors = {};
-    
-    if (!formData.fullName.trim()) {
-      newErrors.fullName = 'Full name is required';
-    }
     
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
@@ -49,20 +38,8 @@ const MobileLayout = () => {
       newErrors.email = 'Email is invalid';
     }
     
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone number is required';
-    } else if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ''))) {
-      newErrors.phone = 'Phone number must be 10 digits';
-    }
-    
     if (!formData.password.trim()) {
       newErrors.password = 'Password is required';
-    } else if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
-    }
-    
-    if (!formData.agreeToTerms) {
-      newErrors.agreeToTerms = 'You must agree to terms';
     }
     
     setErrors(newErrors);
@@ -70,17 +47,17 @@ const MobileLayout = () => {
   };
 
   const handleInputChange = (e) => {
-    const { name, value, type, checked } = e.target;
+    const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: value
     }));
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (validateForm()) {
-      console.log('Form is valid:', formData);
+      console.log('Login data:', formData);
     }
     return false;
   };
@@ -141,7 +118,8 @@ const MobileLayout = () => {
                 </Typography>
               </Box>
               <Typography variant="h5" sx={{ fontWeight: 800, color: 'white' }}>
-                Start Your Premium Journey Today
+                Travel Redefined.{' '}
+                <span style={{ color: '#00d4ff' }}>Experience Luxury.</span>
               </Typography>
             </Box>
           </Box>
@@ -149,10 +127,10 @@ const MobileLayout = () => {
           <Box sx={{ p: 3, pb: 5 }}>
             <Box sx={{ mb: 4 }}>
               <Typography variant="h6" sx={{ fontWeight: 700, color: 'white', mb: 0.5 }}>
-                Create Account
+                Welcome Back
               </Typography>
               <Typography variant="body2" sx={{ color: '#94a3b8' }}>
-                Join the elite travel community.
+                Please enter your details to access your account.
               </Typography>
             </Box>
 
@@ -160,28 +138,9 @@ const MobileLayout = () => {
               <TextField
                 fullWidth
                 required
-                name="fullName"
-                placeholder="Your full name"
-                value={formData.fullName}
-                onChange={handleInputChange}
-                error={!!errors.fullName}
-                helperText={errors.fullName}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Person sx={{ color: '#64748b' }} />
-                    </InputAdornment>
-                  ),
-                }}
-                size="small"
-              />
-
-              <TextField
-                fullWidth
-                required
                 name="email"
                 type="email"
-                placeholder="name@email.com"
+                placeholder="name@company.com"
                 value={formData.email}
                 onChange={handleInputChange}
                 error={!!errors.email}
@@ -190,26 +149,6 @@ const MobileLayout = () => {
                   startAdornment: (
                     <InputAdornment position="start">
                       <Email sx={{ color: '#64748b' }} />
-                    </InputAdornment>
-                  ),
-                }}
-                size="small"
-              />
-
-              <TextField
-                fullWidth
-                required
-                name="phone"
-                type="tel"
-                placeholder="9875934033"
-                value={formData.phone}
-                onChange={handleInputChange}
-                error={!!errors.phone}
-                helperText={errors.phone}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Phone sx={{ color: '#64748b' }} />
                     </InputAdornment>
                   ),
                 }}
@@ -247,30 +186,14 @@ const MobileLayout = () => {
                 size="small"
               />
 
-              <Box>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      required
-                      name="agreeToTerms"
-                      checked={formData.agreeToTerms}
-                      onChange={handleInputChange}
-                      sx={{ color: '#64748b', '&.Mui-checked': { color: '#00d4ff' } }}
-                      size="small"
-                    />
-                  }
-                  label={
-                    <Typography variant="caption" sx={{ color: '#94a3b8' }}>
-                      I agree to the <span style={{ color: '#00d4ff', fontWeight: 600 }}>Terms</span> and{' '}
-                      <span style={{ color: '#00d4ff', fontWeight: 600 }}>Privacy Policy</span>.
-                    </Typography>
-                  }
-                />
-                {errors.agreeToTerms && (
-                  <Typography variant="caption" sx={{ color: '#f44336', display: 'block', mt: 0.5, ml: 4 }}>
-                    {errors.agreeToTerms}
-                  </Typography>
-                )}
+              <Box sx={{ textAlign: 'right', mb: 1 }}>
+                <Typography 
+                  variant="caption" 
+                  sx={{ color: '#00d4ff', fontWeight: 700, cursor: 'pointer' }}
+                  onClick={() => navigate('/forgot-password')}
+                >
+                  Forgot Password?
+                </Typography>
               </Box>
 
               <Button
@@ -289,7 +212,7 @@ const MobileLayout = () => {
                   },
                 }}
               >
-                Create Account
+                Sign In
               </Button>
             </Box>
 
@@ -310,7 +233,7 @@ const MobileLayout = () => {
                   textTransform: 'uppercase'
                 }}
               >
-                Or 
+                Or
               </Typography>
             </Box>
 
@@ -340,12 +263,12 @@ const MobileLayout = () => {
             </Button>
 
             <Typography variant="caption" sx={{ textAlign: 'center', mt: 5, color: '#64748b', display: 'block' }}>
-              Already have an account?{' '}
+              Don't have an account?{' '}
               <span 
                 style={{ color: '#00d4ff', fontWeight: 700, cursor: 'pointer' }}
-                onClick={() => navigate('/login')}
+                onClick={() => navigate('/register')}
               >
-                Log In
+                Sign Up
               </span>
             </Typography>
           </Box>
@@ -355,4 +278,4 @@ const MobileLayout = () => {
   );
 };
 
-export default MobileLayout;
+export default MobileLoginLayout;
