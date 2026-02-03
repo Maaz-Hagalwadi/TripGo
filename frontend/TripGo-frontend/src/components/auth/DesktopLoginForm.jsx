@@ -5,13 +5,67 @@ import TripGoIcon from '../../assets/icons/TripGoIcon';
 const DesktopLoginForm = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    email: '',
+    emailOrPhone: '',
     password: ''
   });
+  const [errors, setErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const loginUser = async (formData) => {
+    try {
+      const response = await fetch('http://localhost:8080/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          emailOrPhone: formData.emailOrPhone,
+          password: formData.password
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Login successful:', data);
+        setErrors({ success: 'Login successful! Redirecting...' });
+        setTimeout(() => navigate('/'), 1500);
+      } else {
+        const errorData = await response.json();
+        console.log('Login error:', errorData);
+        
+        if (errorData.error === 'INVALID_CREDENTIALS') {
+          setErrors({ general: 'Invalid email/phone or password' });
+        } else if (errorData.error === 'EMAIL_NOT_VERIFIED') {
+          setErrors({ general: 'Please verify your email before login' });
+        } else if (errorData.error === 'OPERATOR_PENDING') {
+          setErrors({ general: 'Operator account is awaiting admin approval' });
+        } else if (errorData.error === 'OPERATOR_REJECTED') {
+          setErrors({ general: 'Your operator application was rejected' });
+        } else {
+          setErrors({ general: errorData.message || 'Login failed' });
+        }
+      }
+    } catch (error) {
+      console.error('Network error:', error);
+      setErrors({ general: 'Network error. Please try again.' });
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Login data:', formData);
+    setErrors({});
+    
+    if (!formData.emailOrPhone.trim()) {
+      setErrors({ emailOrPhone: 'Email or phone is required' });
+      return;
+    }
+    if (!formData.password.trim()) {
+      setErrors({ password: 'Password is required' });
+      return;
+    }
+    
+    setIsLoading(true);
+    await loginUser(formData);
+    setIsLoading(false);
   };
 
   return (
@@ -45,19 +99,37 @@ const DesktopLoginForm = () => {
               <h1 className="text-3xl font-extrabold text-white mb-3">Welcome Back</h1>
               <p className="text-slate-400">Please enter your details to access your account.</p>
             </div>
+            {errors.success && (
+              <div className="p-3 mb-4 bg-green-900/20 border border-green-500/30 rounded-xl text-green-400">
+                <p className="text-sm">{errors.success}</p>
+              </div>
+            )}
+            
+            {errors.general && (
+              <div className="p-3 mb-4 bg-red-900/20 border border-red-500/30 rounded-xl text-red-400">
+                <p className="text-sm">{errors.general}</p>
+              </div>
+            )}
+            
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
-                <label className="text-sm font-semibold text-silver-text ml-1">Email Address</label>
+                <label className="text-sm font-semibold text-silver-text ml-1">Email or Phone</label>
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3">mail</span>
                   <input 
-                    className="w-full pl-12 pr-4 py-4 bg-input-gray border border-white/10 rounded-xl text-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none" 
-                    placeholder="name@company.com" 
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    className={`w-full pl-12 pr-4 py-4 bg-input-gray border ${errors.emailOrPhone ? 'border-red-500' : 'border-white/10'} rounded-xl text-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
+                    placeholder="name@company.com or phone" 
+                    type="text"
+                    value={formData.emailOrPhone}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, emailOrPhone: e.target.value }));
+                      if (errors.emailOrPhone) setErrors(prev => ({ ...prev, emailOrPhone: '' }));
+                    }}
                   />
                 </div>
+                {errors.emailOrPhone && (
+                  <p className="text-red-400 text-xs mt-1 ml-1">{errors.emailOrPhone}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between items-center ml-1">
@@ -72,16 +144,26 @@ const DesktopLoginForm = () => {
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3">lock</span>
                   <input 
-                    className="w-full pl-12 pr-4 py-4 bg-input-gray border border-white/10 rounded-xl text-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none" 
+                    className={`w-full pl-12 pr-4 py-4 bg-input-gray border ${errors.password ? 'border-red-500' : 'border-white/10'} rounded-xl text-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
                     placeholder="••••••••" 
                     type="password"
                     value={formData.password}
-                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, password: e.target.value }));
+                      if (errors.password) setErrors(prev => ({ ...prev, password: '' }));
+                    }}
                   />
                 </div>
+                {errors.password && (
+                  <p className="text-red-400 text-xs mt-1 ml-1">{errors.password}</p>
+                )}
               </div>
-              <button className="w-full bg-primary hover:bg-primary/90 text-black py-4 rounded-xl font-extrabold text-lg transition-all shadow-[0_0_20px_rgba(0,212,255,0.2)] transform hover:scale-[1.01] active:scale-[0.99] mt-2">
-                Sign In
+              <button 
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-black py-4 rounded-xl font-extrabold text-lg transition-all shadow-[0_0_20px_rgba(0,212,255,0.2)] transform hover:scale-[1.01] active:scale-[0.99] mt-2"
+              >
+                {isLoading ? 'Signing In...' : 'Sign In'}
               </button>
             </form>
             <div className="mt-10">

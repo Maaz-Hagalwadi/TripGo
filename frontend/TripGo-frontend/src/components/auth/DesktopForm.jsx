@@ -6,12 +6,144 @@ const DesktopForm = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    fullName: '',
+    firstName: '',
+    lastName: '',
     email: '',
     phone: '',
     password: '',
+    confirmPassword: '',
     agreeToTerms: false
   });
+  const [errors, setErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+
+  const registerUser = async (formData) => {
+    try {
+      console.log('Sending registration request:', {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password
+      });
+      
+      const response = await fetch('http://localhost:8080/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          phone: formData.phone,
+          password: formData.password
+        })
+      });
+
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      
+      if (response.ok) {
+        const message = await response.text();
+        console.log('Success response:', message);
+        setErrors({ success: 'Registration successful! Please check your email to verify your account.' });
+        setTimeout(() => navigate('/login'), 2000);
+      } else {
+        const errorText = await response.text();
+        console.log('Error response:', errorText);
+        
+        try {
+          const errorObj = JSON.parse(errorText);
+          if (errorObj.message && errorObj.message.includes('phone:')) {
+            setErrors({ phone: 'Phone must be exactly 10 digits' });
+          } else if (errorObj.message && errorObj.message.includes('email:')) {
+            setErrors({ email: errorObj.message.split('email: ')[1] });
+          } else if (errorText.includes('Email already in use')) {
+            setErrors({ email: 'Email already in use' });
+          } else if (errorText.includes('Phone already in use')) {
+            setErrors({ phone: 'Phone already in use' });
+          } else {
+            setErrors({ general: errorObj.message || 'Registration failed' });
+          }
+        } catch {
+          if (errorText.includes('Email already in use')) {
+            setErrors({ email: 'Email already in use' });
+          } else if (errorText.includes('Phone already in use')) {
+            setErrors({ phone: 'Phone already in use' });
+          } else {
+            setErrors({ general: 'Registration failed. Please try again.' });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Network error:', error);
+      setErrors({ general: `Network error: ${error.message}` });
+    }
+  };
+
+  const validateForm = () => {
+    const newErrors = {};
+    
+    // First name validation
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = 'First name is required';
+    }
+    
+    // Last name validation
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = 'Last name is required';
+    }
+    
+    // Email validation
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+    
+    // Phone validation
+    if (!formData.phone.trim()) {
+      newErrors.phone = 'Phone number is required';
+    } else if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ''))) {
+      newErrors.phone = 'Phone must be exactly 10 digits';
+    }
+    
+    // Password validation
+    if (!formData.password.trim()) {
+      newErrors.password = 'Password is required';
+    } else {
+      const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+      if (!passwordRegex.test(formData.password)) {
+        newErrors.password = 'Password must be at least 8 characters with letters, numbers, and symbols';
+      }
+    }
+    
+    // Confirm password validation
+    if (!formData.confirmPassword.trim()) {
+      newErrors.confirmPassword = 'Please confirm your password';
+    } else if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+    
+    // Terms validation
+    if (!formData.agreeToTerms) {
+      newErrors.agreeToTerms = 'You must agree to the terms and conditions';
+    }
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setErrors({}); // Clear previous errors
+    if (validateForm()) {
+      setIsLoading(true);
+      await registerUser(formData);
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="bg-deep-black text-slate-100 min-h-screen flex items-center justify-center p-4">
@@ -56,20 +188,76 @@ const DesktopForm = () => {
           <div className="max-w-md w-full mx-auto">
             <div className="mb-6">
               <h1 className="text-3xl font-extrabold text-white mb-3">Create Account</h1>
-              <p className="text-slate-400">Enter your details to register for your TripGo account.</p>
+              <p className="text-slate-400">Choose your account type and enter your details.</p>
+              
+              <div className="flex gap-4 mt-4 p-3 bg-input-gray/50 rounded-xl border border-white/5">
+                <button 
+                  type="button"
+                  onClick={() => navigate('/register')}
+                  className="flex-1 py-2 px-4 bg-primary text-black rounded-lg font-bold text-sm transition-all"
+                >
+                  Regular User
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => navigate('/operator-register')}
+                  className="flex-1 py-2 px-4 bg-white/10 text-white rounded-lg font-bold text-sm hover:bg-white/20 transition-all"
+                >
+                  Bus Operator
+                </button>
+              </div>
             </div>
-            <form className="space-y-3">
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
-                <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">person</span>
-                  <input 
-                    className="w-full pl-12 pr-4 py-3 bg-input-gray border border-white/5 rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none" 
-                    placeholder="Enter Your Name" 
-                    type="text"
-                    value={formData.fullName}
-                    onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
-                  />
+            {errors.success && (
+              <div className="p-3 mb-4 bg-green-900/20 border border-green-500/30 rounded-xl text-green-400">
+                <p className="text-sm">{errors.success}</p>
+              </div>
+            )}
+            
+            {errors.general && (
+              <div className="p-3 mb-4 bg-red-900/20 border border-red-500/30 rounded-xl text-red-400">
+                <p className="text-sm">{errors.general}</p>
+              </div>
+            )}
+            
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">First Name</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">person</span>
+                    <input 
+                      className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.firstName ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
+                      placeholder="First Name" 
+                      type="text"
+                      value={formData.firstName}
+                      onChange={(e) => {
+                        setFormData(prev => ({ ...prev, firstName: e.target.value }));
+                        if (errors.firstName) setErrors(prev => ({ ...prev, firstName: '' }));
+                      }}
+                    />
+                  </div>
+                  {errors.firstName && (
+                    <p className="text-red-400 text-xs mt-1 ml-1">{errors.firstName}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Last Name</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">person</span>
+                    <input 
+                      className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.lastName ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
+                      placeholder="Last Name" 
+                      type="text"
+                      value={formData.lastName}
+                      onChange={(e) => {
+                        setFormData(prev => ({ ...prev, lastName: e.target.value }));
+                        if (errors.lastName) setErrors(prev => ({ ...prev, lastName: '' }));
+                      }}
+                    />
+                  </div>
+                  {errors.lastName && (
+                    <p className="text-red-400 text-xs mt-1 ml-1">{errors.lastName}</p>
+                  )}
                 </div>
               </div>
               <div className="space-y-2">
@@ -77,37 +265,54 @@ const DesktopForm = () => {
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">mail</span>
                   <input 
-                    className="w-full pl-12 pr-4 py-3 bg-input-gray border border-white/5 rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none" 
+                    className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.email ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
                     placeholder="name@company.com" 
                     type="email"
+                    autoComplete="off"
                     value={formData.email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, email: e.target.value }));
+                      if (errors.email) setErrors(prev => ({ ...prev, email: '' }));
+                    }}
                   />
                 </div>
+                {errors.email && (
+                  <p className="text-red-400 text-xs mt-1 ml-1">{errors.email}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">call</span>
                   <input 
-                    className="w-full pl-12 pr-4 py-3 bg-input-gray border border-white/5 rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none" 
+                    className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.phone ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
                     placeholder="9765764530" 
                     type="tel"
                     value={formData.phone}
-                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, phone: e.target.value }));
+                      if (errors.phone) setErrors(prev => ({ ...prev, phone: '' }));
+                    }}
                   />
                 </div>
+                {errors.phone && (
+                  <p className="text-red-400 text-xs mt-1 ml-1">{errors.phone}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Password</label>
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">lock</span>
                   <input 
-                    className="w-full pl-12 pr-12 py-3 bg-input-gray border border-white/5 rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none" 
+                    className={`w-full pl-12 pr-12 py-3 bg-input-gray border ${errors.password ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
                     placeholder="••••••••" 
                     type={showPassword ? "text" : "password"}
+                    autoComplete="new-password"
                     value={formData.password}
-                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, password: e.target.value }));
+                      if (errors.password) setErrors(prev => ({ ...prev, password: '' }));
+                    }}
                   />
                   <button 
                     className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors" 
@@ -117,6 +322,29 @@ const DesktopForm = () => {
                     <span className="material-symbols-outlined">visibility</span>
                   </button>
                 </div>
+                {errors.password && (
+                  <p className="text-red-400 text-xs mt-1 ml-1">{errors.password}</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Confirm Password</label>
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">lock</span>
+                  <input 
+                    className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.confirmPassword ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
+                    placeholder="••••••••" 
+                    type="password"
+                    autoComplete="new-password"
+                    value={formData.confirmPassword}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, confirmPassword: e.target.value }));
+                      if (errors.confirmPassword) setErrors(prev => ({ ...prev, confirmPassword: '' }));
+                    }}
+                  />
+                </div>
+                {errors.confirmPassword && (
+                  <p className="text-red-400 text-xs mt-1 ml-1">{errors.confirmPassword}</p>
+                )}
               </div>
               <div className="flex items-start gap-3 py-2">
                 <div className="flex items-center h-5">
@@ -125,15 +353,25 @@ const DesktopForm = () => {
                     id="terms" 
                     type="checkbox"
                     checked={formData.agreeToTerms}
-                    onChange={(e) => setFormData(prev => ({ ...prev, agreeToTerms: e.target.checked }))}
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, agreeToTerms: e.target.checked }));
+                      if (errors.agreeToTerms) setErrors(prev => ({ ...prev, agreeToTerms: '' }));
+                    }}
                   />
                 </div>
                 <label className="text-sm text-slate-400 leading-tight" htmlFor="terms">
                   I agree to the <a className="text-primary hover:underline font-medium" href="#">Terms and Conditions</a> and <a className="text-primary hover:underline font-medium" href="#">Privacy Policy</a>.
                 </label>
               </div>
-              <button className="w-full bg-primary hover:bg-primary/90 text-black py-3 rounded-2xl font-extrabold text-lg flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(0,212,255,0.2)] transform hover:scale-[1.01] active:scale-[0.98]">
-                Create Account
+              {errors.agreeToTerms && (
+                <p className="text-red-400 text-xs mt-1 ml-1">{errors.agreeToTerms}</p>
+              )}
+              <button 
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-black py-3 rounded-2xl font-extrabold text-lg flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(0,212,255,0.2)] transform hover:scale-[1.01] active:scale-[0.98]"
+              >
+                {isLoading ? 'Creating Account...' : 'Create Account'}
               </button>
             </form>
             <div className="relative my-3">

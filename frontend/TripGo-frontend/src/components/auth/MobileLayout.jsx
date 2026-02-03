@@ -28,41 +28,129 @@ const MobileLayout = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    fullName: '',
+    firstName: '',
+    lastName: '',
     email: '',
     phone: '',
     password: '',
+    confirmPassword: '',
     agreeToTerms: false
   });
   const [errors, setErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
+
+  const registerUser = async (formData) => {
+    try {
+      console.log('Sending registration request:', {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        password: formData.password
+      });
+      
+      const response = await fetch('http://localhost:8080/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          phone: formData.phone,
+          password: formData.password
+        })
+      });
+
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      
+      if (response.ok) {
+        const message = await response.text();
+        console.log('Success response:', message);
+        setErrors({ success: 'Registration successful! Please check your email to verify your account.' });
+        setTimeout(() => navigate('/login'), 2000);
+      } else {
+        const errorText = await response.text();
+        console.log('Error response:', errorText);
+        
+        try {
+          const errorObj = JSON.parse(errorText);
+          if (errorObj.message && errorObj.message.includes('phone:')) {
+            setErrors({ phone: 'Phone must be exactly 10 digits' });
+          } else if (errorObj.message && errorObj.message.includes('email:')) {
+            setErrors({ email: errorObj.message.split('email: ')[1] });
+          } else if (errorText.includes('Email already in use')) {
+            setErrors({ email: 'Email already in use' });
+          } else if (errorText.includes('Phone already in use')) {
+            setErrors({ phone: 'Phone already in use' });
+          } else {
+            setErrors({ general: errorObj.message || 'Registration failed' });
+          }
+        } catch {
+          if (errorText.includes('Email already in use')) {
+            setErrors({ email: 'Email already in use' });
+          } else if (errorText.includes('Phone already in use')) {
+            setErrors({ phone: 'Phone already in use' });
+          } else {
+            setErrors({ general: 'Registration failed. Please try again.' });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Network error:', error);
+      setErrors({ general: `Network error: ${error.message}` });
+    }
+  };
 
   const validateForm = () => {
     const newErrors = {};
     
-    if (!formData.fullName.trim()) {
-      newErrors.fullName = 'Full name is required';
+    // First name validation
+    if (!formData.firstName.trim()) {
+      newErrors.firstName = 'First name is required';
     }
     
+    // Last name validation
+    if (!formData.lastName.trim()) {
+      newErrors.lastName = 'Last name is required';
+    }
+    
+    // Email validation
     if (!formData.email.trim()) {
       newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = 'Email is invalid';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Please enter a valid email address';
     }
     
+    // Phone validation
     if (!formData.phone.trim()) {
       newErrors.phone = 'Phone number is required';
     } else if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ''))) {
-      newErrors.phone = 'Phone number must be 10 digits';
+      newErrors.phone = 'Phone must be exactly 10 digits';
     }
     
+    // Password validation
     if (!formData.password.trim()) {
       newErrors.password = 'Password is required';
-    } else if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
+    } else {
+      const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+      if (!passwordRegex.test(formData.password)) {
+        newErrors.password = 'Password must be at least 8 characters with letters, numbers, and symbols';
+      }
     }
     
+    // Confirm password validation
+    if (!formData.confirmPassword.trim()) {
+      newErrors.confirmPassword = 'Please confirm your password';
+    } else if (formData.password !== formData.confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
+    }
+    
+    // Terms validation
     if (!formData.agreeToTerms) {
-      newErrors.agreeToTerms = 'You must agree to terms';
+      newErrors.agreeToTerms = 'You must agree to the terms and conditions';
     }
     
     setErrors(newErrors);
@@ -75,12 +163,18 @@ const MobileLayout = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (validateForm()) {
-      console.log('Form is valid:', formData);
+      setIsLoading(true);
+      await registerUser(formData);
+      setIsLoading(false);
     }
     return false;
   };
@@ -151,30 +245,116 @@ const MobileLayout = () => {
               <Typography variant="h6" sx={{ fontWeight: 700, color: 'white', mb: 0.5 }}>
                 Create Account
               </Typography>
-              <Typography variant="body2" sx={{ color: '#94a3b8' }}>
-                Join the elite travel community.
+              <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2 }}>
+                Choose your account type and enter your details.
               </Typography>
+              
+              <Box sx={{ 
+                display: 'flex', 
+                gap: 1, 
+                p: 1, 
+                bgcolor: 'rgba(255,255,255,0.05)', 
+                borderRadius: 2,
+                border: '1px solid rgba(255,255,255,0.1)'
+              }}>
+                <Button 
+                  onClick={() => navigate('/register')}
+                  sx={{
+                    flex: 1,
+                    py: 1,
+                    bgcolor: '#00d4ff',
+                    color: 'black',
+                    fontWeight: 800,
+                    fontSize: '0.75rem',
+                    borderRadius: 1.5,
+                    '&:hover': { bgcolor: '#00b8e6' }
+                  }}
+                >
+                  Regular User
+                </Button>
+                <Button 
+                  onClick={() => navigate('/operator-register')}
+                  sx={{
+                    flex: 1,
+                    py: 1,
+                    bgcolor: 'rgba(255,255,255,0.1)',
+                    color: 'white',
+                    fontWeight: 800,
+                    fontSize: '0.75rem',
+                    borderRadius: 1.5,
+                    '&:hover': { bgcolor: 'rgba(255,255,255,0.2)' }
+                  }}
+                >
+                  Bus Operator
+                </Button>
+              </Box>
             </Box>
 
+            {errors.success && (
+              <Box sx={{ 
+                p: 2, 
+                mb: 2, 
+                bgcolor: 'rgba(76, 175, 80, 0.1)', 
+                border: '1px solid rgba(76, 175, 80, 0.3)', 
+                borderRadius: 2,
+                color: '#4caf50'
+              }}>
+                <Typography variant="body2">{errors.success}</Typography>
+              </Box>
+            )}
+            
+            {errors.general && (
+              <Box sx={{ 
+                p: 2, 
+                mb: 2, 
+                bgcolor: 'rgba(244, 67, 54, 0.1)', 
+                border: '1px solid rgba(244, 67, 54, 0.3)', 
+                borderRadius: 2,
+                color: '#f44336'
+              }}>
+                <Typography variant="body2">{errors.general}</Typography>
+              </Box>
+            )}
+
             <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <TextField
-                fullWidth
-                required
-                name="fullName"
-                placeholder="Your full name"
-                value={formData.fullName}
-                onChange={handleInputChange}
-                error={!!errors.fullName}
-                helperText={errors.fullName}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Person sx={{ color: '#64748b' }} />
-                    </InputAdornment>
-                  ),
-                }}
-                size="small"
-              />
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+                <TextField
+                  fullWidth
+                  required
+                  name="firstName"
+                  placeholder="First Name"
+                  value={formData.firstName}
+                  onChange={handleInputChange}
+                  error={!!errors.firstName}
+                  helperText={errors.firstName}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Person sx={{ color: '#64748b' }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                  size="small"
+                />
+                <TextField
+                  fullWidth
+                  required
+                  name="lastName"
+                  placeholder="Last Name"
+                  value={formData.lastName}
+                  onChange={handleInputChange}
+                  error={!!errors.lastName}
+                  helperText={errors.lastName}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <Person sx={{ color: '#64748b' }} />
+                      </InputAdornment>
+                    ),
+                  }}
+                  size="small"
+                />
+              </Box>
 
               <TextField
                 fullWidth
@@ -186,6 +366,7 @@ const MobileLayout = () => {
                 onChange={handleInputChange}
                 error={!!errors.email}
                 helperText={errors.email}
+                inputProps={{ autoComplete: 'off' }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -226,6 +407,7 @@ const MobileLayout = () => {
                 onChange={handleInputChange}
                 error={!!errors.password}
                 helperText={errors.password}
+                inputProps={{ autoComplete: 'new-password' }}
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -241,6 +423,27 @@ const MobileLayout = () => {
                       >
                         {showPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+                size="small"
+              />
+
+              <TextField
+                fullWidth
+                required
+                name="confirmPassword"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                value={formData.confirmPassword}
+                onChange={handleInputChange}
+                error={!!errors.confirmPassword}
+                helperText={errors.confirmPassword}
+                inputProps={{ autoComplete: 'new-password' }}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Lock sx={{ color: '#64748b' }} />
                     </InputAdornment>
                   ),
                 }}
@@ -277,6 +480,7 @@ const MobileLayout = () => {
                 type="submit"
                 fullWidth
                 variant="contained"
+                disabled={isLoading}
                 sx={{
                   bgcolor: '#00d4ff',
                   color: 'black',
@@ -287,9 +491,13 @@ const MobileLayout = () => {
                   '&:hover': {
                     bgcolor: '#00b8e6',
                   },
+                  '&:disabled': {
+                    bgcolor: 'rgba(0,212,255,0.5)',
+                    color: 'black'
+                  }
                 }}
               >
-                Create Account
+                {isLoading ? 'Creating Account...' : 'Create Account'}
               </Button>
             </Box>
 
