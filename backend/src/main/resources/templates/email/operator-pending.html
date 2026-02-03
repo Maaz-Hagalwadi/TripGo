@@ -14,15 +14,37 @@
         <p>Please review and approve/reject this operator application.</p>
         
         <div style="text-align: center; margin: 30px 0;">
-            <a th:href="${adminUrl}" 
-               style="background: #007bff; 
+            <a th:href="${approveUrl}" 
+               style="background: #28a745; 
                       color: white; 
-                      padding: 12px 30px; 
+                      padding: 12px 25px; 
                       text-decoration: none; 
                       border-radius: 5px; 
                       display: inline-block;
-                      font-weight: bold;">
-                Review in Admin Dashboard
+                      font-weight: bold;
+                      margin: 0 10px;">
+                ✅ Approve
+            </a>
+            
+            <a th:href="${rejectUrl}" 
+               style="background: #dc3545; 
+                      color: white; 
+                      padding: 12px 25px; 
+                      text-decoration: none; 
+                      border-radius: 5px; 
+                      display: inline-block;
+                      font-weight: bold;
+                      margin: 0 10px;">
+                ❌ Reject
+            </a>
+        </div>
+        
+        <div style="text-align: center; margin: 20px 0;">
+            <a th:href="${adminUrl}" 
+               style="color: #007bff; 
+                      text-decoration: none;
+                      font-size: 14px;">
+                Or review in Admin Dashboard
             </a>
         </div>
         
