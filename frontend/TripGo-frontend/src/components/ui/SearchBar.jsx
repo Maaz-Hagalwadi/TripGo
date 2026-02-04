@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const SearchBar = () => {
+  const navigate = useNavigate();
   const today = new Date().toISOString().split('T')[0];
   const [isMobile, setIsMobile] = useState(false);
   
@@ -17,6 +19,10 @@ const SearchBar = () => {
   
   const handleDateIconClick = () => {
     document.getElementById('dateInput').showPicker();
+  };
+
+  const handleSearch = () => {
+    navigate('/search-results');
   };
 
   return (
@@ -66,7 +72,10 @@ const SearchBar = () => {
         </div>
         
         <div className="px-2">
-          <button className="w-full bg-primary hover:bg-primary/90 text-black h-[60px] rounded-xl font-extrabold flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(0,212,255,0.3)] transform hover:scale-[1.02]">
+          <button 
+            onClick={handleSearch}
+            className="w-full bg-primary hover:bg-primary/90 text-black h-[60px] rounded-xl font-extrabold flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(0,212,255,0.3)] transform hover:scale-[1.02]"
+          >
             <span className="material-symbols-outlined">search</span>
             Search
           </button>
