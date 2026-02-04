@@ -160,10 +160,15 @@ const DesktopForm = () => {
         >
           <div className="relative z-10 space-y-6">
             <div className="flex items-center gap-3 mb-12">
-              <div className="text-primary">
+              <div className="text-primary cursor-pointer" onClick={() => navigate('/')}>
                 <TripGoIcon className="w-10 h-10" />
               </div>
-              <span className="text-3xl font-extrabold tracking-tight text-white">TripGo</span>
+              <span 
+                className="text-3xl font-extrabold tracking-tight text-white cursor-pointer hover:text-primary transition-colors" 
+                onClick={() => navigate('/')}
+              >
+                TripGo
+              </span>
             </div>
             <h2 className="text-4xl lg:text-5xl font-extrabold text-white leading-tight">Start Your Premium Journey Today.</h2>
             <p className="text-slate-300 text-lg max-w-md">Join over 2 million travelers booking seamless bus journeys across 500+ cities.</p>

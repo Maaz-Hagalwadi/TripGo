@@ -5,10 +5,50 @@ import TripGoIcon from '../../assets/icons/TripGoIcon';
 const DesktopForgotPasswordForm = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
+  const [errors, setErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  const forgotPassword = async (email) => {
+    try {
+      const response = await fetch('http://localhost:8080/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `email=${email}`
+      });
+
+      if (response.ok) {
+        setErrors({ success: 'Reset email sent! Check your inbox.' });
+      } else {
+        const errorText = await response.text();
+        if (errorText.includes('User not found')) {
+          setErrors({ email: 'No account found with this email address' });
+        } else {
+          setErrors({ general: errorText || 'Failed to send reset email. Please try again.' });
+        }
+      }
+    } catch (error) {
+      console.error('Network error:', error);
+      setErrors({ general: 'Network error. Please try again.' });
+    }
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Reset email:', email);
+    setErrors({});
+    
+    if (!email.trim()) {
+      setErrors({ email: 'Email is required' });
+      return;
+    }
+    
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setErrors({ email: 'Please enter a valid email address' });
+      return;
+    }
+    
+    setIsLoading(true);
+    await forgotPassword(email);
+    setIsLoading(false);
   };
 
   return (
@@ -26,10 +66,15 @@ const DesktopForgotPasswordForm = () => {
         >
           <div className="relative z-10 space-y-6">
             <div className="flex items-center gap-3 mb-12">
-              <div className="text-primary">
+              <div className="text-primary cursor-pointer" onClick={() => navigate('/')}>
                 <TripGoIcon className="w-10 h-10" />
               </div>
-              <span className="text-3xl font-extrabold tracking-tight text-white">TripGo</span>
+              <span 
+                className="text-3xl font-extrabold tracking-tight text-white cursor-pointer hover:text-primary transition-colors" 
+                onClick={() => navigate('/')}
+              >
+                TripGo
+              </span>
             </div>
             <h2 className="text-4xl lg:text-5xl font-extrabold text-white leading-tight">Travel with Peace of Mind.</h2>
             <p className="text-slate-300 text-lg max-w-md">Our recovery system ensures you never lose access to your premium travel experiences.</p>
@@ -56,22 +101,44 @@ const DesktopForgotPasswordForm = () => {
               <h1 className="text-3xl font-extrabold text-white mb-3">Forgot Password?</h1>
               <p className="text-slate-400">No worries, we'll send you reset instructions.</p>
             </div>
+            {errors.success && (
+              <div className="p-3 mb-4 bg-green-900/20 border border-green-500/30 rounded-xl text-green-400">
+                <p className="text-sm">{errors.success}</p>
+              </div>
+            )}
+            
+            {errors.general && (
+              <div className="p-3 mb-4 bg-red-900/20 border border-red-500/30 rounded-xl text-red-400">
+                <p className="text-sm">{errors.general}</p>
+              </div>
+            )}
+            
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">mail</span>
                   <input 
-                    className="w-full pl-12 pr-4 py-3 bg-input-gray border border-white/5 rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none" 
+                    className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.email ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
                     placeholder="name@company.com" 
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (errors.email) setErrors(prev => ({ ...prev, email: '' }));
+                    }}
                   />
                 </div>
+                {errors.email && (
+                  <p className="text-red-400 text-xs mt-1 ml-1">{errors.email}</p>
+                )}
               </div>
-              <button className="w-full bg-primary hover:bg-primary/90 text-black py-3 rounded-2xl font-extrabold text-lg flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(0,212,255,0.2)] transform hover:scale-[1.01] active:scale-[0.98] mt-6">
-                Send Reset Link
+              <button 
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-black py-3 rounded-2xl font-extrabold text-lg flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(0,212,255,0.2)] transform hover:scale-[1.01] active:scale-[0.98] mt-6"
+              >
+                {isLoading ? 'Sending...' : 'Send Reset Link'}
               </button>
             </form>
             <div className="mt-8 flex flex-col items-center">
