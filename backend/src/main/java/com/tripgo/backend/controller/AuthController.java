@@ -147,9 +147,30 @@ public class AuthController {
         PasswordResetToken token = passwordResetService.createToken(user);
 
         emailService.sendResetPasswordEmail(user,
-                "http://localhost:8080/auth/reset-password?token=" + token.getToken());
+                "http://localhost:5174/reset-password?token=" + token.getToken());
 
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/resend-verification")
+    public ResponseEntity<String> resendVerification(@RequestParam String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.isEmailVerified()) {
+            throw new RuntimeException("Email already verified");
+        }
+
+        EmailVerificationToken token = emailVerificationService.createToken(user);
+        String verificationLink = "http://localhost:8080/auth/verify-email?token=" + token.getToken();
+
+        if (user.getRoles().stream().anyMatch(r -> r.getName() == RoleType.ROLE_OPERATOR)) {
+            emailService.sendOperatorVerificationEmail(user, verificationLink);
+        } else {
+            emailService.sendUserVerificationEmail(user, verificationLink);
+        }
+
+        return ResponseEntity.ok("Verification email sent successfully");
     }
 
     @PostMapping("/reset-password")
@@ -173,7 +194,7 @@ public class AuthController {
     @GetMapping("/reset-password")
     public void validateResetToken(@RequestParam String token, HttpServletResponse response) throws IOException {
         passwordResetService.validateToken(token);
-        response.sendRedirect("http://localhost:3000/reset-password?token=" + token);
+        response.sendRedirect("http://localhost:5174/reset-password?token=" + token);
     }
 
     private String extractCookie(HttpServletRequest request, String name) {

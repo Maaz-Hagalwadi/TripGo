@@ -18,6 +18,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
 @EnableMethodSecurity
@@ -32,6 +33,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http)throws Exception {
         http
+                .cors(cors -> cors.and())
                 .csrf(csrf -> csrf.disable())
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint(jwtAuthenticationEntryPoint)
@@ -45,6 +47,7 @@ public class SecurityConfig {
                                 "/login/oauth2/**",
                                 "/operators/register",
                                 "/auth/verify-email",
+                                "/auth/verify",
                                 "/auth/forgot-password",
                                 "/auth/reset-password",
                                 "/admin/operators/*/approve",
