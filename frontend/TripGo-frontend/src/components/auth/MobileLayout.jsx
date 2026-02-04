@@ -227,10 +227,20 @@ const MobileLayout = () => {
           }}>
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <Box sx={{ color: '#00d4ff' }}>
+                <Box sx={{ color: '#00d4ff', cursor: 'pointer' }} onClick={() => navigate('/')}>
                   <TripGoIcon style={{ width: 32, height: 32 }} />
                 </Box>
-                <Typography variant="h5" sx={{ fontWeight: 800, color: 'white' }}>
+                <Typography 
+                  variant="h5" 
+                  sx={{ 
+                    fontWeight: 800, 
+                    color: 'white', 
+                    cursor: 'pointer',
+                    '&:hover': { color: '#00d4ff' },
+                    transition: 'color 0.2s'
+                  }}
+                  onClick={() => navigate('/')}
+                >
                   TripGo
                 </Typography>
               </Box>

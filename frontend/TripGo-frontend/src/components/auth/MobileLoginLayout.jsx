@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { 
   Box, 
   Container, 
@@ -22,6 +23,7 @@ import { darkTheme } from '../../theme/darkTheme';
 
 const MobileLoginLayout = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     emailOrPhone: '',
@@ -32,36 +34,16 @@ const MobileLoginLayout = () => {
 
   const loginUser = async (formData) => {
     try {
-      const response = await fetch('http://localhost:8080/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          emailOrPhone: formData.emailOrPhone,
-          password: formData.password
-        })
+      const success = await login({
+        emailOrPhone: formData.emailOrPhone,
+        password: formData.password
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Login successful:', data);
+      if (success) {
         setErrors({ success: 'Login successful! Redirecting...' });
-        setTimeout(() => navigate('/'), 1500);
+        navigate('/dashboard'); // Immediate redirect
       } else {
-        const errorData = await response.json();
-        console.log('Login error:', errorData);
-        
-        if (errorData.error === 'INVALID_CREDENTIALS') {
-          setErrors({ general: 'Invalid email/phone or password' });
-        } else if (errorData.error === 'EMAIL_NOT_VERIFIED') {
-          setErrors({ general: 'Please verify your email before login' });
-        } else if (errorData.error === 'OPERATOR_PENDING') {
-          setErrors({ general: 'Operator account is awaiting admin approval' });
-        } else if (errorData.error === 'OPERATOR_REJECTED') {
-          setErrors({ general: 'Your operator application was rejected' });
-        } else {
-          setErrors({ general: errorData.message || 'Login failed' });
-        }
+        setErrors({ general: 'Invalid email/phone or password' });
       }
     } catch (error) {
       console.error('Network error:', error);
@@ -147,10 +129,20 @@ const MobileLoginLayout = () => {
           }}>
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <Box sx={{ color: '#00d4ff' }}>
+                <Box sx={{ color: '#00d4ff', cursor: 'pointer' }} onClick={() => navigate('/')}>
                   <TripGoIcon style={{ width: 32, height: 32 }} />
                 </Box>
-                <Typography variant="h5" sx={{ fontWeight: 800, color: 'white' }}>
+                <Typography 
+                  variant="h5" 
+                  sx={{ 
+                    fontWeight: 800, 
+                    color: 'white', 
+                    cursor: 'pointer',
+                    '&:hover': { color: '#00d4ff' },
+                    transition: 'color 0.2s'
+                  }}
+                  onClick={() => navigate('/')}
+                >
                   TripGo
                 </Typography>
               </Box>

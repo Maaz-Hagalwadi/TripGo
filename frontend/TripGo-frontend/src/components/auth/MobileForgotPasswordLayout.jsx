@@ -21,26 +21,49 @@ const MobileForgotPasswordLayout = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [errors, setErrors] = useState({});
+  const [isLoading, setIsLoading] = useState(false);
 
-  const validateForm = () => {
-    const newErrors = {};
-    
-    if (!email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(email)) {
-      newErrors.email = 'Email is invalid';
+  const forgotPassword = async (email) => {
+    try {
+      const response = await fetch('http://localhost:8080/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `email=${email}`
+      });
+
+      if (response.ok) {
+        setErrors({ success: 'Reset email sent! Check your inbox.' });
+      } else {
+        const errorText = await response.text();
+        if (errorText.includes('User not found')) {
+          setErrors({ email: 'No account found with this email address' });
+        } else {
+          setErrors({ general: errorText || 'Failed to send reset email. Please try again.' });
+        }
+      }
+    } catch (error) {
+      console.error('Network error:', error);
+      setErrors({ general: 'Network error. Please try again.' });
     }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (validateForm()) {
-      console.log('Reset email:', email);
+    setErrors({});
+    
+    if (!email.trim()) {
+      setErrors({ email: 'Email is required' });
+      return;
     }
-    return false;
+    
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setErrors({ email: 'Please enter a valid email address' });
+      return;
+    }
+    
+    setIsLoading(true);
+    await forgotPassword(email);
+    setIsLoading(false);
   };
 
   return (
@@ -87,10 +110,20 @@ const MobileForgotPasswordLayout = () => {
           }}>
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <Box sx={{ color: '#00d4ff' }}>
+                <Box sx={{ color: '#00d4ff', cursor: 'pointer' }} onClick={() => navigate('/')}>
                   <TripGoIcon style={{ width: 32, height: 32 }} />
                 </Box>
-                <Typography variant="h5" sx={{ fontWeight: 800, color: 'white' }}>
+                <Typography 
+                  variant="h5" 
+                  sx={{ 
+                    fontWeight: 800, 
+                    color: 'white', 
+                    cursor: 'pointer',
+                    '&:hover': { color: '#00d4ff' },
+                    transition: 'color 0.2s'
+                  }}
+                  onClick={() => navigate('/')}
+                >
                   TripGo
                 </Typography>
               </Box>
@@ -122,6 +155,32 @@ const MobileForgotPasswordLayout = () => {
               </Typography>
             </Box>
 
+            {errors.success && (
+              <Box sx={{ 
+                p: 2, 
+                mb: 2, 
+                bgcolor: 'rgba(76, 175, 80, 0.1)', 
+                border: '1px solid rgba(76, 175, 80, 0.3)', 
+                borderRadius: 2,
+                color: '#4caf50'
+              }}>
+                <Typography variant="body2">{errors.success}</Typography>
+              </Box>
+            )}
+            
+            {errors.general && (
+              <Box sx={{ 
+                p: 2, 
+                mb: 2, 
+                bgcolor: 'rgba(244, 67, 54, 0.1)', 
+                border: '1px solid rgba(244, 67, 54, 0.3)', 
+                borderRadius: 2,
+                color: '#f44336'
+              }}>
+                <Typography variant="body2">{errors.general}</Typography>
+              </Box>
+            )}
+
             <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <TextField
                 fullWidth
@@ -130,7 +189,10 @@ const MobileForgotPasswordLayout = () => {
                 type="email"
                 placeholder="name@company.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (errors.email) setErrors(prev => ({ ...prev, email: '' }));
+                }}
                 error={!!errors.email}
                 helperText={errors.email}
                 InputProps={{
@@ -147,6 +209,7 @@ const MobileForgotPasswordLayout = () => {
                 type="submit"
                 fullWidth
                 variant="contained"
+                disabled={isLoading}
                 sx={{
                   bgcolor: '#00d4ff',
                   color: 'black',
@@ -157,9 +220,13 @@ const MobileForgotPasswordLayout = () => {
                   '&:hover': {
                     bgcolor: '#00b8e6',
                   },
+                  '&:disabled': {
+                    bgcolor: 'rgba(0,212,255,0.5)',
+                    color: 'black'
+                  }
                 }}
               >
-                Send Reset Link
+                {isLoading ? 'Sending...' : 'Send Reset Link'}
               </Button>
             </Box>
 
