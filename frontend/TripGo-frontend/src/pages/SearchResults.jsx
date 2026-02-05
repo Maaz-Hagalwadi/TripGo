@@ -1,32 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import HeaderAuth from '../components/layout/HeaderAuth';
 import TripGoIcon from '../assets/icons/TripGoIcon';
 
 const SearchResults = () => {
   return (
     <div className="bg-deep-black text-slate-100 min-h-screen">
       {/* Header */}
-      <header className="sticky top-0 z-50 w-full border-b border-white/5 bg-deep-black/90 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-2">
-              <div className="text-primary">
-                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                  <path clipRule="evenodd" d="M12.0799 24L4 19.2479L9.95537 8.75216L18.04 13.4961L18.0446 4H29.9554L29.96 13.4961L38.0446 8.75216L44 19.2479L35.92 24L44 28.7521L38.0446 39.2479L29.96 34.5039L29.9554 44H18.0446L18.04 34.5039L9.95537 39.2479L4 28.7521L12.0799 24Z" fillRule="evenodd"></path>
-                </svg>
-              </div>
-              <span className="text-xl font-extrabold tracking-tight text-white">TripGo</span>
-            </div>
-            <div className="flex items-center gap-6">
-              <button className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">Support</button>
-              <button className="bg-white/10 hover:bg-white/20 text-white px-5 py-2 rounded-full text-sm font-bold transition-all">My Profile</button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <HeaderAuth />
 
       {/* Search Bar */}
-      <div className="bg-charcoal border-b border-white/5 py-4 sticky top-16 z-40">
+      <div className="bg-charcoal border-b border-white/5 py-4 sticky top-20 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
             <div className="relative group">
