@@ -1,0 +1,41 @@
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope:
+              - email
+              - profile
+              - openid
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tripgo
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      leak-detection-threshold: 60000
+      housekeeping-period-ms: 30000
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${EMAIL_USERNAME}
+    password: ${EMAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-expiration: 900000
+    refresh-token-expiration: 604800000
+  frontend:
+    url: ${FRONTEND_URL:http://localhost:5174}
+  backend:
+    url: ${BACKEND_URL:http://localhost:8080}
