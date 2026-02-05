@@ -24,6 +24,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -48,6 +49,12 @@ public class AuthController {
     private final PasswordResetService passwordResetService;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
+
+    @Value("${app.frontend.url}")
+    private String frontendUrl;
+
+    @Value("${app.backend.url}")
+    private String backendUrl;
 
     @PostMapping("/register")
     public ResponseEntity<String> register(@Valid @RequestBody RegisterRequest request) {
@@ -132,9 +139,9 @@ public class AuthController {
             userRepository.save(user);
             emailVerificationService.markUsed(verificationToken);
 
-            response.sendRedirect("http://localhost:5174/verify-email?status=success");
+            response.sendRedirect(frontendUrl + "/verify-email?status=success");
         } catch (Exception e) {
-            response.sendRedirect("http://localhost:5174/verify-email?status=error&message=" + e.getMessage());
+            response.sendRedirect(frontendUrl + "/verify-email?status=error&message=" + e.getMessage());
         }
     }
 
@@ -147,7 +154,7 @@ public class AuthController {
         PasswordResetToken token = passwordResetService.createToken(user);
 
         emailService.sendResetPasswordEmail(user,
-                "http://localhost:5174/reset-password?token=" + token.getToken());
+                frontendUrl + "/reset-password?token=" + token.getToken());
 
         return ResponseEntity.ok().build();
     }
@@ -162,7 +169,7 @@ public class AuthController {
         }
 
         EmailVerificationToken token = emailVerificationService.createToken(user);
-        String verificationLink = "http://localhost:8080/auth/verify-email?token=" + token.getToken();
+        String verificationLink = backendUrl + "/auth/verify-email?token=" + token.getToken();
 
         if (user.getRoles().stream().anyMatch(r -> r.getName() == RoleType.ROLE_OPERATOR)) {
             emailService.sendOperatorVerificationEmail(user, verificationLink);
@@ -194,7 +201,7 @@ public class AuthController {
     @GetMapping("/reset-password")
     public void validateResetToken(@RequestParam String token, HttpServletResponse response) throws IOException {
         passwordResetService.validateToken(token);
-        response.sendRedirect("http://localhost:5174/reset-password?token=" + token);
+        response.sendRedirect(frontendUrl + "/reset-password?token=" + token);
     }
 
     private String extractCookie(HttpServletRequest request, String name) {
