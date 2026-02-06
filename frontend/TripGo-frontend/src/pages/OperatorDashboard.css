@@ -1,0 +1,48 @@
+/* Hide sidebar on mobile, show on desktop */
+@media (max-width: 767px) {
+  .operator-sidebar {
+    display: none !important;
+  }
+  
+  .operator-main {
+    margin-left: 0 !important;
+    padding-bottom: 4rem !important;
+  }
+  
+  .mobile-bottom-nav {
+    display: grid !important;
+  }
+  
+  /* Hide search bar on mobile */
+  .operator-search {
+    display: none !important;
+  }
+  
+  /* Make notification dropdown better on mobile */
+  .notification-dropdown {
+    position: fixed !important;
+    right: 1rem !important;
+    left: 1rem !important;
+    top: 64px !important;
+    width: auto !important;
+    max-width: none !important;
+    margin-top: 0 !important;
+    max-height: calc(100vh - 64px - 4rem) !important;
+  }
+  
+  /* Make profile dropdown better on mobile */
+  .profile-dropdown {
+    position: fixed !important;
+    right: 1rem !important;
+    left: auto !important;
+    top: 64px !important;
+    width: calc(100% - 2rem) !important;
+    max-width: 320px !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .mobile-bottom-nav {
+    display: none !important;
+  }
+}
