@@ -61,7 +61,9 @@ const SearchBar = () => {
     if (validateForm()) {
       navigate('/search-results', { 
         state: { 
-          searchData: formData 
+          from: formData.from.trim(),
+          to: formData.to.trim(),
+          date: formData.date
         } 
       });
     }

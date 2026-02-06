@@ -21,21 +21,41 @@ export const AuthProvider = ({ children }) => {
 
   const checkAuth = async () => {
     try {
-      const response = await fetch('http://localhost:8080/auth/verify', {
+      const response = await fetch('http://localhost:8080/users/me', {
         method: 'GET',
         credentials: 'include'
       });
       
-      const data = await response.json();
+      console.log('Auth check response status:', response.status);
       
-      if (data.valid) {
+      if (response.ok) {
+        const data = await response.json();
+        console.log('User data from /users/me:', data);
+        
+        // Extract primary role from roles array
+        let primaryRole = null;
+        if (data.roles && data.roles.length > 0) {
+          if (data.roles.includes('ROLE_ADMIN')) {
+            primaryRole = 'ADMIN';
+          } else if (data.roles.includes('ROLE_OPERATOR')) {
+            primaryRole = 'OPERATOR';
+          } else if (data.roles.includes('ROLE_USER')) {
+            primaryRole = 'USER';
+          }
+        }
+        
+        const userData = { ...data, role: primaryRole };
+        console.log('Processed user data with role:', userData);
+        
         setIsAuthenticated(true);
-        setUser(data.user);
+        setUser(userData);
       } else {
+        console.log('Auth check failed');
         setIsAuthenticated(false);
         setUser(null);
       }
     } catch (error) {
+      console.error('Auth check error:', error);
       setIsAuthenticated(false);
       setUser(null);
     } finally {
@@ -53,7 +73,7 @@ export const AuthProvider = ({ children }) => {
       });
 
       if (response.ok) {
-        setIsAuthenticated(true);
+        await checkAuth();
         return true;
       }
       return false;
