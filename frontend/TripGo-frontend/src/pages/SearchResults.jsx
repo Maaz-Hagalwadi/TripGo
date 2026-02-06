@@ -1,9 +1,63 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import HeaderAuth from '../components/layout/HeaderAuth';
+import { searchBuses } from '../api/busService';
+import { useAuth } from '../contexts/AuthContext';
 import TripGoIcon from '../assets/icons/TripGoIcon';
 
 const SearchResults = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, loading } = useAuth();
+  const [buses, setBuses] = useState([]);
+  const [loadingBuses, setLoadingBuses] = useState(true);
+  const [error, setError] = useState(null);
+  const [searchParams, setSearchParams] = useState({
+    from: location.state?.from || '',
+    to: location.state?.to || '',
+    date: location.state?.date || new Date().toISOString().split('T')[0]
+  });
+
+  useEffect(() => {
+    console.log('SearchResults - User data:', user, 'loading:', loading);
+    if (loading) return;
+    
+    if (!user) {
+      console.log('SearchResults - No user, redirecting');
+      navigate('/');
+      return;
+    }
+    
+    if (user.role && user.role !== 'USER') {
+      console.log('SearchResults - Blocking access for role:', user.role);
+      navigate('/');
+      return;
+    }
+    
+    if (searchParams.from && searchParams.to && searchParams.date) {
+      fetchBuses();
+    }
+  }, [user, loading, navigate]);
+
+  const fetchBuses = async () => {
+    setLoadingBuses(true);
+    setError(null);
+    try {
+      const data = await searchBuses(searchParams.from, searchParams.to, searchParams.date);
+      setBuses(data || []);
+    } catch (err) {
+      setError('Failed to fetch buses. Please try again.');
+      console.error(err);
+    } finally {
+      setLoadingBuses(false);
+    }
+  };
+
+  const handleUpdateSearch = () => {
+    if (searchParams.from.trim() && searchParams.to.trim() && searchParams.date) {
+      fetchBuses();
+    }
+  };
   return (
     <div className="bg-deep-black text-slate-100 min-h-screen">
       {/* Header */}
@@ -15,17 +69,37 @@ const SearchResults = () => {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
             <div className="relative group">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-silver-text z-10 text-xl">location_on</span>
-              <input className="w-full pl-10 pr-4 py-2.5 bg-input-gray border border-white/10 rounded-lg text-white text-sm placeholder-silver-text focus:ring-1 focus:ring-primary focus:border-transparent transition-all outline-none" placeholder="Departure City" type="text" defaultValue="San Francisco"/>
+              <input 
+                value={searchParams.from}
+                onChange={(e) => setSearchParams({...searchParams, from: e.target.value})}
+                className="w-full pl-10 pr-4 py-2.5 bg-input-gray border border-white/10 rounded-lg text-white text-sm placeholder-silver-text focus:ring-1 focus:ring-primary focus:border-transparent transition-all outline-none" 
+                placeholder="Departure City" 
+                type="text"
+              />
             </div>
             <div className="relative">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-silver-text z-10 text-xl">directions_bus</span>
-              <input className="w-full pl-10 pr-4 py-2.5 bg-input-gray border border-white/10 rounded-lg text-white text-sm placeholder-silver-text focus:ring-1 focus:ring-primary focus:border-transparent transition-all outline-none" placeholder="Destination City" type="text" defaultValue="Los Angeles"/>
+              <input 
+                value={searchParams.to}
+                onChange={(e) => setSearchParams({...searchParams, to: e.target.value})}
+                className="w-full pl-10 pr-4 py-2.5 bg-input-gray border border-white/10 rounded-lg text-white text-sm placeholder-silver-text focus:ring-1 focus:ring-primary focus:border-transparent transition-all outline-none" 
+                placeholder="Destination City" 
+                type="text"
+              />
             </div>
             <div className="relative">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-silver-text z-10 text-xl">calendar_today</span>
-              <input className="w-full pl-10 pr-4 py-2.5 bg-input-gray border border-white/10 rounded-lg text-white text-sm placeholder-silver-text focus:ring-1 focus:ring-primary focus:border-transparent transition-all outline-none" placeholder="Oct 25, 2023" type="text" defaultValue="Oct 25, 2023"/>
+              <input 
+                value={searchParams.date}
+                onChange={(e) => setSearchParams({...searchParams, date: e.target.value})}
+                className="w-full pl-10 pr-4 py-2.5 bg-input-gray border border-white/10 rounded-lg text-white text-sm placeholder-silver-text focus:ring-1 focus:ring-primary focus:border-transparent transition-all outline-none" 
+                type="date"
+              />
             </div>
-            <button className="w-full bg-primary hover:bg-primary/90 text-black h-[42px] rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(0,212,255,0.2)]">
+            <button 
+              onClick={handleUpdateSearch}
+              className="w-full bg-primary hover:bg-primary/90 text-black h-[42px] rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(0,212,255,0.2)]"
+            >
               <span className="material-symbols-outlined text-lg">sync</span>
               Update
             </button>
@@ -94,164 +168,86 @@ const SearchResults = () => {
           {/* Bus Results */}
           <div className="flex-1 space-y-4">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-white">24 Buses found</h2>
-              <div className="flex items-center gap-4 text-sm font-medium">
-                <span className="text-slate-400">Sort by:</span>
-                <select className="bg-transparent border-none text-primary font-bold focus:ring-0 cursor-pointer">
-                  <option>Cheapest First</option>
-                  <option>Earliest First</option>
-                  <option>Fastest First</option>
-                </select>
-              </div>
+              <h2 className="text-xl font-bold text-white">
+                {loadingBuses ? 'Searching...' : `${buses.length} Buses found`}
+              </h2>
+              {buses.length > 0 && (
+                <div className="flex items-center gap-4 text-sm font-medium">
+                  <span className="text-slate-400">Sort by:</span>
+                  <select className="bg-transparent border-none text-primary font-bold focus:ring-0 cursor-pointer">
+                    <option>Cheapest First</option>
+                    <option>Earliest First</option>
+                    <option>Fastest First</option>
+                  </select>
+                </div>
+              )}
             </div>
 
-            {/* Bus Card 1 */}
-            <div className="bg-charcoal border border-white/5 rounded-2xl p-6 hover:border-primary/30 transition-all group">
-              <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center p-2">
-                    <span className="material-symbols-outlined text-3xl text-primary">electric_bolt</span>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-white text-lg">Bolt Express</h4>
-                    <p className="text-xs text-slate-400 font-medium">AC Sleeper (2+1)</p>
-                  </div>
-                </div>
-                <div className="md:col-span-2 grid grid-cols-3 items-center text-center">
-                  <div>
-                    <p className="text-xl font-extrabold text-white">08:30</p>
-                    <p className="text-xs text-slate-400 font-bold uppercase mt-1 tracking-wider">San Francisco</p>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">6h 15m</p>
-                    <div className="w-full h-px bg-white/10 relative">
-                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-primary/40 border border-primary"></div>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xl font-extrabold text-white">14:45</p>
-                    <p className="text-xs text-slate-400 font-bold uppercase mt-1 tracking-wider">Los Angeles</p>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-3 border-l border-white/5 pl-6">
-                  <p className="text-2xl font-black text-primary">$45.00</p>
-                  <button className="w-full bg-white/10 hover:bg-primary hover:text-black text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all">
-                    Select Seat
-                  </button>
+            {/* Loading State */}
+            {loadingBuses && (
+              <div className="flex items-center justify-center py-20">
+                <div className="text-center">
+                  <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                  <p className="text-slate-400">Searching for buses...</p>
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Bus Card 2 */}
-            <div className="bg-charcoal border border-white/5 rounded-2xl p-6 hover:border-primary/30 transition-all group">
-              <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center p-2">
-                    <span className="material-symbols-outlined text-3xl text-accent">stars</span>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-white text-lg">Skyline Gold</h4>
-                    <p className="text-xs text-slate-400 font-medium">Premium Multi-Axle</p>
-                  </div>
-                </div>
-                <div className="md:col-span-2 grid grid-cols-3 items-center text-center">
-                  <div>
-                    <p className="text-xl font-extrabold text-white">10:00</p>
-                    <p className="text-xs text-slate-400 font-bold uppercase mt-1 tracking-wider">San Francisco</p>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">5h 45m</p>
-                    <div className="w-full h-px bg-white/10 relative">
-                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-primary/40 border border-primary"></div>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xl font-extrabold text-white">15:45</p>
-                    <p className="text-xs text-slate-400 font-bold uppercase mt-1 tracking-wider">Los Angeles</p>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-3 border-l border-white/5 pl-6">
-                  <p className="text-2xl font-black text-primary">$62.50</p>
-                  <button className="w-full bg-white/10 hover:bg-primary hover:text-black text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all">
-                    Select Seat
-                  </button>
-                </div>
+            {/* Error State */}
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-6 text-center">
+                <span className="material-symbols-outlined text-red-400 text-4xl mb-2">error</span>
+                <p className="text-red-400 font-medium">{error}</p>
               </div>
-            </div>
+            )}
 
-            {/* Bus Card 3 */}
-            <div className="bg-charcoal border border-white/5 rounded-2xl p-6 hover:border-primary/30 transition-all group">
-              <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center p-2">
-                    <span className="material-symbols-outlined text-3xl text-slate-400">commute</span>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-white text-lg">City Runner</h4>
-                    <p className="text-xs text-slate-400 font-medium">Standard Non-AC</p>
-                  </div>
-                </div>
-                <div className="md:col-span-2 grid grid-cols-3 items-center text-center">
-                  <div>
-                    <p className="text-xl font-extrabold text-white">22:15</p>
-                    <p className="text-xs text-slate-400 font-bold uppercase mt-1 tracking-wider">San Francisco</p>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">7h 00m</p>
-                    <div className="w-full h-px bg-white/10 relative">
-                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-primary/40 border border-primary"></div>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xl font-extrabold text-white">05:15</p>
-                    <p className="text-xs text-slate-400 font-bold uppercase mt-1 tracking-wider">Los Angeles</p>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-3 border-l border-white/5 pl-6">
-                  <p className="text-2xl font-black text-primary">$24.99</p>
-                  <button className="w-full bg-white/10 hover:bg-primary hover:text-black text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all">
-                    Select Seat
-                  </button>
-                </div>
+            {/* No Results */}
+            {!loadingBuses && !error && buses.length === 0 && (
+              <div className="bg-charcoal border border-white/5 rounded-2xl p-12 text-center">
+                <span className="material-symbols-outlined text-slate-600 text-6xl mb-4">search_off</span>
+                <h3 className="text-xl font-bold text-white mb-2">No Buses Found</h3>
+                <p className="text-slate-400">Try adjusting your search criteria or date</p>
               </div>
-            </div>
+            )}
 
-            {/* Bus Card 4 */}
-            <div className="bg-charcoal border border-white/5 rounded-2xl p-6 hover:border-primary/30 transition-all group">
-              <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-6">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center p-2">
-                    <span className="material-symbols-outlined text-3xl text-primary">eco</span>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-white text-lg">Green Travel</h4>
-                    <p className="text-xs text-slate-400 font-medium">Electric Semi-Sleeper</p>
-                  </div>
-                </div>
-                <div className="md:col-span-2 grid grid-cols-3 items-center text-center">
-                  <div>
-                    <p className="text-xl font-extrabold text-white">13:30</p>
-                    <p className="text-xs text-slate-400 font-bold uppercase mt-1 tracking-wider">San Francisco</p>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">6h 45m</p>
-                    <div className="w-full h-px bg-white/10 relative">
-                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-primary/40 border border-primary"></div>
+            {/* Bus Cards */}
+            {!loadingBuses && !error && buses.map((bus, index) => (
+              <div key={index} className="bg-charcoal border border-white/5 rounded-2xl p-6 hover:border-primary/30 transition-all group">
+                <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-6">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center p-2">
+                      <span className="material-symbols-outlined text-3xl text-primary">directions_bus</span>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-white text-lg">{bus.busName}</h4>
+                      <p className="text-xs text-slate-400 font-medium">{bus.busType}</p>
                     </div>
                   </div>
-                  <div>
-                    <p className="text-xl font-extrabold text-white">20:15</p>
-                    <p className="text-xs text-slate-400 font-bold uppercase mt-1 tracking-wider">Los Angeles</p>
+                  <div className="md:col-span-2 grid grid-cols-3 items-center text-center">
+                    <div>
+                      <p className="text-xl font-extrabold text-white">{bus.departureTime}</p>
+                      <p className="text-xs text-slate-400 font-bold uppercase mt-1 tracking-wider">{searchParams.from}</p>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">{bus.duration}</p>
+                      <div className="w-full h-px bg-white/10 relative">
+                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-primary/40 border border-primary"></div>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-xl font-extrabold text-white">{bus.arrivalTime}</p>
+                      <p className="text-xs text-slate-400 font-bold uppercase mt-1 tracking-wider">{searchParams.to}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end gap-3 border-l border-white/5 pl-6">
+                    <p className="text-2xl font-black text-primary">${bus.price}</p>
+                    <button className="w-full bg-white/10 hover:bg-primary hover:text-black text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all">
+                      Select Seat
+                    </button>
                   </div>
                 </div>
-                <div className="flex flex-col items-end gap-3 border-l border-white/5 pl-6">
-                  <p className="text-2xl font-black text-primary">$38.00</p>
-                  <button className="w-full bg-white/10 hover:bg-primary hover:text-black text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all">
-                    Select Seat
-                  </button>
-                </div>
               </div>
-            </div>
+            ))}
           </div>
         </div>
       </main>
