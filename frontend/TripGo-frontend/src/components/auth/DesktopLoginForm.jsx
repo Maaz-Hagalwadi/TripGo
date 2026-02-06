@@ -1,17 +1,32 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import TripGoIcon from '../../assets/icons/TripGoIcon';
 
 const DesktopLoginForm = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, checkAuth, user } = useAuth();
   const [formData, setFormData] = useState({
     emailOrPhone: '',
     password: ''
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [loginSuccess, setLoginSuccess] = useState(false);
+
+  useEffect(() => {
+    console.log('Login redirect check - loginSuccess:', loginSuccess, 'user:', user, 'role:', user?.role);
+    if (loginSuccess && user && user.role) {
+      console.log('Redirecting based on role:', user.role);
+      if (user.role === 'OPERATOR') {
+        navigate('/operator/dashboard');
+      } else if (user.role === 'USER') {
+        navigate('/dashboard');
+      } else {
+        navigate('/');
+      }
+    }
+  }, [user, loginSuccess, navigate]);
 
   const loginUser = async (formData) => {
     try {
@@ -22,7 +37,7 @@ const DesktopLoginForm = () => {
 
       if (success) {
         setErrors({ success: 'Login successful! Redirecting...' });
-        navigate('/dashboard'); // Immediate redirect
+        setLoginSuccess(true);
       } else {
         setErrors({ general: 'Invalid email/phone or password' });
       }

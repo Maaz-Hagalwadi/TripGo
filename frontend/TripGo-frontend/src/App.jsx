@@ -11,6 +11,8 @@ import AdminOperatorAction from './pages/AdminOperatorAction';
 import ResetPassword from './pages/ResetPassword';
 import SearchResults from './pages/SearchResults';
 import Dashboard from './pages/Dashboard';
+import OperatorDashboard from './pages/OperatorDashboard';
+import AddBus from './pages/AddBus';
 
 function App() {
   return (
@@ -27,6 +29,8 @@ function App() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/admin/operator-action" element={<AdminOperatorAction />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/operator/dashboard" element={<ProtectedRoute><OperatorDashboard /></ProtectedRoute>} />
+          <Route path="/operator/add-bus" element={<ProtectedRoute><AddBus /></ProtectedRoute>} />
           <Route path="/search-results" element={<ProtectedRoute><SearchResults /></ProtectedRoute>} />
         </Routes>
       </Router>
