@@ -4,6 +4,8 @@ import com.tripgo.backend.model.entities.User;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
+import java.util.List;
+
 @Getter
 @AllArgsConstructor
 public class UserProfileResponse {
@@ -12,6 +14,7 @@ public class UserProfileResponse {
     private String email;
     private String phone;
     private boolean emailVerified;
+    private List<String> roles;
 
     public static UserProfileResponse from(User user) {
         return new UserProfileResponse(
@@ -19,7 +22,10 @@ public class UserProfileResponse {
                 user.getLastName(),
                 user.getEmail(),
                 user.getPhone(),
-                user.isEmailVerified()
+                user.isEmailVerified(),
+                user.getRoles().stream()
+                    .map(role -> role.getName().name())
+                    .toList()
         );
     }
 }
