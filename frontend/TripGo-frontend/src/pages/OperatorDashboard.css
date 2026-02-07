@@ -39,10 +39,36 @@
     width: calc(100% - 2rem) !important;
     max-width: 320px !important;
   }
+  
+  /* Seat layout: show toggle, hide desktop view */
+  .deck-toggle-mobile {
+    display: flex !important;
+  }
+  
+  .deck-view-mobile {
+    display: block !important;
+  }
+  
+  .deck-view-desktop {
+    display: none !important;
+  }
 }
 
 @media (min-width: 768px) {
   .mobile-bottom-nav {
     display: none !important;
+  }
+  
+  /* Seat layout: hide toggle, show desktop view */
+  .deck-toggle-mobile {
+    display: none !important;
+  }
+  
+  .deck-view-mobile {
+    display: none !important;
+  }
+  
+  .deck-view-desktop {
+    display: grid !important;
   }
 }
