@@ -23,7 +23,7 @@ import { darkTheme } from '../../theme/darkTheme';
 
 const MobileLoginLayout = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     emailOrPhone: '',
@@ -41,7 +41,11 @@ const MobileLoginLayout = () => {
 
       if (success) {
         setErrors({ success: 'Login successful! Redirecting...' });
-        navigate('/dashboard'); // Immediate redirect
+        // Small delay to allow user state to update
+        setTimeout(() => {
+          // Force page reload to get updated user state
+          window.location.href = '/dashboard';
+        }, 500);
       } else {
         setErrors({ general: 'Invalid email/phone or password' });
       }
