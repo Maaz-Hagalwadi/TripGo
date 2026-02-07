@@ -22,6 +22,12 @@ const Dashboard = () => {
       return;
     }
     
+    if (user.role === 'OPERATOR') {
+      console.log('Dashboard - OPERATOR role, redirecting to operator dashboard');
+      navigate('/operator/dashboard');
+      return;
+    }
+    
     if (user.role && user.role !== 'USER') {
       console.log('Dashboard - Not USER role, redirecting to home');
       navigate('/');
