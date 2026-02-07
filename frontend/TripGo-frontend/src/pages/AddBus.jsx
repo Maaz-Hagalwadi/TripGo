@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import OperatorSidebar from '../components/operator/OperatorSidebar';
+import { getAmenities } from '../api/amenityService';
 import './OperatorDashboard.css';
 
 const AddBus = () => {
@@ -9,9 +10,18 @@ const AddBus = () => {
   const { user, loading, logout } = useAuth();
   const [activeView, setActiveView] = useState('add-bus');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [selectedAmenities, setSelectedAmenities] = useState(['wifi', 'charging', 'gps']);
+  const [selectedAmenities, setSelectedAmenities] = useState([]);
+  const [amenities, setAmenities] = useState([]);
+  const [loadingAmenities, setLoadingAmenities] = useState(true);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [busName, setBusName] = useState('');
+  const [busCode, setBusCode] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
+  const [model, setModel] = useState('');
+  const [busType, setBusType] = useState('');
+  const [totalSeats, setTotalSeats] = useState('');
+  const [errors, setErrors] = useState({});
   const profileRef = useRef(null);
   const notificationRef = useRef(null);
 
@@ -25,6 +35,29 @@ const AddBus = () => {
       navigate('/');
     }
   }, [user, loading, navigate]);
+
+  useEffect(() => {
+    const fetchAmenities = async () => {
+      try {
+        const data = await getAmenities();
+        console.log('Fetched amenities:', data);
+        setAmenities(data);
+      } catch (error) {
+        console.error('Error fetching amenities:', error);
+        // Fallback to default amenities if backend is unavailable
+        setAmenities([
+          { id: '1', code: 'WIFI', description: 'Wireless Internet' },
+          { id: '2', code: 'AC', description: 'Air Conditioned' },
+          { id: '3', code: 'CHARGER', description: 'Charging Point' },
+          { id: '4', code: 'WATER', description: 'Water Bottle' },
+          { id: '5', code: 'BLANKET', description: 'Blanket' }
+        ]);
+      } finally {
+        setLoadingAmenities(false);
+      }
+    };
+    fetchAmenities();
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -48,21 +81,38 @@ const AddBus = () => {
 
   const unreadCount = notifications.filter(n => n.unread).length;
 
-  const amenities = [
-    { id: 'wifi', icon: 'wifi', label: 'WiFi' },
-    { id: 'ac', icon: 'ac_unit', label: 'Air Conditioning' },
-    { id: 'charging', icon: 'power', label: 'Charging Point' },
-    { id: 'water', icon: 'water_full', label: 'Water Bottle' },
-    { id: 'tv', icon: 'tv', label: 'Entertainment' },
-    { id: 'emergency', icon: 'emergency', label: 'Emergency Exit' },
-    { id: 'gps', icon: 'gps_fixed', label: 'GPS Tracking' },
-    { id: 'firstaid', icon: 'medical_services', label: 'First Aid Kit' },
-  ];
+  const amenityIcons = {
+    WIFI: 'wifi',
+    AC: 'ac_unit',
+    CHARGER: 'power',
+    WATER: 'water_full',
+    BLANKET: 'bed'
+  };
 
   const toggleAmenity = (id) => {
     setSelectedAmenities(prev =>
       prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]
     );
+  };
+
+  const handleGenerateLayout = () => {
+    const newErrors = {};
+    if (!busName) newErrors.busName = 'Bus name is required';
+    if (!busCode) newErrors.busCode = 'Bus code is required';
+    if (!vehicleNumber) newErrors.vehicleNumber = 'Vehicle number is required';
+    if (!model) newErrors.model = 'Model is required';
+    if (!busType) newErrors.busType = 'Bus type is required';
+    if (!totalSeats) newErrors.totalSeats = 'Total seats is required';
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+    
+    setErrors({});
+    navigate('/operator/bus-layout', {
+      state: { busName, busCode, vehicleNumber, model, busType, totalSeats: parseInt(totalSeats), amenityIds: selectedAmenities }
+    });
   };
 
   return (
@@ -208,29 +258,69 @@ const AddBus = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Bus Name</label>
-                      <input className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-black/40 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" placeholder="e.g. Royal Express" type="text"/>
+                      <input value={busName} onChange={(e) => { setBusName(e.target.value); setErrors(prev => ({...prev, busName: ''})); }} className={`w-full px-4 py-3 rounded-lg border ${errors.busName ? 'border-red-500' : 'border-slate-300 dark:border-slate-700'} bg-white dark:bg-black/40 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all`} placeholder="e.g. Royal Express" type="text"/>
+                      {errors.busName && <p className="text-red-500 text-xs">{errors.busName}</p>}
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Bus Code</label>
-                      <input className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-black/40 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" placeholder="e.g. RE-204" type="text"/>
+                      <input value={busCode} onChange={(e) => { setBusCode(e.target.value); setErrors(prev => ({...prev, busCode: ''})); }} className={`w-full px-4 py-3 rounded-lg border ${errors.busCode ? 'border-red-500' : 'border-slate-300 dark:border-slate-700'} bg-white dark:bg-black/40 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all`} placeholder="e.g. RE-204" type="text"/>
+                      {errors.busCode && <p className="text-red-500 text-xs">{errors.busCode}</p>}
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Vehicle Number</label>
-                      <input className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-black/40 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" placeholder="e.g. KA-01-F-1234" type="text"/>
+                      <input value={vehicleNumber} onChange={(e) => { setVehicleNumber(e.target.value); setErrors(prev => ({...prev, vehicleNumber: ''})); }} className={`w-full px-4 py-3 rounded-lg border ${errors.vehicleNumber ? 'border-red-500' : 'border-slate-300 dark:border-slate-700'} bg-white dark:bg-black/40 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all`} placeholder="e.g. KA-01-F-1234" type="text"/>
+                      {errors.vehicleNumber && <p className="text-red-500 text-xs">{errors.vehicleNumber}</p>}
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Model</label>
-                      <input className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-black/40 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all" placeholder="e.g. Volvo 9400 B11R" type="text"/>
+                      <input value={model} onChange={(e) => { setModel(e.target.value); setErrors(prev => ({...prev, model: ''})); }} className={`w-full px-4 py-3 rounded-lg border ${errors.model ? 'border-red-500' : 'border-slate-300 dark:border-slate-700'} bg-white dark:bg-black/40 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all`} placeholder="e.g. Volvo 9400 B11R" type="text"/>
+                      {errors.model && <p className="text-red-500 text-xs">{errors.model}</p>}
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Total Seats</label>
+                      <input value={totalSeats} onChange={(e) => { setTotalSeats(e.target.value); setErrors(prev => ({...prev, totalSeats: ''})); }} className={`w-full px-4 py-3 rounded-lg border ${errors.totalSeats ? 'border-red-500' : 'border-slate-300 dark:border-slate-700'} bg-white dark:bg-black/40 text-slate-900 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all`} placeholder="e.g. 40" type="number" min="1"/>
+                      {errors.totalSeats && <p className="text-red-500 text-xs">{errors.totalSeats}</p>}
                     </div>
                     <div className="space-y-2 md:col-span-2">
                       <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Bus Type</label>
-                      <select className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-black/40 text-slate-900 dark:text-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all appearance-none cursor-pointer">
+                      <select value={busType} onChange={(e) => { setBusType(e.target.value); setErrors(prev => ({...prev, busType: ''})); }} className={`w-full px-4 py-3 rounded-lg border ${errors.busType ? 'border-red-500' : 'border-slate-300 dark:border-slate-700'} bg-white dark:bg-black/40 text-slate-900 dark:text-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all appearance-none cursor-pointer`}>
                         <option value="">Select Bus Type</option>
-                        <option value="sleeper">AC Sleeper (2+1)</option>
-                        <option value="seater">Luxury Seater (2+2)</option>
-                        <option value="semi-sleeper">Semi-Sleeper</option>
-                        <option value="scania">Scania Multi-Axle</option>
+                        <optgroup label="Seater Types">
+                          <option value="SEATER">Seater</option>
+                          <option value="SEMI_SLEEPER">Semi Sleeper</option>
+                          <option value="EXECUTIVE_SEATER">Executive Seater</option>
+                          <option value="LUXURY_SEATER">Luxury Seater</option>
+                        </optgroup>
+                        <optgroup label="Sleeper Types">
+                          <option value="SLEEPER">Sleeper</option>
+                          <option value="AC_SLEEPER">AC Sleeper</option>
+                          <option value="NON_AC_SLEEPER">Non-AC Sleeper</option>
+                          <option value="SEMI_SLEEPER_AC">Semi Sleeper AC</option>
+                          <option value="SEMI_SLEEPER_NON_AC">Semi Sleeper Non-AC</option>
+                        </optgroup>
+                        <optgroup label="Multi-Axle">
+                          <option value="MULTI_AXLE_SEMI_SLEEPER">Multi-Axle Semi Sleeper</option>
+                          <option value="MULTI_AXLE_SLEEPER">Multi-Axle Sleeper</option>
+                          <option value="MULTI_AXLE_AC_SLEEPER">Multi-Axle AC Sleeper</option>
+                        </optgroup>
+                        <optgroup label="Volvo Premium">
+                          <option value="VOLVO_AC">Volvo AC</option>
+                          <option value="VOLVO_MULTI_AXLE">Volvo Multi-Axle</option>
+                          <option value="VOLVO_SLEEPER">Volvo Sleeper</option>
+                          <option value="VOLVO_MULTI_AXLE_SLEEPER">Volvo Multi-Axle Sleeper</option>
+                        </optgroup>
+                        <optgroup label="Mercedes-Benz Premium">
+                          <option value="MERCEDES_BENZ_AC">Mercedes-Benz AC</option>
+                          <option value="MERCEDES_BENZ_SLEEPER">Mercedes-Benz Sleeper</option>
+                        </optgroup>
+                        <optgroup label="Special">
+                          <option value="ELECTRIC">Electric</option>
+                          <option value="MINI_BUS">Mini Bus</option>
+                          <option value="DELUXE">Deluxe</option>
+                          <option value="SUPER_DELUXE">Super Deluxe</option>
+                        </optgroup>
                       </select>
+                      {errors.busType && <p className="text-red-500 text-xs">{errors.busType}</p>}
                     </div>
                   </div>
                 </div>
@@ -242,20 +332,30 @@ const AddBus = () => {
                     <h3 className="text-lg font-bold">Amenities & Features</h3>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                    {amenities.map((amenity) => (
-                      <div
-                        key={amenity.id}
-                        onClick={() => toggleAmenity(amenity.id)}
-                        className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                          selectedAmenities.includes(amenity.id)
-                            ? 'border-primary bg-primary/10 text-primary hover:bg-primary/20'
-                            : 'border-slate-300 dark:border-slate-800 bg-slate-50 dark:bg-black/40 text-slate-600 dark:text-white hover:border-slate-400 dark:hover:border-slate-600'
-                        }`}
-                      >
-                        <span className={`material-symbols-outlined mb-2 text-2xl transition-transform ${selectedAmenities.includes(amenity.id) ? 'scale-110' : ''}`}>{amenity.icon}</span>
-                        <span className={`text-[10px] font-extrabold uppercase tracking-widest ${selectedAmenities.includes(amenity.id) ? 'text-primary' : 'text-slate-500 dark:text-slate-400'}`}>{amenity.label}</span>
-                      </div>
-                    ))}
+                    {loadingAmenities ? (
+                      <div className="col-span-full text-center py-8 text-slate-500">Loading amenities...</div>
+                    ) : amenities.length === 0 ? (
+                      <div className="col-span-full text-center py-8 text-slate-500">No amenities available</div>
+                    ) : (
+                      amenities.map((amenity) => (
+                        <div
+                          key={amenity.id}
+                          onClick={() => toggleAmenity(amenity.id)}
+                          className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                            selectedAmenities.includes(amenity.id)
+                              ? 'border-primary bg-primary/10 text-primary hover:bg-primary/20'
+                              : 'border-slate-300 dark:border-slate-800 bg-slate-50 dark:bg-black/40 text-slate-600 dark:text-white hover:border-slate-400 dark:hover:border-slate-600'
+                          }`}
+                        >
+                          <span className={`material-symbols-outlined mb-2 text-2xl transition-transform ${selectedAmenities.includes(amenity.id) ? 'scale-110' : ''}`}>
+                            {amenityIcons[amenity.code] || 'check_circle'}
+                          </span>
+                          <span className={`text-[10px] font-extrabold uppercase tracking-widest text-center ${selectedAmenities.includes(amenity.id) ? 'text-primary' : 'text-slate-500 dark:text-slate-400'}`}>
+                            {amenity.description}
+                          </span>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
@@ -265,7 +365,7 @@ const AddBus = () => {
                 <button onClick={() => navigate('/operator/dashboard')} className="px-6 py-2.5 rounded-lg font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5 transition-colors">
                   Cancel
                 </button>
-                <button className="bg-primary hover:bg-primary/90 text-white px-8 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-primary/20">
+                <button onClick={handleGenerateLayout} className="bg-primary hover:bg-primary/90 text-white px-8 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-primary/20">
                   Next: Generate Layout
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
