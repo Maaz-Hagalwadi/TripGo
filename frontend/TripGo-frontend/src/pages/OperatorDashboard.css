@@ -52,6 +52,11 @@
   .deck-view-desktop {
     display: none !important;
   }
+  
+  /* Bus grid: 1 column on mobile */
+  .bus-grid {
+    grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
+  }
 }
 
 @media (min-width: 768px) {
@@ -70,5 +75,10 @@
   
   .deck-view-desktop {
     display: grid !important;
+  }
+  
+  /* Bus grid: 3 columns on desktop */
+  .bus-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
