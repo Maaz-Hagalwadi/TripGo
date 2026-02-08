@@ -13,5 +13,6 @@ public record BusResponse(
         String model,
         BusType busType,
         Integer totalSeats,
+        boolean active,
         List<AmenityDTO> amenities
 ) {}
