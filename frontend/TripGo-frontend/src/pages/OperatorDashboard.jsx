@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import OperatorSidebar from '../components/operator/OperatorSidebar';
+import { getBuses } from '../api/amenityService';
 import './OperatorDashboard.css';
 
 const OperatorDashboard = () => {
@@ -11,6 +12,8 @@ const OperatorDashboard = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [activeView, setActiveView] = useState('overview');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [buses, setBuses] = useState([]);
+  const [loadingBuses, setLoadingBuses] = useState(true);
   const profileRef = useRef(null);
   const notificationRef = useRef(null);
 
@@ -26,6 +29,23 @@ const OperatorDashboard = () => {
       navigate('/');
     }
   }, [user, loading, navigate]);
+
+  useEffect(() => {
+    fetchBuses();
+  }, []);
+
+  const fetchBuses = async () => {
+    try {
+      setLoadingBuses(true);
+      const data = await getBuses();
+      setBuses(data || []);
+    } catch (error) {
+      console.error('Failed to fetch buses:', error);
+      setBuses([]);
+    } finally {
+      setLoadingBuses(false);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -59,9 +79,9 @@ const OperatorDashboard = () => {
             <div className="bg-white dark:bg-[#1a1a1a] p-6 rounded-xl border border-slate-200 dark:border-slate-800 flex items-start justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Buses</p>
-                <h3 className="text-3xl font-bold mt-2">48</h3>
+                <h3 className="text-3xl font-bold mt-2">{loadingBuses ? '...' : buses.length}</h3>
                 <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
-                  <span className="material-symbols-outlined text-xs">info</span> 4 in maintenance
+                  <span className="material-symbols-outlined text-xs">info</span> {buses.filter(b => b.active).length} active
                 </p>
               </div>
               <div className="bg-primary/10 p-3 rounded-lg text-primary">
