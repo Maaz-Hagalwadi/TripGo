@@ -5,9 +5,9 @@ const OperatorSidebar = ({ activeItem = 'overview', onNavigate, collapsed = fals
   
   const menuItems = [
     { id: 'overview', icon: 'dashboard', label: 'Overview', route: '/operator/dashboard' },
-    { id: 'buses', icon: 'directions_bus', label: 'My Buses' },
+    { id: 'my-buses', icon: 'directions_bus', label: 'My Buses', route: '/operator/my-buses' },
     { id: 'add-bus', icon: 'add_circle', label: 'Add Bus', route: '/operator/add-bus' },
-    { id: 'schedules', icon: 'calendar_month', label: 'Schedules' },
+    { id: 'schedules', icon: 'calendar_month', label: 'Schedules', route: '/operator/create-route' },
     { id: 'bookings', icon: 'confirmation_number', label: 'Bookings' },
     { id: 'earnings', icon: 'account_balance_wallet', label: 'Earnings' },
   ];

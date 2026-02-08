@@ -44,14 +44,7 @@ const AddBus = () => {
         setAmenities(data);
       } catch (error) {
         console.error('Error fetching amenities:', error);
-        // Fallback to default amenities if backend is unavailable
-        setAmenities([
-          { id: '1', code: 'WIFI', description: 'Wireless Internet' },
-          { id: '2', code: 'AC', description: 'Air Conditioned' },
-          { id: '3', code: 'CHARGER', description: 'Charging Point' },
-          { id: '4', code: 'WATER', description: 'Water Bottle' },
-          { id: '5', code: 'BLANKET', description: 'Blanket' }
-        ]);
+        setAmenities([]);
       } finally {
         setLoadingAmenities(false);
       }
