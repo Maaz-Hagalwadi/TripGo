@@ -14,6 +14,9 @@ import Dashboard from './pages/Dashboard';
 import OperatorDashboard from './pages/OperatorDashboard';
 import AddBus from './pages/AddBus';
 import BusSeatLayout from './pages/BusSeatLayout';
+import BusReview from './pages/BusReview';
+import MyBuses from './pages/MyBuses';
+import CreateRoute from './pages/CreateRoute';
 
 function App() {
   return (
@@ -31,8 +34,11 @@ function App() {
           <Route path="/admin/operator-action" element={<AdminOperatorAction />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/operator/dashboard" element={<ProtectedRoute><OperatorDashboard /></ProtectedRoute>} />
+          <Route path="/operator/my-buses" element={<ProtectedRoute><MyBuses /></ProtectedRoute>} />
           <Route path="/operator/add-bus" element={<ProtectedRoute><AddBus /></ProtectedRoute>} />
           <Route path="/operator/bus-layout" element={<ProtectedRoute><BusSeatLayout /></ProtectedRoute>} />
+          <Route path="/operator/bus-review" element={<ProtectedRoute><BusReview /></ProtectedRoute>} />
+          <Route path="/operator/create-route" element={<ProtectedRoute><CreateRoute /></ProtectedRoute>} />
           <Route path="/search-results" element={<ProtectedRoute><SearchResults /></ProtectedRoute>} />
         </Routes>
       </Router>

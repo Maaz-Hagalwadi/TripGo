@@ -1,12 +1,54 @@
 const API_BASE_URL = 'http://localhost:8080';
 
-export const getAmenities = async () => {
+const refreshAccessToken = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/amenities`, {
-      method: 'GET',
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
       },
+    });
+    return response.ok;
+  } catch (error) {
+    console.error('Token refresh failed:', error);
+    return false;
+  }
+};
+
+const fetchWithAuth = async (url, options = {}) => {
+  let response = await fetch(url, {
+    ...options,
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+  if (response.status === 401) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      response = await fetch(url, {
+        ...options,
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      });
+    } else {
+      window.location.href = '/login';
+    }
+  }
+
+  return response;
+};
+
+export const getAmenities = async () => {
+  try {
+    const response = await fetchWithAuth(`${API_BASE_URL}/amenities`, {
+      method: 'GET',
     });
     
     if (!response.ok) {
@@ -43,24 +85,78 @@ export const createAmenity = async (code, description) => {
   }
 };
 
-export const createBus = async (busData, token) => {
+export const createBus = async (busData) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/operator/buses`, {
+    const response = await fetchWithAuth(`${API_BASE_URL}/operator/buses`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
       body: JSON.stringify(busData),
     });
     
     if (!response.ok) {
-      throw new Error(`Failed to create bus: ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.message || `Failed to create bus: ${response.status}`;
+      throw new Error(errorMessage);
     }
     
     return response.json();
   } catch (error) {
     console.error('Error creating bus:', error);
+    throw error;
+  }
+};
+
+export const getBuses = async () => {
+  try {
+    const response = await fetchWithAuth(`${API_BASE_URL}/operator/buses`, {
+      method: 'GET',
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch buses: ${response.status}`);
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error('Error fetching buses:', error);
+    throw error;
+  }
+};
+
+export const updateBus = async (busId, busData) => {
+  try {
+    const response = await fetchWithAuth(`${API_BASE_URL}/operator/buses/${busId}`, {
+      method: 'PUT',
+      body: JSON.stringify(busData),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.message || `Failed to update bus: ${response.status}`;
+      throw new Error(errorMessage);
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error('Error updating bus:', error);
+    throw error;
+  }
+};
+
+export const deleteBus = async (busId) => {
+  try {
+    const response = await fetchWithAuth(`${API_BASE_URL}/operator/buses/${busId}`, {
+      method: 'DELETE',
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage = errorData.message || `Failed to delete bus: ${response.status}`;
+      throw new Error(errorMessage);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error deleting bus:', error);
     throw error;
   }
 };
