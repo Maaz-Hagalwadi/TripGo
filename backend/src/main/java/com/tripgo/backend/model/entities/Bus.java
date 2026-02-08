@@ -58,7 +58,7 @@ public class Bus {
 
 
     @Column(name = "active")
-    private boolean active = true;
+    private boolean active = false;
 
 
     @CreationTimestamp

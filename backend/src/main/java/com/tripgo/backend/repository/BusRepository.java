@@ -11,4 +11,6 @@ public interface BusRepository extends JpaRepository<Bus, UUID> {
     List<Bus> findByOperator(Operator operator);
 
     List<Bus> findByOperatorAndActiveTrue(Operator operator);
+    
+    List<Bus> findByOperatorAndActiveFalse(Operator operator);
 }

@@ -52,7 +52,7 @@ public class BusService {
     }
 
     public List<BusResponse> list(User user) {
-        List<Bus> buses = busRepository.findByOperatorAndActiveTrue(user.getOperator());
+        List<Bus> buses = busRepository.findByOperator(user.getOperator());
         return buses.stream().map(this::toResponse).toList();
     }
 
@@ -65,6 +65,7 @@ public class BusService {
                 bus.getModel(),
                 bus.getBusType(),
                 bus.getTotalSeats(),
+                bus.isActive(),
                 bus.getAmenities().stream()
                         .sorted(Comparator.comparing(AmenityMaster::getCode))
                         .map(a -> new AmenityDTO(
