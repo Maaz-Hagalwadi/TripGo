@@ -55,7 +55,7 @@ const BusSeatLayout = () => {
     const numTotal = parseInt(total);
     console.log('Total seats input:', total, 'Parsed:', numTotal);
     
-    if (type.includes('SLEEPER')) {
+    if (type.includes('SLEEPER') && !type.includes('SEMI')) {
       const generatedSeats = [];
       
       // Lower deck - split evenly
@@ -202,6 +202,16 @@ const BusSeatLayout = () => {
     return 'event_seat';
   };
 
+  const handleContinue = () => {
+    navigate('/operator/bus-review', {
+      state: {
+        ...busData,
+        amenities: busData.amenityIds || [],
+        blockedSeats: selectedSeats
+      }
+    });
+  };
+
   return (
     <div className="bg-background-light dark:bg-[#101e22] text-slate-900 dark:text-slate-100 min-h-screen flex">
       <div className="operator-sidebar">
@@ -339,7 +349,7 @@ const BusSeatLayout = () => {
                   <span className="ml-auto text-sm text-slate-500">Total Seats: {seats.length}</span>
                 </div>
 
-                {busType.includes('SLEEPER') ? (
+                {busType.includes('SLEEPER') && !busType.includes('SEMI') ? (
                   <div className="bg-slate-50 dark:bg-black/40 rounded-xl p-8">
                     <div className="mb-6 flex justify-center">
                       <div className="bg-slate-300 dark:bg-slate-700 px-6 py-2 rounded-t-full">
@@ -377,37 +387,37 @@ const BusSeatLayout = () => {
                     <div className="deck-view-mobile max-w-4xl mx-auto">
                       <div className="space-y-2">
                         {Array.from(new Set(seats.filter(s => s.deck === activeDeck).map(s => s.row))).map(row => (
-                          <div key={`${activeDeck}-${row}`} className="flex gap-2 justify-center">
+                          <div key={`${activeDeck}-${row}`} className="flex gap-1.5 justify-center">
                             {seats.filter(s => s.deck === activeDeck && s.row === row && s.col === 0).map((seat) => (
                               <button
                                 key={seat.id}
                                 onClick={() => toggleSeat(seat.id)}
-                                className={`!w-24 !h-24 rounded-lg border-2 flex flex-col items-center justify-center transition-all ${
+                                className={`!w-20 !h-30 !min-w-[5rem] !min-h-[7.5rem] rounded-lg border-2 flex flex-col items-center justify-center transition-all ${
                                   selectedSeats.includes(seat.id)
                                     ? 'border-red-500 bg-red-500/20 text-red-500'
                                     : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-primary'
                                 }`}
                               >
-                                <span className="material-symbols-outlined text-2xl">bed</span>
-                                <span className="text-xs font-bold">{seat.number}</span>
+                                <span className="material-symbols-outlined text-xl">bed</span>
+                                <span className="text-[10px] font-bold">{seat.number}</span>
                               </button>
                             ))}
-                            <div className="w-4 flex items-center justify-center">
+                            <div className="w-6 flex items-center justify-center">
                               <div className="h-full w-0.5 bg-slate-300 dark:bg-slate-700"></div>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-1.5">
                               {seats.filter(s => s.deck === activeDeck && s.row === row && s.col > 0).map((seat) => (
                                 <button
                                   key={seat.id}
                                   onClick={() => toggleSeat(seat.id)}
-                                  className={`!w-24 !h-24 rounded-lg border-2 flex flex-col items-center justify-center transition-all ${
+                                  className={`!w-20 !h-30 !min-w-[5rem] !min-h-[7.5rem] rounded-lg border-2 flex flex-col items-center justify-center transition-all ${
                                     selectedSeats.includes(seat.id)
                                       ? 'border-red-500 bg-red-500/20 text-red-500'
                                       : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-primary'
                                   }`}
                                 >
-                                  <span className="material-symbols-outlined text-2xl">bed</span>
-                                  <span className="text-xs font-bold">{seat.number}</span>
+                                  <span className="material-symbols-outlined text-xl">bed</span>
+                                  <span className="text-[10px] font-bold">{seat.number}</span>
                                 </button>
                               ))}
                             </div>
@@ -551,7 +561,7 @@ const BusSeatLayout = () => {
                 <button onClick={() => navigate('/operator/add-bus')} className="px-6 py-2.5 rounded-lg font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5 transition-colors">
                   Back
                 </button>
-                <button className="bg-primary hover:bg-primary/90 text-white px-8 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-primary/20">
+                <button onClick={handleContinue} className="bg-primary hover:bg-primary/90 text-white px-8 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-primary/20">
                   Save & Continue
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
