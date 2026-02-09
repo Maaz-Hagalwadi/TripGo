@@ -4,10 +4,7 @@ import com.tripgo.backend.dto.request.AddFareRequest;
 import com.tripgo.backend.dto.request.AddSegmentRequest;
 import com.tripgo.backend.dto.request.CreateRouteRequest;
 import com.tripgo.backend.dto.request.CreateScheduleRequest;
-import com.tripgo.backend.dto.response.RouteResponse;
-import com.tripgo.backend.dto.response.FareResponse;
-import com.tripgo.backend.dto.response.RouteScheduleResponse;
-import com.tripgo.backend.dto.response.SegmentResponse;
+import com.tripgo.backend.dto.response.*;
 import com.tripgo.backend.model.entities.*;
 import com.tripgo.backend.repository.*;
 import com.tripgo.backend.security.service.CustomUserDetails;
@@ -160,8 +157,14 @@ public class RouteService {
 
         return new RouteScheduleResponse(
                 schedule.getId(),
-                routeId,  // Use parameter to avoid lazy loading
-                req.busId(),  // Use parameter to avoid lazy loading
+                new RouteResponse(
+                        route.getId(),
+                        route.getName(),
+                        route.getOrigin(),
+                        route.getDestination(),
+                        route.getDistanceKm()
+                ),
+                toBusResponse(bus),
                 req.departureTime(),
                 req.arrivalTime(),
                 req.frequency(),
@@ -204,6 +207,92 @@ public class RouteService {
                         s.getId(), s.getSeq(), s.getFromStop(), s.getToStop(), s.getDistanceKm(), s.getDurationMinutes()
                 ))
                 .toList();
+    }
+
+    public List<RouteScheduleResponse> listSchedules(User user) {
+        if (user.getOperator() == null) {
+            throw new RuntimeException("User not an operator");
+        }
+
+        List<Route> routes = routeRepository.findByOperator(user.getOperator());
+        
+        return routes.stream()
+                .flatMap(route -> scheduleRepository.findByRoute(route).stream())
+                .map(schedule -> new RouteScheduleResponse(
+                        schedule.getId(),
+                        new RouteResponse(
+                                schedule.getRoute().getId(),
+                                schedule.getRoute().getName(),
+                                schedule.getRoute().getOrigin(),
+                                schedule.getRoute().getDestination(),
+                                schedule.getRoute().getDistanceKm()
+                        ),
+                        toBusResponse(schedule.getBus()),
+                        schedule.getDepartureTime(),
+                        schedule.getArrivalTime(),
+                        schedule.getFrequency(),
+                        schedule.getActive()
+                ))
+                .toList();
+    }
+
+    public RouteScheduleResponse getSchedule(UUID scheduleId, User user) {
+        RouteSchedule schedule = scheduleRepository.findById(scheduleId)
+                .orElseThrow(() -> new RuntimeException("Schedule not found"));
+
+        if (user.getOperator() == null || 
+            !schedule.getRoute().getOperator().getId().equals(user.getOperator().getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        return new RouteScheduleResponse(
+                schedule.getId(),
+                new RouteResponse(
+                        schedule.getRoute().getId(),
+                        schedule.getRoute().getName(),
+                        schedule.getRoute().getOrigin(),
+                        schedule.getRoute().getDestination(),
+                        schedule.getRoute().getDistanceKm()
+                ),
+                toBusResponse(schedule.getBus()),
+                schedule.getDepartureTime(),
+                schedule.getArrivalTime(),
+                schedule.getFrequency(),
+                schedule.getActive()
+        );
+    }
+
+    public void deleteSchedule(UUID scheduleId, User user) {
+        RouteSchedule schedule = scheduleRepository.findById(scheduleId)
+                .orElseThrow(() -> new RuntimeException("Schedule not found"));
+
+        if (user.getOperator() == null || 
+            !schedule.getRoute().getOperator().getId().equals(user.getOperator().getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        schedule.setActive(false);
+        scheduleRepository.save(schedule);
+    }
+
+    private BusResponse toBusResponse(Bus bus) {
+        return new BusResponse(
+                bus.getId(),
+                bus.getName(),
+                bus.getBusCode(),
+                bus.getVehicleNumber(),
+                bus.getModel(),
+                bus.getBusType(),
+                bus.getTotalSeats(),
+                bus.isActive(),
+                bus.getAmenities().stream()
+                        .map(a -> new AmenityDTO(
+                                a.getId(),
+                                a.getCode(),
+                                a.getDescription()
+                        ))
+                        .toList()
+        );
     }
 
 }
