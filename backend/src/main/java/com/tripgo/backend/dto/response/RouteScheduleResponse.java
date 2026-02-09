@@ -5,8 +5,8 @@ import java.util.UUID;
 
 public record RouteScheduleResponse(
         UUID id,
-        UUID routeId,
-        UUID busId,
+        RouteResponse route,
+        BusResponse bus,
         Instant departureTime,
         Instant arrivalTime,
         String frequency,
