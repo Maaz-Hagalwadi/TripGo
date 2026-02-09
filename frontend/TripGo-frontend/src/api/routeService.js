@@ -171,3 +171,73 @@ export const recomputeDistance = async (routeId) => {
     throw error;
   }
 };
+
+export const getRouteSchedules = async (routeId) => {
+  try {
+    const response = await fetchWithAuth(`${API_BASE_URL}/operator/schedules`, {
+      method: 'GET',
+    });
+    
+    if (!response.ok) {
+      console.warn('Schedule endpoint not available yet');
+      return [];
+    }
+    
+    const allSchedules = await response.json();
+    return allSchedules.filter(schedule => schedule.route?.id === routeId);
+  } catch (error) {
+    console.error('Error fetching schedules:', error);
+    return [];
+  }
+};
+
+export const getAllSchedules = async () => {
+  try {
+    const response = await fetchWithAuth(`${API_BASE_URL}/operator/schedules`, {
+      method: 'GET',
+    });
+    
+    if (!response.ok) {
+      return [];
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error('Error fetching schedules:', error);
+    return [];
+  }
+};
+
+export const getSchedule = async (scheduleId) => {
+  try {
+    const response = await fetchWithAuth(`${API_BASE_URL}/operator/schedules/${scheduleId}`, {
+      method: 'GET',
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch schedule');
+    }
+    
+    return response.json();
+  } catch (error) {
+    console.error('Error fetching schedule:', error);
+    throw error;
+  }
+};
+
+export const deleteSchedule = async (scheduleId) => {
+  try {
+    const response = await fetchWithAuth(`${API_BASE_URL}/operator/schedules/${scheduleId}`, {
+      method: 'DELETE',
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to delete schedule');
+    }
+    
+    return response.ok;
+  } catch (error) {
+    console.error('Error deleting schedule:', error);
+    throw error;
+  }
+};
