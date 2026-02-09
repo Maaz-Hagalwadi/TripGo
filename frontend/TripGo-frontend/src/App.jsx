@@ -17,6 +17,7 @@ import BusSeatLayout from './pages/BusSeatLayout';
 import BusReview from './pages/BusReview';
 import MyBuses from './pages/MyBuses';
 import CreateRoute from './pages/CreateRoute';
+import Schedules from './pages/Schedules';
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
           <Route path="/operator/bus-layout" element={<ProtectedRoute><BusSeatLayout /></ProtectedRoute>} />
           <Route path="/operator/bus-review" element={<ProtectedRoute><BusReview /></ProtectedRoute>} />
           <Route path="/operator/create-route" element={<ProtectedRoute><CreateRoute /></ProtectedRoute>} />
+          <Route path="/operator/schedules" element={<ProtectedRoute><Schedules /></ProtectedRoute>} />
           <Route path="/search-results" element={<ProtectedRoute><SearchResults /></ProtectedRoute>} />
         </Routes>
       </Router>
