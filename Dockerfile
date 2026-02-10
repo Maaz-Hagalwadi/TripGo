@@ -2,7 +2,6 @@ FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
 COPY backend/pom.xml .
 COPY backend/src/ ./src/
-COPY backend/application.properties.example ./src/main/resources/application.properties
 RUN mvn clean package -DskipTests
 
 FROM eclipse-temurin:21-jre
