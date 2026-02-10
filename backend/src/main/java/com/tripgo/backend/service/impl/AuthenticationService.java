@@ -52,34 +52,18 @@ public class AuthenticationService {
     private long refreshTokenExpirationMs;
 
     public void login(LoginRequest request, HttpServletResponse response) {
-        Authentication authentication;
-        try {
-             authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(
-                            request.getEmailOrPhone(),
-                            request.getPassword()
-                    )
-            );
-        } catch (BadCredentialsException ex) {
-            //invalid username/password
-            throw new BadCredentialsException("Invalid email or password");
-        }
+        // First check if user exists
+        User user = userRepository.findByEmailOrPhone(request.getEmailOrPhone(), request.getEmailOrPhone())
+                .orElseThrow(() -> new BadCredentialsException("Invalid email/phone or password"));
 
-
-
-        CustomUserDetails userDetails =
-                (CustomUserDetails) authentication.getPrincipal();
-
-        User user = userDetails.getUser();
-
-
+        // Check email verification before authentication
         if (!user.isEmailVerified()) {
             throw new RuntimeException("Please verify your email before login");
         }
 
+        // Check operator status if applicable
         boolean isOperator = user.getRoles().stream()
                 .anyMatch(r -> r.getName() == RoleType.ROLE_OPERATOR);
-
 
         if (isOperator) {
             Operator op = user.getOperator();
@@ -92,7 +76,20 @@ public class AuthenticationService {
             }
         }
 
+        // Now authenticate
+        Authentication authentication;
+        try {
+             authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.getEmailOrPhone(),
+                            request.getPassword()
+                    )
+            );
+        } catch (BadCredentialsException ex) {
+            throw new BadCredentialsException("Invalid email/phone or password");
+        }
 
+        CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
 
         // 🔹 Generate tokens
         String accessToken = jwtTokenProvider.generateAccessToken(authentication);
