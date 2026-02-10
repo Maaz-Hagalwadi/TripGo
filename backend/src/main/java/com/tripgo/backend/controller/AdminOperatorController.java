@@ -5,6 +5,7 @@ import com.tripgo.backend.repository.OperatorRepository;
 import com.tripgo.backend.service.impl.EmailService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,6 +19,9 @@ public class AdminOperatorController {
 
     private final OperatorRepository operatorRepository;
     private final EmailService emailService;
+
+    @Value("${app.frontend.url}")
+    private String frontendUrl;
 
     @PostMapping("/{id}/approve")
     public ResponseEntity<String> approve(@PathVariable UUID id) {
@@ -42,9 +46,9 @@ public class AdminOperatorController {
             operatorRepository.save(op);
             emailService.sendOperatorApproved(op);
 
-            response.sendRedirect("http://localhost:5174/admin/operator-action?status=approved&operator=" + op.getName());
+            response.sendRedirect(frontendUrl + "/admin/operator-action?status=approved&operator=" + op.getName());
         } catch (Exception e) {
-            response.sendRedirect("http://localhost:5174/admin/operator-action?status=error&message=" + e.getMessage());
+            response.sendRedirect(frontendUrl + "/admin/operator-action?status=error&message=" + e.getMessage());
         }
     }
 
@@ -58,10 +62,9 @@ public class AdminOperatorController {
             operatorRepository.save(op);
             emailService.sendOperatorRejected(op);
 
-            response.sendRedirect("http://localhost:5174/admin/operator-action?status=rejected&operator=" + op.getName());
+            response.sendRedirect(frontendUrl + "/admin/operator-action?status=rejected&operator=" + op.getName());
         } catch (Exception e) {
-            response.sendRedirect("http://localhost:5174/admin/operator-action?status=error&message=" + e.getMessage());
+            response.sendRedirect(frontendUrl + "/admin/operator-action?status=error&message=" + e.getMessage());
         }
     }
 }
-
