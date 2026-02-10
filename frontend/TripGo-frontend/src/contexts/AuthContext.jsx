@@ -86,37 +86,51 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials) => {
     try {
+      console.log('=== LOGIN ATTEMPT ===');
+      console.log('Credentials:', { emailOrPhone: credentials.emailOrPhone, password: '***' });
+      console.log('API URL:', `${API_BASE_URL}/auth/login`);
+      
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials)
       });
 
+      console.log('Login response status:', response.status);
+      console.log('Login response ok:', response.ok);
+
       if (response.ok) {
         const data = await response.json();
-        console.log('Login response data:', data);
-        console.log('accessToken exists:', !!data.accessToken);
+        console.log('=== LOGIN RESPONSE DATA ===');
+        console.log('Full response:', JSON.stringify(data, null, 2));
+        console.log('accessToken type:', typeof data.accessToken);
+        console.log('accessToken value:', data.accessToken ? `${data.accessToken.substring(0, 20)}...` : 'MISSING');
         console.log('refreshToken exists:', !!data.refreshToken);
         
         if (data.accessToken && data.refreshToken) {
+          console.log('=== STORING TOKENS ===');
           localStorage.setItem('accessToken', data.accessToken);
           localStorage.setItem('refreshToken', data.refreshToken);
-          console.log('Tokens stored in localStorage');
-          console.log('Verify token in storage:', localStorage.getItem('accessToken') ? 'found' : 'NOT FOUND');
-          // Small delay to ensure localStorage is updated
-          await new Promise(resolve => setTimeout(resolve, 100));
+          console.log('Tokens stored successfully');
+          
+          const storedToken = localStorage.getItem('accessToken');
+          console.log('Verification - token retrieved:', storedToken ? `${storedToken.substring(0, 20)}...` : 'FAILED TO RETRIEVE');
+          
           await checkAuth();
           return { success: true };
         } else {
-          console.error('Tokens not found in response:', data);
+          console.error('=== TOKEN MISSING IN RESPONSE ===');
+          console.error('Response keys:', Object.keys(data));
           return { success: false, error: 'Invalid response from server' };
         }
       }
       
       const data = await response.json();
+      console.error('Login failed:', data);
       return { success: false, error: data.error || data.message || 'Login failed' };
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('=== LOGIN ERROR ===');
+      console.error('Error:', error);
       return { success: false, error: 'Network error. Please try again.' };
     }
   };
