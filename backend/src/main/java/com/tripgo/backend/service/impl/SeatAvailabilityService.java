@@ -24,12 +24,22 @@ public class SeatAvailabilityService {
     public SearchResult searchAvailability(RouteSchedule schedule, String from, String to, String seatType) {
 
         List<RouteSegment> segments = segmentRepo.findByRouteOrderBySeq(schedule.getRoute());
+        
+        System.out.println("🔍 Searching availability for: " + from + " -> " + to);
+        System.out.println("📋 Route segments:");
+        for (int i = 0; i < segments.size(); i++) {
+            RouteSegment seg = segments.get(i);
+            System.out.println("  [" + i + "] " + seg.getFromStop() + " -> " + seg.getToStop());
+        }
 
         int startIdx = indexOf(segments, from);
         int endIdx = indexOf(segments, to);
+        
+        System.out.println("📍 Start index: " + startIdx + ", End index: " + endIdx);
 
         if (startIdx == -1 || endIdx == -1 || endIdx <= startIdx) {
-            throw new RuntimeException("Invalid stop selection");
+            System.out.println("❌ Invalid stop selection: startIdx=" + startIdx + ", endIdx=" + endIdx);
+            throw new RuntimeException("Invalid stop selection: Could not find '" + from + "' or '" + to + "' in route segments");
         }
 
         // 1. Fare Calculation
@@ -39,8 +49,9 @@ public class SeatAvailabilityService {
 
         for (int i = startIdx; i < endIdx; i++) {
             RouteSegment segment = segments.get(i);
+            System.out.println("💰 Looking for fare: segment=" + segment.getId() + ", seatType=" + searchSeatType);
             Fare fare = fareRepo.findByRouteSegmentIdAndSeatType(segment.getId(), searchSeatType)
-                    .orElseThrow(() -> new RuntimeException("Fare not defined for segment: " + segment.getId() + ", seatType: " + searchSeatType));
+                    .orElseThrow(() -> new RuntimeException("Fare not defined for segment: " + segment.getFromStop() + " -> " + segment.getToStop() + ", seatType: " + searchSeatType));
 
             base = base.add(fare.getBaseFare());
             gst = gst.add(fare.getBaseFare()

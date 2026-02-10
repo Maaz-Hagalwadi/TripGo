@@ -29,7 +29,13 @@ public class SearchController {
             @RequestParam String to,
             @RequestParam LocalDate date
     ) {
-        List<RouteSchedule> schedules = scheduleRepo.findByFromAndToAndDate(from, to, date);
+        // Normalize input - trim and capitalize first letter
+        String normalizedFrom = normalizeStopName(from);
+        String normalizedTo = normalizeStopName(to);
+        
+        System.out.println("🔍 Search request: " + from + " -> " + to + " (normalized: " + normalizedFrom + " -> " + normalizedTo + ")");
+        
+        List<RouteSchedule> schedules = scheduleRepo.findByFromAndToAndDate(normalizedFrom, normalizedTo, date);
         
         return schedules.stream()
                 .map(schedule -> {
@@ -47,9 +53,16 @@ public class SearchController {
                     adjustedSchedule.setFrequency(schedule.getFrequency());
                     adjustedSchedule.setActive(schedule.getActive());
                     
-                    return availabilityService.search(adjustedSchedule, from, to, "SLEEPER");
+                    return availabilityService.search(adjustedSchedule, normalizedFrom, normalizedTo, "SLEEPER");
                 })
                 .toList();
+    }
+    
+    private String normalizeStopName(String stop) {
+        if (stop == null || stop.isEmpty()) return stop;
+        stop = stop.trim();
+        // Capitalize first letter, lowercase rest
+        return stop.substring(0, 1).toUpperCase() + stop.substring(1).toLowerCase();
     }
     
     private Instant adjustToDate(Instant originalTime, LocalDate targetDate) {
