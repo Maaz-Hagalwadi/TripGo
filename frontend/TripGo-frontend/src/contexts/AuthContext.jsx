@@ -91,10 +91,17 @@ export const AuthProvider = ({ children }) => {
 
       if (response.ok) {
         const data = await response.json();
-        localStorage.setItem('accessToken', data.accessToken);
-        localStorage.setItem('refreshToken', data.refreshToken);
-        await checkAuth();
-        return { success: true };
+        console.log('Login response data:', data);
+        
+        if (data.accessToken && data.refreshToken) {
+          localStorage.setItem('accessToken', data.accessToken);
+          localStorage.setItem('refreshToken', data.refreshToken);
+          await checkAuth();
+          return { success: true };
+        } else {
+          console.error('Tokens not found in response:', data);
+          return { success: false, error: 'Invalid response from server' };
+        }
       }
       
       const data = await response.json();
