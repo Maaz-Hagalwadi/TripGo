@@ -2,11 +2,12 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080
 
 export const getCurrentUser = async () => {
   try {
+    const token = localStorage.getItem('accessToken');
     const response = await fetch(`${API_BASE_URL}/users/me`, {
       method: 'GET',
-      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` }),
       },
     });
 
