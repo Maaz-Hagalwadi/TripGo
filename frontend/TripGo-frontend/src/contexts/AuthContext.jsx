@@ -24,6 +24,8 @@ export const AuthProvider = ({ children }) => {
   const checkAuth = async () => {
     try {
       const token = localStorage.getItem('accessToken');
+      console.log('checkAuth - token from localStorage:', token ? 'exists' : 'missing');
+      
       if (!token) {
         setIsAuthenticated(false);
         setUser(null);
@@ -31,6 +33,7 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
+      console.log('Calling /users/me with token');
       const response = await fetch(`${API_BASE_URL}/users/me`, {
         method: 'GET',
         headers: {
@@ -96,6 +99,9 @@ export const AuthProvider = ({ children }) => {
         if (data.accessToken && data.refreshToken) {
           localStorage.setItem('accessToken', data.accessToken);
           localStorage.setItem('refreshToken', data.refreshToken);
+          console.log('Tokens stored in localStorage');
+          // Small delay to ensure localStorage is updated
+          await new Promise(resolve => setTimeout(resolve, 100));
           await checkAuth();
           return { success: true };
         } else {
