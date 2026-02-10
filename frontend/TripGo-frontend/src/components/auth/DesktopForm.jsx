@@ -273,7 +273,7 @@ const DesktopForm = () => {
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">mail</span>
                   <input 
                     className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.email ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                    placeholder="name@company.com" 
+                      placeholder="Enter your email" 
                     type="email"
                     autoComplete="off"
                     value={formData.email}
@@ -293,7 +293,7 @@ const DesktopForm = () => {
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">call</span>
                   <input 
                     className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.phone ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                    placeholder="9765764530" 
+                    placeholder="10-digit number" 
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => {
@@ -312,7 +312,7 @@ const DesktopForm = () => {
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">lock</span>
                   <input 
                     className={`w-full pl-12 pr-12 py-3 bg-input-gray border ${errors.password ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                    placeholder="••••••••" 
+                    placeholder="Enter password" 
                     type={showPassword ? "text" : "password"}
                     autoComplete="new-password"
                     value={formData.password}
@@ -322,7 +322,7 @@ const DesktopForm = () => {
                     }}
                   />
                   <button 
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors" 
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors mt-4" 
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                   >
@@ -339,7 +339,7 @@ const DesktopForm = () => {
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">lock</span>
                   <input 
                     className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.confirmPassword ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                    placeholder="••••••••" 
+                    placeholder="Re-enter password" 
                     type="password"
                     autoComplete="new-password"
                     value={formData.confirmPassword}

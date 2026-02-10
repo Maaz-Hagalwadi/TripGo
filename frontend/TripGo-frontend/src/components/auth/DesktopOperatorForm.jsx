@@ -249,7 +249,7 @@ const DesktopOperatorForm = () => {
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Email</label>
                     <input 
                       className={`w-full px-4 py-3 bg-input-gray border ${errors.email ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="name@company.com" 
+                      placeholder="Enter your email" 
                       type="email"
                       autoComplete="off"
                       value={formData.email}
@@ -264,7 +264,7 @@ const DesktopOperatorForm = () => {
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Phone</label>
                     <input 
                       className={`w-full px-4 py-3 bg-input-gray border ${errors.phone ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="9765764530" 
+                      placeholder="10-digit number" 
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => {
@@ -281,7 +281,7 @@ const DesktopOperatorForm = () => {
                     <div className="relative">
                       <input 
                         className={`w-full px-4 py-3 pr-12 bg-input-gray border ${errors.password ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                        placeholder="••••••••" 
+                        placeholder="Enter password" 
                         type={showPassword ? "text" : "password"}
                         autoComplete="new-password"
                         value={formData.password}
@@ -291,7 +291,7 @@ const DesktopOperatorForm = () => {
                         }}
                       />
                       <button 
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors" 
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors mt-4" 
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                       >
@@ -304,7 +304,7 @@ const DesktopOperatorForm = () => {
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Confirm Password</label>
                     <input 
                       className={`w-full px-4 py-3 bg-input-gray border ${errors.confirmPassword ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="••••••••" 
+                      placeholder="Re-enter password" 
                       type="password"
                       autoComplete="new-password"
                       value={formData.confirmPassword}
@@ -325,7 +325,7 @@ const DesktopOperatorForm = () => {
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Company Name</label>
                     <input 
                       className={`w-full px-4 py-3 bg-input-gray border ${errors.operatorName ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="City Bus Lines" 
+                      placeholder="Company Name" 
                       type="text"
                       value={formData.operatorName}
                       onChange={(e) => {
@@ -339,7 +339,7 @@ const DesktopOperatorForm = () => {
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Short Name</label>
                     <input 
                       className={`w-full px-4 py-3 bg-input-gray border ${errors.shortName ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="CBL" 
+                      placeholder="Short Name" 
                       type="text"
                       value={formData.shortName}
                       onChange={(e) => {
@@ -355,7 +355,7 @@ const DesktopOperatorForm = () => {
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Contact Phone</label>
                     <input 
                       className={`w-full px-4 py-3 bg-input-gray border ${errors.contactPhone ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="9876543210" 
+                      placeholder="10-digit number" 
                       type="tel"
                       value={formData.contactPhone}
                       onChange={(e) => {
@@ -369,7 +369,7 @@ const DesktopOperatorForm = () => {
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Contact Email</label>
                     <input 
                       className={`w-full px-4 py-3 bg-input-gray border ${errors.contactEmail ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="contact@company.com" 
+                      placeholder="Enter contact email" 
                       type="email"
                       value={formData.contactEmail}
                       onChange={(e) => {
@@ -384,7 +384,7 @@ const DesktopOperatorForm = () => {
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Address</label>
                   <textarea 
                     className={`w-full px-4 py-3 bg-input-gray border ${errors.address ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none resize-none`} 
-                    placeholder="123 Main St, City, State" 
+                    placeholder="Enter company address" 
                     rows="2"
                     value={formData.address}
                     onChange={(e) => {

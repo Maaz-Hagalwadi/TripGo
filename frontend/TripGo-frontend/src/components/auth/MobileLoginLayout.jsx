@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
@@ -33,6 +33,19 @@ const MobileLoginLayout = () => {
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
+  const [loginSuccess, setLoginSuccess] = useState(false);
+
+  useEffect(() => {
+    if (loginSuccess && user && user.role) {
+      if (user.role === 'OPERATOR') {
+        navigate('/operator/dashboard');
+      } else if (user.role === 'USER') {
+        navigate('/dashboard');
+      } else {
+        navigate('/');
+      }
+    }
+  }, [user, loginSuccess, navigate]);
 
   const loginUser = async (formData) => {
     try {
@@ -43,11 +56,7 @@ const MobileLoginLayout = () => {
 
       if (success) {
         setErrors({ success: 'Login successful! Redirecting...' });
-        // Small delay to allow user state to update
-        setTimeout(() => {
-          // Force page reload to get updated user state
-          window.location.href = '/dashboard';
-        }, 500);
+        setLoginSuccess(true);
       } else {
         setErrors({ general: 'Invalid email/phone or password' });
       }
