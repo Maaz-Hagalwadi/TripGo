@@ -95,11 +95,14 @@ export const AuthProvider = ({ children }) => {
       if (response.ok) {
         const data = await response.json();
         console.log('Login response data:', data);
+        console.log('accessToken exists:', !!data.accessToken);
+        console.log('refreshToken exists:', !!data.refreshToken);
         
         if (data.accessToken && data.refreshToken) {
           localStorage.setItem('accessToken', data.accessToken);
           localStorage.setItem('refreshToken', data.refreshToken);
           console.log('Tokens stored in localStorage');
+          console.log('Verify token in storage:', localStorage.getItem('accessToken') ? 'found' : 'NOT FOUND');
           // Small delay to ensure localStorage is updated
           await new Promise(resolve => setTimeout(resolve, 100));
           await checkAuth();
