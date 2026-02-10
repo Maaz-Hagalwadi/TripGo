@@ -14,18 +14,24 @@ import java.util.UUID;
 public interface RouteScheduleRepository extends JpaRepository<RouteSchedule, UUID> {
     List<RouteSchedule> findByRoute(Route route);
     
-    @Query("""
-        SELECT rs FROM RouteSchedule rs 
-        JOIN rs.route r 
+    @Query(value = """
+        SELECT rs.* FROM route_schedules rs 
+        JOIN routes r ON rs.route_id = r.id 
         WHERE LOWER(r.origin) = LOWER(:from) 
         AND LOWER(r.destination) = LOWER(:to) 
-        AND rs.departureTime >= :startOfDay 
-        AND rs.departureTime < :endOfDay
-        """)
+        AND rs.active = true
+        AND (
+            DATE(rs.departure_time) = :date
+            OR (rs.frequency = 'DAILY' AND DATE(rs.departure_time) <= :date)
+            OR (rs.frequency = 'WEEKDAYS' AND DATE(rs.departure_time) <= :date 
+                AND EXTRACT(DOW FROM DATE(:date)) BETWEEN 1 AND 5)
+            OR (rs.frequency = 'WEEKENDS' AND DATE(rs.departure_time) <= :date 
+                AND EXTRACT(DOW FROM DATE(:date)) IN (0, 6))
+        )
+        """, nativeQuery = true)
     List<RouteSchedule> findByFromAndToAndDate(
         @Param("from") String from, 
         @Param("to") String to, 
-        @Param("startOfDay") Instant startOfDay,
-        @Param("endOfDay") Instant endOfDay
+        @Param("date") LocalDate date
     );
 }

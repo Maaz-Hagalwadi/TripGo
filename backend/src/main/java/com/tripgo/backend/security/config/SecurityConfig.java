@@ -52,7 +52,8 @@ public class SecurityConfig {
                                 "/auth/forgot-password",
                                 "/auth/reset-password",
                                 "/admin/operators/*/approve",
-                                "/admin/operators/*/reject")
+                                "/admin/operators/*/reject",
+                                "/search/**")
                         .permitAll()
                         .requestMatchers("/operator/**").hasRole("OPERATOR")
                         .requestMatchers("/admin/**").hasRole("ADMIN")

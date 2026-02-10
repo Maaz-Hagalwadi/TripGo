@@ -27,37 +27,58 @@ public class SearchController {
     public List<SearchResponse> search(
             @RequestParam String from,
             @RequestParam String to,
-            @RequestParam String date,
-            @RequestParam(required = false) String seatType
+            @RequestParam LocalDate date
     ) {
-        System.out.println("🔍 Search request: from=" + from + ", to=" + to + ", date=" + date);
+        List<RouteSchedule> schedules = scheduleRepo.findByFromAndToAndDate(from, to, date);
         
-        LocalDate travelDate = LocalDate.parse(date);
-        Instant startOfDay = travelDate.atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
-        Instant endOfDay = travelDate.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant();
-        
-        System.out.println("📅 Date range: " + startOfDay + " to " + endOfDay);
-        
-        // Find all schedules for the route and date
-        List<RouteSchedule> schedules = scheduleRepo.findByFromAndToAndDate(from, to, startOfDay, endOfDay);
-        System.out.println("📋 Found " + schedules.size() + " schedules");
-        
-        // Get availability for each schedule
-        List<SearchResponse> results = schedules.stream()
+        return schedules.stream()
                 .map(schedule -> {
-                    System.out.println("🚌 Processing schedule: " + schedule.getId() + ", departure: " + schedule.getDepartureTime());
-                    return availabilityService.search(schedule, from, to, seatType);
+                    // Adjust departure time to the searched date
+                    Instant adjustedDeparture = adjustToDate(schedule.getDepartureTime(), date);
+                    Instant adjustedArrival = adjustToDate(schedule.getArrivalTime(), date);
+                    
+                    // Create a temporary schedule with adjusted times
+                    RouteSchedule adjustedSchedule = new RouteSchedule();
+                    adjustedSchedule.setId(schedule.getId());
+                    adjustedSchedule.setRoute(schedule.getRoute());
+                    adjustedSchedule.setBus(schedule.getBus());
+                    adjustedSchedule.setDepartureTime(adjustedDeparture);
+                    adjustedSchedule.setArrivalTime(adjustedArrival);
+                    adjustedSchedule.setFrequency(schedule.getFrequency());
+                    adjustedSchedule.setActive(schedule.getActive());
+                    
+                    return availabilityService.search(adjustedSchedule, from, to, "SLEEPER");
                 })
-                .filter(result -> hasAvailableSeats(result)) // Check if any seats are available
                 .toList();
-                
-        System.out.println("✅ Returning " + results.size() + " results");
-        return results;
     }
     
-    private boolean hasAvailableSeats(SearchResponse response) {
-        return response.seatAvailability().stream()
-                .anyMatch(SeatAvailability::available);
+    private Instant adjustToDate(Instant originalTime, LocalDate targetDate) {
+        java.time.LocalDateTime originalDateTime = java.time.LocalDateTime.ofInstant(originalTime, java.time.ZoneOffset.UTC);
+        java.time.LocalTime timeOfDay = originalDateTime.toLocalTime();
+        return targetDate.atTime(timeOfDay).toInstant(java.time.ZoneOffset.UTC);
+    }
+    
+    @GetMapping("/debug")
+    public List<String> debugSchedules() {
+        return scheduleRepo.findAll().stream()
+                .map(s -> "Route: " + s.getRoute().getOrigin() + " -> " + s.getRoute().getDestination() + 
+                         ", Date: " + s.getDepartureTime() + ", Active: " + s.getActive())
+                .toList();
+    }
+    
+    @GetMapping("/debug/route")
+    public List<String> debugByRoute(@RequestParam String from, @RequestParam String to) {
+        List<RouteSchedule> all = scheduleRepo.findAll();
+        System.out.println("Total schedules in DB: " + all.size());
+        
+        return all.stream()
+                .filter(s -> s.getRoute().getOrigin().equalsIgnoreCase(from) && 
+                            s.getRoute().getDestination().equalsIgnoreCase(to))
+                .map(s -> "ID: " + s.getId() + 
+                         ", Route: " + s.getRoute().getOrigin() + " -> " + s.getRoute().getDestination() + 
+                         ", Departure: " + s.getDepartureTime() + 
+                         ", Active: " + s.getActive())
+                .toList();
     }
 }
 
