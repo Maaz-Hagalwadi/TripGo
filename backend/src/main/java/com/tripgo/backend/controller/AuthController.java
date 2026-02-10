@@ -67,7 +67,11 @@ public class AuthController {
                                       HttpServletResponse response) {
         try {
             authService.login(request, response);
-            return ResponseEntity.ok(Map.of("message", "Login successful"));
+            return ResponseEntity.ok(Map.of(
+                "message", "Login successful",
+                "accessToken", response.getHeader("X-Access-Token"),
+                "refreshToken", response.getHeader("X-Refresh-Token")
+            ));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
