@@ -35,5 +35,4 @@ build/
 
 ### Configuration Files ###
 application.yml
-application.properties
 .DS_Store
