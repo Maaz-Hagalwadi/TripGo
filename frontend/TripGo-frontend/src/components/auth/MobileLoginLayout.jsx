@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { 
@@ -20,6 +20,8 @@ import {
 } from '@mui/icons-material';
 import TripGoIcon from '../../assets/icons/TripGoIcon';
 import { darkTheme } from '../../theme/darkTheme';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 
 const MobileLoginLayout = () => {
   const navigate = useNavigate();
