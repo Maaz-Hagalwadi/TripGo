@@ -1,3 +1,4 @@
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || `${API_BASE_URL}';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
@@ -47,7 +48,7 @@ const MobileOperatorLayout = () => {
 
   const registerOperator = async (formData) => {
     try {
-      const response = await fetch('http://localhost:8080/operators/register', {
+      const response = await fetch(`${API_BASE_URL}/operators/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

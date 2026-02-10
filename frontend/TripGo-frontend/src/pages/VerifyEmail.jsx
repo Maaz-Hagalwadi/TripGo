@@ -4,6 +4,8 @@ import { Box, Typography, Button, CircularProgress, Container } from '@mui/mater
 import { CheckCircle, Error } from '@mui/icons-material';
 import TripGoIcon from '../assets/icons/TripGoIcon';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+
 const VerifyEmail = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -25,7 +27,7 @@ const VerifyEmail = () => {
     } else if (token) {
       // Direct token verification (fallback)
       console.log('Calling verification endpoint...');
-      fetch(`http://localhost:8080/auth/verify-email?token=${token}`)
+      fetch(`${API_BASE_URL}/auth/verify-email?token=${token}`)
         .then(response => {
           console.log('Response status:', response.status);
           if (response.ok) {
