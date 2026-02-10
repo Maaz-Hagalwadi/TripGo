@@ -18,15 +18,18 @@ const DesktopLoginForm = () => {
 
   useEffect(() => {
     console.log('Login redirect check - loginSuccess:', loginSuccess, 'user:', user, 'role:', user?.role);
-    if (loginSuccess && user && user.role) {
+    if (loginSuccess && user?.role) {
       console.log('Redirecting based on role:', user.role);
-      if (user.role === 'OPERATOR') {
-        navigate('/operator/dashboard');
-      } else if (user.role === 'USER') {
-        navigate('/dashboard');
-      } else {
-        navigate('/');
-      }
+      const timer = setTimeout(() => {
+        if (user.role === 'OPERATOR') {
+          navigate('/operator/dashboard');
+        } else if (user.role === 'USER') {
+          navigate('/dashboard');
+        } else {
+          navigate('/');
+        }
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [user, loginSuccess, navigate]);
 

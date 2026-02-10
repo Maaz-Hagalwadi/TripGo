@@ -21,12 +21,15 @@ const OperatorDashboard = () => {
     if (loading) return;
     
     if (!user) {
-      navigate('/');
+      console.log('OperatorDashboard: No user, redirecting to login');
+      navigate('/login', { replace: true });
       return;
     }
     
+    console.log('OperatorDashboard: User role:', user.role);
     if (user.role && user.role !== 'OPERATOR') {
-      navigate('/');
+      console.log('OperatorDashboard: Not an operator, redirecting to dashboard');
+      navigate('/dashboard', { replace: true });
     }
   }, [user, loading, navigate]);
 

@@ -36,14 +36,17 @@ const MobileLoginLayout = () => {
   const [loginSuccess, setLoginSuccess] = useState(false);
 
   useEffect(() => {
-    if (loginSuccess && user && user.role) {
-      if (user.role === 'OPERATOR') {
-        navigate('/operator/dashboard');
-      } else if (user.role === 'USER') {
-        navigate('/dashboard');
-      } else {
-        navigate('/');
-      }
+    if (loginSuccess && user?.role) {
+      const timer = setTimeout(() => {
+        if (user.role === 'OPERATOR') {
+          navigate('/operator/dashboard');
+        } else if (user.role === 'USER') {
+          navigate('/dashboard');
+        } else {
+          navigate('/');
+        }
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [user, loginSuccess, navigate]);
 
