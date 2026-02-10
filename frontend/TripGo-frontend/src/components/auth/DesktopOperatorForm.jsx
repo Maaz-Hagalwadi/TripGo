@@ -25,7 +25,7 @@ const DesktopOperatorForm = () => {
 
   const registerOperator = async (formData) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/operators/register', {
+      const response = await fetch(`${API_BASE_URL}/operators/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

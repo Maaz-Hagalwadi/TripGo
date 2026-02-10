@@ -26,7 +26,7 @@ const MobileForgotPasswordLayout = () => {
 
   const forgotPassword = async (email) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/forgot-password', {
+      const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `email=${email}`
