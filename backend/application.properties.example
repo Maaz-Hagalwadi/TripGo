@@ -1,0 +1,46 @@
+spring.application.name=TripGo Backend
+spring.jpa.hibernate.ddl-auto=none
+spring.datasource.url=${DB_URL}
+spring.datasource.username=${DB_USERNAME}
+spring.datasource.password=${DB_PASSWORD}
+spring.datasource.initialization-mode=never
+
+spring.jpa.show-sql=true
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect
+
+spring.flyway.enabled=true
+spring.flyway.locations=classpath:db/migration
+
+logging.level.org.hibernate.SQL=DEBUG
+
+# Server Port (Render uses PORT env variable)
+server.port=${PORT:8080}
+
+# JWT Settings
+app.jwt.secret=${JWT_SECRET}
+app.jwt.access-token-expiration=900000
+app.jwt.refresh-token-expiration=1209600000
+
+# Email verification token expiry (24 hours)
+app.email.verification-expiration=86400000
+
+app.password.reset-expiration=900000
+
+spring.mail.host=smtp.gmail.com
+spring.mail.port=587
+spring.mail.username=${MAIL_USERNAME}
+spring.mail.password=${MAIL_PASSWORD}
+spring.mail.properties.mail.smtp.auth=true
+spring.mail.properties.mail.smtp.starttls.enable=true
+
+spring.thymeleaf.prefix=classpath:/templates/
+spring.thymeleaf.suffix=.html
+spring.thymeleaf.mode=HTML
+spring.thymeleaf.cache=false
+
+# Frontend URL
+app.frontend.url=${FRONTEND_URL:http://localhost:5173}
+# Backend URL
+app.backend.url=${BACKEND_URL:http://localhost:8080}
+# CORS allowed origins
+app.cors.allowed-origins=${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5174}
