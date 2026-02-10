@@ -2,10 +2,11 @@ FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
 COPY backend/pom.xml .
 COPY backend/src ./src
+COPY backend/application.properties.example ./src/main/resources/application.properties
 RUN mvn clean package -DskipTests
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "-Dserver.port=${PORT:-8080}", "-jar", "app.jar"]
