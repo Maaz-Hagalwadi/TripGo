@@ -143,9 +143,13 @@ public class EmailService {
             helper.setText(html, true);
 
             mailSender.send(message);
-            System.out.println("Email sent to " + to);
+            System.out.println("✅ Email sent successfully to " + to);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to send email to " + to, e);
+            System.err.println("❌ Failed to send email to " + to);
+            System.err.println("Error type: " + e.getClass().getName());
+            System.err.println("Error message: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to send email to " + to + ": " + e.getMessage(), e);
         }
     }
 }
