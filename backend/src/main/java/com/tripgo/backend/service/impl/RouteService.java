@@ -295,4 +295,21 @@ public class RouteService {
         );
     }
 
+    public void deleteRoute(UUID routeId, User user) {
+        Route route = routeRepository.findById(routeId)
+                .orElseThrow(() -> new RuntimeException("Route not found"));
+
+        if (user.getOperator() == null || 
+            !route.getOperator().getId().equals(user.getOperator().getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        // Delete associated schedules, segments, and fares
+        scheduleRepository.deleteAll(scheduleRepository.findByRoute(route));
+        fareRepository.deleteAll(fareRepository.findByRoute(route));
+        segmentRepository.deleteAll(segmentRepository.findByRouteOrderBySeq(route));
+        
+        // Delete the route
+        routeRepository.delete(route);
+    }
 }

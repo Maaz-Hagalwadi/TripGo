@@ -84,6 +84,10 @@ public class RouteController {
         return routeService.listSegments(routeId, user);
     }
 
-
-
+    @DeleteMapping("/{routeId}")
+    public ResponseEntity<Void> deleteRoute(@PathVariable UUID routeId, Authentication auth) {
+        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+        routeService.deleteRoute(routeId, user);
+        return ResponseEntity.ok().build();
+    }
 }
