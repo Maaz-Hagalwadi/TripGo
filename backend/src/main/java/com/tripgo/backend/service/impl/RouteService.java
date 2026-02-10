@@ -304,10 +304,12 @@ public class RouteService {
             throw new RuntimeException("Access denied");
         }
 
-        // Delete associated schedules, segments, and fares
-        scheduleRepository.deleteAll(scheduleRepository.findByRoute(route));
-        fareRepository.deleteAll(fareRepository.findByRoute(route));
-        segmentRepository.deleteAll(segmentRepository.findByRouteOrderBySeq(route));
+        // Delete associated data
+        scheduleRepository.findByRoute(route).forEach(scheduleRepository::delete);
+        segmentRepository.findByRouteOrderBySeq(route).forEach(segment -> {
+            fareRepository.findByRouteSegment(segment).forEach(fareRepository::delete);
+            segmentRepository.delete(segment);
+        });
         
         // Delete the route
         routeRepository.delete(route);

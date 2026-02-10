@@ -24,6 +24,8 @@ export const AuthProvider = ({ children }) => {
   const checkAuth = async () => {
     try {
       const token = localStorage.getItem('accessToken');
+      console.log('checkAuth - token from localStorage:', token ? 'exists' : 'missing');
+      
       if (!token) {
         setIsAuthenticated(false);
         setUser(null);
@@ -31,6 +33,7 @@ export const AuthProvider = ({ children }) => {
         return;
       }
 
+      console.log('Calling /users/me with token');
       const response = await fetch(`${API_BASE_URL}/users/me`, {
         method: 'GET',
         headers: {
@@ -44,9 +47,10 @@ export const AuthProvider = ({ children }) => {
         const data = await response.json();
         console.log('User data from /users/me:', data);
         
-        // Extract primary role from roles array
+        // Extract primary role from roles array (prioritize higher roles)
         let primaryRole = null;
         if (data.roles && data.roles.length > 0) {
+          // Check in priority order: ADMIN > OPERATOR > USER
           if (data.roles.includes('ROLE_ADMIN')) {
             primaryRole = 'ADMIN';
           } else if (data.roles.includes('ROLE_OPERATOR')) {
@@ -56,6 +60,9 @@ export const AuthProvider = ({ children }) => {
           }
         }
         
+        console.log('Roles from backend:', data.roles);
+        console.log('Extracted primary role:', primaryRole);
+        
         const userData = { ...data, role: primaryRole };
         console.log('Processed user data with role:', userData);
         
@@ -63,6 +70,8 @@ export const AuthProvider = ({ children }) => {
         setUser(userData);
       } else {
         console.log('Auth check failed');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
         setIsAuthenticated(false);
         setUser(null);
       }
@@ -85,13 +94,23 @@ export const AuthProvider = ({ children }) => {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('Login response data:', data);
+        console.log('accessToken exists:', !!data.accessToken);
+        console.log('refreshToken exists:', !!data.refreshToken);
+        
         if (data.accessToken && data.refreshToken) {
           localStorage.setItem('accessToken', data.accessToken);
           localStorage.setItem('refreshToken', data.refreshToken);
+          console.log('Tokens stored in localStorage');
+          console.log('Verify token in storage:', localStorage.getItem('accessToken') ? 'found' : 'NOT FOUND');
+          // Small delay to ensure localStorage is updated
+          await new Promise(resolve => setTimeout(resolve, 100));
           await checkAuth();
           return { success: true };
+        } else {
+          console.error('Tokens not found in response:', data);
+          return { success: false, error: 'Invalid response from server' };
         }
-        return { success: false, error: 'Invalid response from server' };
       }
       
       const data = await response.json();

@@ -40,6 +40,7 @@ const CreateRoute = () => {
   
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     if (loading) return;
@@ -60,12 +61,13 @@ const CreateRoute = () => {
 
   const handleStep1Submit = async () => {
     if (!routeData.name || !routeData.origin || !routeData.destination) {
-      alert('Please fill all route details');
+      setErrorMessage('Please fill all route details');
       return;
     }
     
     try {
       setSubmitting(true);
+      setErrorMessage('');
       const response = await createRoute(routeData);
       setRouteId(response.id);
       setSegments([
@@ -73,7 +75,7 @@ const CreateRoute = () => {
       ]);
       setStep(2);
     } catch (error) {
-      alert(error.message);
+      setErrorMessage(error.message);
     } finally {
       setSubmitting(false);
     }
@@ -92,12 +94,13 @@ const CreateRoute = () => {
 
   const handleStep2Submit = async () => {
     if (segments.some(s => !s.toStop || !s.distanceKm || !s.durationMinutes)) {
-      alert('Please fill all segment details');
+      setErrorMessage('Please fill all segment details');
       return;
     }
     
     try {
       setSubmitting(true);
+      setErrorMessage('');
       const ids = [];
       for (const segment of segments) {
         const response = await addSegment(routeId, segment);
@@ -122,7 +125,7 @@ const CreateRoute = () => {
       setFares(initialFares);
       setStep(3);
     } catch (error) {
-      alert(error.message);
+      setErrorMessage(error.message);
     } finally {
       setSubmitting(false);
     }
@@ -136,12 +139,13 @@ const CreateRoute = () => {
 
   const handleStep3Submit = async () => {
     if (fares.some(f => !f.baseFare)) {
-      alert('Please set fares for all segments and seat types');
+      setErrorMessage('Please set fares for all segments and seat types');
       return;
     }
     
     try {
       setSubmitting(true);
+      setErrorMessage('');
       for (const fare of fares) {
         await addFare(routeId, {
           segmentId: fare.segmentId,
@@ -152,7 +156,7 @@ const CreateRoute = () => {
       }
       setStep(4);
     } catch (error) {
-      alert(error.message);
+      setErrorMessage(error.message);
     } finally {
       setSubmitting(false);
     }
@@ -160,12 +164,13 @@ const CreateRoute = () => {
 
   const handleStep4Submit = async () => {
     if (!scheduleData.busId || !scheduleData.departureTime || !scheduleData.arrivalTime) {
-      alert('Please fill all schedule details');
+      setErrorMessage('Please fill all schedule details');
       return;
     }
     
     try {
       setSubmitting(true);
+      setErrorMessage('');
       // Convert datetime-local to ISO 8601 format
       const payload = {
         busId: scheduleData.busId,
@@ -179,7 +184,7 @@ const CreateRoute = () => {
         navigate('/operator/schedules');
       }, 2000);
     } catch (error) {
-      alert(error.message);
+      setErrorMessage(error.message);
     } finally {
       setSubmitting(false);
     }
@@ -210,6 +215,11 @@ const CreateRoute = () => {
           </div>
 
           <div className="max-w-4xl mx-auto bg-white dark:bg-[#1a1a1a] rounded-xl p-6 border border-slate-200 dark:border-slate-800">
+            {errorMessage && (
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 text-sm">
+                {errorMessage}
+              </div>
+            )}
             {/* Step 1: Route Details */}
             {step === 1 && (
               <div className="space-y-4">
@@ -220,7 +230,7 @@ const CreateRoute = () => {
                     type="text"
                     value={routeData.name}
                     onChange={(e) => setRouteData({...routeData, name: e.target.value})}
-                    placeholder="e.g., Mumbai to Pune Express"
+                    placeholder="Enter route name"
                     className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
                   />
                 </div>
@@ -231,7 +241,7 @@ const CreateRoute = () => {
                       type="text"
                       value={routeData.origin}
                       onChange={(e) => setRouteData({...routeData, origin: e.target.value})}
-                      placeholder="Mumbai"
+                      placeholder="Enter origin city"
                       className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
                     />
                   </div>
@@ -241,7 +251,7 @@ const CreateRoute = () => {
                       type="text"
                       value={routeData.destination}
                       onChange={(e) => setRouteData({...routeData, destination: e.target.value})}
-                      placeholder="Pune"
+                      placeholder="Enter destination city"
                       className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
                     />
                   </div>
@@ -278,7 +288,7 @@ const CreateRoute = () => {
                           type="text"
                           value={seg.toStop}
                           onChange={(e) => updateSegment(idx, 'toStop', e.target.value)}
-                          placeholder="Next stop"
+                          placeholder="Enter stop name"
                           className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
                         />
                       </div>
@@ -290,7 +300,7 @@ const CreateRoute = () => {
                           type="number"
                           value={seg.distanceKm}
                           onChange={(e) => updateSegment(idx, 'distanceKm', e.target.value)}
-                          placeholder="64.5"
+                          placeholder="Enter distance"
                           className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
                         />
                       </div>
@@ -300,7 +310,7 @@ const CreateRoute = () => {
                           type="number"
                           value={seg.durationMinutes}
                           onChange={(e) => updateSegment(idx, 'durationMinutes', e.target.value)}
-                          placeholder="90"
+                          placeholder="Enter duration"
                           className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
                         />
                       </div>
@@ -349,7 +359,7 @@ const CreateRoute = () => {
                                 type="number"
                                 value={fares[fareIdx]?.baseFare || ''}
                                 onChange={(e) => updateFare(fareIdx, 'baseFare', e.target.value)}
-                                placeholder="₹500"
+                                placeholder="Enter fare amount"
                                 className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
                               />
                             </div>

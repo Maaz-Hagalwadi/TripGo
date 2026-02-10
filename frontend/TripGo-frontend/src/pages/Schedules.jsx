@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import OperatorSidebar from '../components/operator/OperatorSidebar';
-import { getRoutes, getRouteSegments, getRouteSchedules, deleteSchedule } from '../api/routeService';
+import { getRoutes, getRouteSegments, getRouteSchedules, deleteSchedule, deleteRoute } from '../api/routeService';
 import './OperatorDashboard.css';
 
 const Schedules = () => {
@@ -14,6 +14,8 @@ const Schedules = () => {
   const [expandedRoute, setExpandedRoute] = useState(null);
   const [segments, setSegments] = useState({});
   const [schedules, setSchedules] = useState({});
+  const [deleteModal, setDeleteModal] = useState({ show: false, scheduleId: null, routeId: null, type: null });
+  const [errorMessage, setErrorMessage] = useState(null);
 
   useEffect(() => {
     if (loading) return;
@@ -58,15 +60,31 @@ const Schedules = () => {
   };
 
   const handleDeleteSchedule = async (scheduleId, routeId) => {
-    if (!confirm('Are you sure you want to delete this schedule?')) return;
+    setDeleteModal({ show: true, scheduleId, routeId, type: 'schedule' });
+  };
+
+  const handleDeleteRoute = async (routeId) => {
+    setDeleteModal({ show: true, routeId, type: 'route' });
+  };
+
+  const confirmDelete = async () => {
+    const { scheduleId, routeId, type } = deleteModal;
+    setErrorMessage(null);
     try {
-      await deleteSchedule(scheduleId);
-      setSchedules(prev => ({
-        ...prev,
-        [routeId]: prev[routeId].filter(s => s.id !== scheduleId)
-      }));
+      if (type === 'schedule') {
+        await deleteSchedule(scheduleId);
+        setSchedules(prev => ({
+          ...prev,
+          [routeId]: prev[routeId].filter(s => s.id !== scheduleId)
+        }));
+      } else if (type === 'route') {
+        await deleteRoute(routeId);
+        setRoutes(prev => prev.filter(r => r.id !== routeId));
+        setExpandedRoute(null);
+      }
+      setDeleteModal({ show: false, scheduleId: null, routeId: null, type: null });
     } catch (error) {
-      alert('Failed to delete schedule');
+      setErrorMessage(error.message || `Failed to delete ${type}`);
     }
   };
 
@@ -144,9 +162,21 @@ const Schedules = () => {
                           )}
                         </div>
                       </div>
-                      <span className={`material-symbols-outlined transition-transform ${expandedRoute === route.id ? 'rotate-180' : ''}`}>
-                        expand_more
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteRoute(route.id);
+                          }}
+                          className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-red-500 transition-colors"
+                          title="Delete route"
+                        >
+                          <span className="material-symbols-outlined text-sm">delete</span>
+                        </button>
+                        <span className={`material-symbols-outlined transition-transform ${expandedRoute === route.id ? 'rotate-180' : ''}`}>
+                          expand_more
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -248,6 +278,47 @@ const Schedules = () => {
           )}
         </div>
       </main>
+
+      {/* Delete Confirmation Modal */}
+      {deleteModal.show && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-[#1a1a1a] rounded-xl p-6 max-w-md w-full border border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
+                <span className="material-symbols-outlined text-red-500">delete</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold">{deleteModal.type === 'route' ? 'Delete Route' : 'Delete Schedule'}</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-slate-600 dark:text-slate-300 mb-6">
+              {deleteModal.type === 'route' 
+                ? 'Are you sure you want to delete this route? All associated schedules will also be deleted.' 
+                : 'Are you sure you want to delete this schedule?'}
+            </p>
+            {errorMessage && (
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 text-sm">
+                {errorMessage}
+              </div>
+            )}
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setDeleteModal({ show: false, scheduleId: null, routeId: null, type: null })}
+                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

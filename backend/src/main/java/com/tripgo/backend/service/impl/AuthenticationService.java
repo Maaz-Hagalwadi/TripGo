@@ -101,27 +101,29 @@ public class AuthenticationService {
                 refreshToken
         );
 
-        // 🔹 Set ACCESS_TOKEN cookie
+        // 🔹 Set ACCESS_TOKEN cookie AND header
         response.addHeader("Set-Cookie",
                 ResponseCookie.from("ACCESS_TOKEN", accessToken)
                         .httpOnly(true)
                         .secure(false) // true in prod
                         .path("/")
                         .maxAge(accessTokenExpirationMs / 1000)
-                        .sameSite("Strict")
+                        .sameSite("None")
                         .build().toString()
         );
+        response.addHeader("X-Access-Token", accessToken);
 
-        // 🔹 Set REFRESH_TOKEN cookie
+        // 🔹 Set REFRESH_TOKEN cookie AND header
         response.addHeader("Set-Cookie",
                 ResponseCookie.from("REFRESH_TOKEN", refreshToken)
                         .httpOnly(true)
                         .secure(false)
                         .path("/auth/refresh")
                         .maxAge(refreshTokenExpirationMs / 1000)
-                        .sameSite("Strict")
+                        .sameSite("None")
                         .build().toString()
         );
+        response.addHeader("X-Refresh-Token", refreshToken);
     }
 
 
