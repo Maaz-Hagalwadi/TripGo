@@ -63,10 +63,14 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<Map<String, String>> login(@Valid @RequestBody LoginRequest request,
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request,
                                       HttpServletResponse response) {
-        authService.login(request, response);
-        return ResponseEntity.ok(Map.of("message", "Login successful"));
+        try {
+            authService.login(request, response);
+            return ResponseEntity.ok(Map.of("message", "Login successful"));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     @GetMapping("/test")
