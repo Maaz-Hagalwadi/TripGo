@@ -34,9 +34,10 @@ export const AuthProvider = ({ children }) => {
         const data = await response.json();
         console.log('User data from /users/me:', data);
         
-        // Extract primary role from roles array
+        // Extract primary role from roles array (prioritize higher roles)
         let primaryRole = null;
         if (data.roles && data.roles.length > 0) {
+          // Check in priority order: ADMIN > OPERATOR > USER
           if (data.roles.includes('ROLE_ADMIN')) {
             primaryRole = 'ADMIN';
           } else if (data.roles.includes('ROLE_OPERATOR')) {
@@ -45,6 +46,9 @@ export const AuthProvider = ({ children }) => {
             primaryRole = 'USER';
           }
         }
+        
+        console.log('Roles from backend:', data.roles);
+        console.log('Extracted primary role:', primaryRole);
         
         const userData = { ...data, role: primaryRole };
         console.log('Processed user data with role:', userData);
@@ -76,12 +80,14 @@ export const AuthProvider = ({ children }) => {
 
       if (response.ok) {
         await checkAuth();
-        return true;
+        return { success: true };
       }
-      return false;
+      
+      const data = await response.json();
+      return { success: false, error: data.error || data.message || 'Login failed' };
     } catch (error) {
       console.error('Login error:', error);
-      return false;
+      return { success: false, error: 'Network error. Please try again.' };
     }
   };
 

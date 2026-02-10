@@ -32,16 +32,16 @@ const DesktopLoginForm = () => {
 
   const loginUser = async (formData) => {
     try {
-      const success = await login({
+      const result = await login({
         emailOrPhone: formData.emailOrPhone,
         password: formData.password
       });
 
-      if (success) {
+      if (result.success) {
         setErrors({ success: 'Login successful! Redirecting...' });
         setLoginSuccess(true);
       } else {
-        setErrors({ general: 'Invalid email/phone or password' });
+        setErrors({ general: result.error });
       }
     } catch (error) {
       console.error('Network error:', error);

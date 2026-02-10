@@ -4,6 +4,7 @@ import com.tripgo.backend.dto.response.SearchResponse;
 import com.tripgo.backend.dto.response.SeatAvailability;
 import com.tripgo.backend.model.entities.RouteSchedule;
 import com.tripgo.backend.repository.RouteScheduleRepository;
+import com.tripgo.backend.repository.RouteSegmentRepository;
 import com.tripgo.backend.service.impl.AvailabilityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,6 +23,7 @@ public class SearchController {
 
     private final RouteScheduleRepository scheduleRepo;
     private final AvailabilityService availabilityService;
+    private final RouteSegmentRepository segmentRepo;
 
     @GetMapping
     public List<SearchResponse> search(
@@ -92,6 +94,36 @@ public class SearchController {
                          ", Departure: " + s.getDepartureTime() + 
                          ", Active: " + s.getActive())
                 .toList();
+    }
+    
+    @GetMapping("/debug/segments")
+    public List<String> debugSegments(@RequestParam String from, @RequestParam String to) {
+        // First find schedules
+        List<RouteSchedule> schedules = scheduleRepo.findAll().stream()
+                .filter(s -> s.getRoute().getOrigin().equalsIgnoreCase(from) && 
+                            s.getRoute().getDestination().equalsIgnoreCase(to))
+                .toList();
+        
+        if (schedules.isEmpty()) {
+            return List.of("No schedules found for " + from + " -> " + to);
+        }
+        
+        RouteSchedule schedule = schedules.get(0);
+        List<String> result = new java.util.ArrayList<>();
+        result.add("Route: " + schedule.getRoute().getOrigin() + " -> " + schedule.getRoute().getDestination());
+        result.add("Route ID: " + schedule.getRoute().getId());
+        
+        // Get segments using repository
+        List<com.tripgo.backend.model.entities.RouteSegment> segments = 
+            segmentRepo.findByRouteOrderBySeq(schedule.getRoute());
+        
+        result.add("Total segments: " + segments.size());
+        
+        for (int i = 0; i < segments.size(); i++) {
+            var seg = segments.get(i);
+            result.add("Segment [" + i + "] seq=" + seg.getSeq() + ": fromStop='" + seg.getFromStop() + "' -> toStop='" + seg.getToStop() + "'");
+        }
+        return result;
     }
 }
 

@@ -241,3 +241,21 @@ export const deleteSchedule = async (scheduleId) => {
     throw error;
   }
 };
+
+export const deleteRoute = async (routeId) => {
+  try {
+    const response = await fetchWithAuth(`${API_BASE_URL}/operator/routes/${routeId}`, {
+      method: 'DELETE',
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || errorData.error || 'Failed to delete route');
+    }
+    
+    return response.ok;
+  } catch (error) {
+    console.error('Error deleting route:', error);
+    throw error;
+  }
+};
