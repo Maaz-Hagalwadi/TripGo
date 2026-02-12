@@ -172,6 +172,9 @@ const DesktopLoginForm = () => {
               >
                 {isLoading ? 'Signing In...' : 'Sign In'}
               </button>
+              {isLoading && (
+                <p className="text-center text-xs text-slate-400 mt-2">First login may take up to 60 seconds...</p>
+              )}
             </form>
             <div className="mt-10">
               <div className="relative flex items-center mb-8">

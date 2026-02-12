@@ -29,6 +29,9 @@ const DesktopForm = () => {
         password: formData.password
       });
       
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000);
+      
       const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: 'POST',
         headers: {
@@ -40,8 +43,11 @@ const DesktopForm = () => {
           email: formData.email,
           phone: formData.phone,
           password: formData.password
-        })
+        }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
 
       console.log('Response status:', response.status);
       console.log('Response headers:', response.headers);
@@ -386,6 +392,9 @@ const DesktopForm = () => {
                 )}
                 {isLoading ? 'Creating Account...' : 'Create Account'}
               </button>
+              {isLoading && (
+                <p className="text-center text-xs text-slate-400 mt-2">First registration may take up to 60 seconds...</p>
+              )}
             </form>
             <div className="relative my-3">
               <div className="absolute inset-0 flex items-center">
