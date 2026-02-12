@@ -5,62 +5,8 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>TripGo - Your Journey, Simplified</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
-<script id="tailwind-config">
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    colors: {
-                        "primary": "#00d4ff", // Electric Blue
-                        "accent": "#ffd700",  // Gold
-                        "deep-black": "#050505",
-                        "charcoal": "#1a1a1a",
-                        "input-gray": "#2A2A2A",
-                        "silver-text": "#E0E0E0",
-                        "dark-gray": "#121212",
-                    },
-                    fontFamily: {
-                        "display": ["Plus Jakarta Sans", "sans-serif"]
-                    },
-                    borderRadius: {
-                        "DEFAULT": "0.25rem",
-                        "lg": "0.5rem",
-                        "xl": "0.75rem",
-                        "full": "9999px"
-                    },
-                },
-            },
-        }
-    </script>
-<style type="text/tailwindcss">
-        :root {
-            --primary-color: #00d4ff;
-            --background-dark: #050505;
-        }
-        body {
-            font-family: "Plus Jakarta Sans", sans-serif;
-        }
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #050505;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #333;
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #444;
-        }
-        input::placeholder {
-            color: #E0E0E0 !important;
-            opacity: 1;
-        }
-    </style>
 </head>
 <body class="bg-deep-black text-slate-100 min-h-screen">
   <div id="root"></div>
