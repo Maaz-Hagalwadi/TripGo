@@ -19,6 +19,10 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     checkAuth();
+    const keepAlive = setInterval(() => {
+      fetch(`${API_BASE_URL}/health`).catch(() => {});
+    }, 600000);
+    return () => clearInterval(keepAlive);
   }, []);
 
   const checkAuth = async () => {
@@ -90,11 +94,17 @@ export const AuthProvider = ({ children }) => {
       console.log('Credentials:', { emailOrPhone: credentials.emailOrPhone, password: '***' });
       console.log('API URL:', `${API_BASE_URL}/auth/login`);
       
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000);
+      
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(credentials)
+        body: JSON.stringify(credentials),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
 
       console.log('Login response status:', response.status);
       console.log('Login response ok:', response.ok);
