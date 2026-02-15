@@ -318,6 +318,7 @@ const MobileLoginLayout = () => {
             <Button
               fullWidth
               variant="outlined"
+              onClick={() => window.location.href = `${API_BASE_URL}/oauth2/authorization/google`}
               sx={{
                 py: 1.5,
                 bgcolor: 'rgba(255,255,255,0.03)',

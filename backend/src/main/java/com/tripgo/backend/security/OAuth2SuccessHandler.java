@@ -25,6 +25,9 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
     private final UserRepository userRepository;
     private final RefreshTokenService refreshTokenService;
 
+    @Value("${app.frontend.url}")
+    private String frontendUrl;
+
     @Value("${app.jwt.refresh-token-expiration}")
     private long refreshTokenExpirationMs;
 
@@ -101,6 +104,6 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
                         .build().toString()
         );
 
-        response.sendRedirect("http://localhost:3000");
+        response.sendRedirect(frontendUrl + "?token=" + accessToken + "&refresh=" + refreshToken);
     }
 }

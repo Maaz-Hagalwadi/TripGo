@@ -18,6 +18,7 @@ import BusReview from './pages/BusReview';
 import MyBuses from './pages/MyBuses';
 import CreateRoute from './pages/CreateRoute';
 import Schedules from './pages/Schedules';
+import OAuth2Callback from './pages/OAuth2Callback';
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/home" element={<Home />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/oauth2/callback" element={<OAuth2Callback />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/register" element={<Register />} />
           <Route path="/operator-register" element={<OperatorRegister />} />

@@ -50,6 +50,9 @@ public class AuthController {
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
 
+    @Value("${spring.security.oauth2.client.registration.google.client-id}")
+    private String googleClientId;
+
     @Value("${app.frontend.url}")
     private String frontendUrl;
 
@@ -80,6 +83,11 @@ public class AuthController {
     @GetMapping("/test")
     public String testApi(){
         return "Successfully validated with api";
+    }
+
+    @GetMapping("/google-client-id")
+    public ResponseEntity<Map<String, String>> getGoogleClientId() {
+        return ResponseEntity.ok(Map.of("clientId", googleClientId));
     }
 
     @PostMapping("/refresh")
