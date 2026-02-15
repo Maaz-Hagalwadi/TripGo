@@ -1,15 +1,25 @@
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import TripGoIcon from '../../assets/icons/TripGoIcon';
 
 const Header = () => {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+
+  const handleProtectedNavigation = (path) => {
+    if (!isAuthenticated) {
+      navigate('/login');
+    } else {
+      navigate(path);
+    }
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-white/5 bg-deep-black/80 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           {/* Logo - Left Corner */}
-          <div className="flex items-center gap-2 -ml-2">
+          <div className="flex items-center gap-2 -ml-2 cursor-pointer" onClick={() => navigate('/')}>
             <div className="text-primary">
               <TripGoIcon />
             </div>
@@ -18,9 +28,9 @@ const Header = () => {
           
           {/* Navigation - Center */}
           <nav className="hidden md:flex items-center gap-10">
-            <a className="text-sm font-bold text-primary" href="#">Home</a>
-            <a className="text-sm font-semibold text-slate-400 hover:text-white transition-colors" href="#">My Bookings</a>
-            <a className="text-sm font-semibold text-slate-400 hover:text-white transition-colors" href="#">Support</a>
+            <a className="text-sm font-bold text-primary cursor-pointer" onClick={() => navigate('/')}>Home</a>
+            <a className="text-sm font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer" onClick={() => handleProtectedNavigation('/bookings')}>My Bookings</a>
+            <a className="text-sm font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer" onClick={() => handleProtectedNavigation('/support')}>Support</a>
           </nav>
           
           {/* Auth Buttons - Right */}
