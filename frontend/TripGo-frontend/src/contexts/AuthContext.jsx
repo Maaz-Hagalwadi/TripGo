@@ -95,7 +95,7 @@ export const AuthProvider = ({ children }) => {
       console.log('API URL:', `${API_BASE_URL}/auth/login`);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90000);
+      const timeoutId = setTimeout(() => controller.abort(), 180000); // 3 minutes
       
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
