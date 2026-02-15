@@ -37,7 +37,7 @@ const SearchResults = () => {
     if (searchParams.from && searchParams.to && searchParams.date) {
       fetchBuses();
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, navigate, searchParams.from, searchParams.to, searchParams.date]);
 
   const fetchBuses = async () => {
     setLoadingBuses(true);
