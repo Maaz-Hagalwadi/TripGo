@@ -118,7 +118,7 @@ const DesktopForgotPasswordForm = () => {
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
                 <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">mail</span>
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">mail</span>
                   <input 
                     className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.email ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
                     placeholder="name@company.com" 

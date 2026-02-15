@@ -237,7 +237,7 @@ const DesktopForm = () => {
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">First Name</label>
                   <div className="relative">
-                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">person</span>
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">person</span>
                     <input 
                       className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.firstName ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
                       placeholder="First Name" 
@@ -256,7 +256,7 @@ const DesktopForm = () => {
                 <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Last Name</label>
                   <div className="relative">
-                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">person</span>
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">person</span>
                     <input 
                       className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.lastName ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
                       placeholder="Last Name" 
@@ -276,7 +276,7 @@ const DesktopForm = () => {
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
                 <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">mail</span>
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">mail</span>
                   <input 
                     className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.email ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
                       placeholder="Enter your email" 
@@ -296,7 +296,7 @@ const DesktopForm = () => {
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
                 <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">call</span>
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">call</span>
                   <input 
                     className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.phone ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
                     placeholder="10-digit number" 
@@ -315,7 +315,7 @@ const DesktopForm = () => {
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Password</label>
                 <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">lock</span>
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">lock</span>
                   <input 
                     className={`w-full pl-12 pr-12 py-3 bg-input-gray border ${errors.password ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
                     placeholder="Enter password" 
@@ -328,7 +328,7 @@ const DesktopForm = () => {
                     }}
                   />
                   <button 
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors mt-4" 
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors" 
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                   >
@@ -342,7 +342,7 @@ const DesktopForm = () => {
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Confirm Password</label>
                 <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3 pointer-events-none">lock</span>
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">lock</span>
                   <input 
                     className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.confirmPassword ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
                     placeholder="Re-enter password" 
