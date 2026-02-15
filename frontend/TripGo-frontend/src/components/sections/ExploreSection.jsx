@@ -1,6 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 const ExploreSection = () => {
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
   const [isMobile, setIsMobile] = useState(false);
   
   useEffect(() => {
@@ -13,6 +17,12 @@ const ExploreSection = () => {
     
     return () => window.removeEventListener('resize', checkScreenSize);
   }, []);
+
+  const handleViewOffers = () => {
+    if (!isAuthenticated) {
+      navigate('/login');
+    }
+  };
   return (
     <section className="py-20 bg-dark-gray">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -29,7 +39,10 @@ const ExploreSection = () => {
             <p className={isMobile ? "text-slate-400 text-lg leading-relaxed" : "text-slate-400 text-xl leading-relaxed"}>
               Book our new exclusive routes through the Pacific Northwest. Experience breathtaking mountain vistas and coastal roads in absolute luxury.
             </p>
-            <button className={isMobile ? "bg-primary hover:bg-primary/90 text-black px-6 py-3 rounded-xl font-bold flex items-center gap-3 transition-all transform hover:translate-x-2" : "bg-primary hover:bg-primary/90 text-black px-10 py-4 rounded-xl font-bold flex items-center gap-3 transition-all transform hover:translate-x-2"}>
+            <button 
+              onClick={handleViewOffers}
+              className={isMobile ? "bg-primary hover:bg-primary/90 text-black px-6 py-3 rounded-xl font-bold flex items-center gap-3 transition-all transform hover:translate-x-2" : "bg-primary hover:bg-primary/90 text-black px-10 py-4 rounded-xl font-bold flex items-center gap-3 transition-all transform hover:translate-x-2"}
+            >
               View Exclusive Offers
               <span className="material-symbols-outlined">arrow_forward</span>
             </button>
