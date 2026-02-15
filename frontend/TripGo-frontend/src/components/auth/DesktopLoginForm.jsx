@@ -122,7 +122,7 @@ const DesktopLoginForm = () => {
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-silver-text ml-1">Email or Phone</label>
                 <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3">mail</span>
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">mail</span>
                   <input 
                     className={`w-full pl-12 pr-4 py-4 bg-input-gray border ${errors.emailOrPhone ? 'border-red-500' : 'border-white/10'} rounded-xl text-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
                     placeholder="name@company.com or phone" 
@@ -149,7 +149,7 @@ const DesktopLoginForm = () => {
                   </a>
                 </div>
                 <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 mt-3">lock</span>
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">lock</span>
                   <input 
                     className={`w-full pl-12 pr-4 py-4 bg-input-gray border ${errors.password ? 'border-red-500' : 'border-white/10'} rounded-xl text-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
                     placeholder="••••••••" 
