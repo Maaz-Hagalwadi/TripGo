@@ -271,3 +271,55 @@ export const deleteRoute = async (routeId) => {
     throw error;
   }
 };
+
+export const getCities = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/cities`, {
+      method: 'GET',
+    });
+    
+    if (!response.ok) {
+      console.warn('Cities endpoint not available, using fallback');
+      return [
+        { id: 1, name: 'Mumbai' },
+        { id: 2, name: 'Delhi' },
+        { id: 3, name: 'Bangalore' },
+        { id: 4, name: 'Pune' },
+        { id: 5, name: 'Hyderabad' },
+        { id: 6, name: 'Chennai' },
+        { id: 7, name: 'Kolkata' },
+        { id: 8, name: 'Ahmedabad' },
+        { id: 9, name: 'Jaipur' },
+        { id: 10, name: 'Surat' }
+      ];
+    }
+    
+    const data = await response.json();
+    return data.length > 0 ? data : [
+      { id: 1, name: 'Mumbai' },
+      { id: 2, name: 'Delhi' },
+      { id: 3, name: 'Bangalore' },
+      { id: 4, name: 'Pune' },
+      { id: 5, name: 'Hyderabad' },
+      { id: 6, name: 'Chennai' },
+      { id: 7, name: 'Kolkata' },
+      { id: 8, name: 'Ahmedabad' },
+      { id: 9, name: 'Jaipur' },
+      { id: 10, name: 'Surat' }
+    ];
+  } catch (error) {
+    console.error('Error fetching cities:', error);
+    return [
+      { id: 1, name: 'Mumbai' },
+      { id: 2, name: 'Delhi' },
+      { id: 3, name: 'Bangalore' },
+      { id: 4, name: 'Pune' },
+      { id: 5, name: 'Hyderabad' },
+      { id: 6, name: 'Chennai' },
+      { id: 7, name: 'Kolkata' },
+      { id: 8, name: 'Ahmedabad' },
+      { id: 9, name: 'Jaipur' },
+      { id: 10, name: 'Surat' }
+    ];
+  }
+};

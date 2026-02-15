@@ -58,12 +58,6 @@ const HeaderAuth = () => {
             >
               Dashboard
             </button>
-            <button 
-              onClick={() => navigate('/search-results')}
-              className="text-sm font-semibold text-slate-400 hover:text-white transition-colors"
-            >
-              Search Buses
-            </button>
             <button className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">
               My Bookings
             </button>
