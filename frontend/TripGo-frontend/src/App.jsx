@@ -1,24 +1,29 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
-import ProtectedRoute from './components/ProtectedRoute';
-import Home from './pages/Home';
-import Register from './pages/Register';
-import Login from './pages/Login';
-import ForgotPassword from './pages/ForgotPassword';
-import VerifyEmail from './pages/VerifyEmail';
-import OperatorRegister from './pages/OperatorRegister';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './shared/contexts/AuthContext';
+import ProtectedRoute from './shared/components/ProtectedRoute';
+
+import Home from './features/home/pages/Home';
+import Dashboard from './features/home/pages/Dashboard';
+
+import Login from './features/auth/pages/Login';
+import Register from './features/auth/pages/Register';
+import ForgotPassword from './features/auth/pages/ForgotPassword';
+import ResetPassword from './features/auth/pages/ResetPassword';
+import VerifyEmail from './features/auth/pages/VerifyEmail';
+import OperatorRegister from './features/auth/pages/OperatorRegister';
+import OAuth2Callback from './features/auth/pages/OAuth2Callback';
+
+import OperatorDashboard from './features/operator/pages/OperatorDashboard';
+import AddBus from './features/operator/pages/AddBus';
+import BusSeatLayout from './features/operator/pages/BusSeatLayout';
+import BusReview from './features/operator/pages/BusReview';
+import MyBuses from './features/operator/pages/MyBuses';
+import CreateRoute from './features/operator/pages/CreateRoute';
+import Schedules from './features/operator/pages/Schedules';
+
+import SearchResults from './features/search/pages/SearchResults';
+
 import AdminOperatorAction from './pages/AdminOperatorAction';
-import ResetPassword from './pages/ResetPassword';
-import SearchResults from './pages/SearchResults';
-import Dashboard from './pages/Dashboard';
-import OperatorDashboard from './pages/OperatorDashboard';
-import AddBus from './pages/AddBus';
-import BusSeatLayout from './pages/BusSeatLayout';
-import BusReview from './pages/BusReview';
-import MyBuses from './pages/MyBuses';
-import CreateRoute from './pages/CreateRoute';
-import Schedules from './pages/Schedules';
-import OAuth2Callback from './pages/OAuth2Callback';
 
 function App() {
   return (
