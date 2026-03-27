@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './shared/contexts/AuthContext';
 import ProtectedRoute from './shared/components/ProtectedRoute';
+import { BusWizardProvider } from './features/operator/context/BusWizardContext';
 
 import Home from './features/home/pages/Home';
 import Dashboard from './features/home/pages/Dashboard';
@@ -24,6 +25,7 @@ import Schedules from './features/operator/pages/Schedules';
 import SearchResults from './features/search/pages/SearchResults';
 
 import AdminOperatorAction from './pages/AdminOperatorAction';
+import Unauthorized from './pages/Unauthorized';
 
 function App() {
   return (
@@ -40,15 +42,44 @@ function App() {
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/admin/operator-action" element={<AdminOperatorAction />} />
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/operator/dashboard" element={<ProtectedRoute><OperatorDashboard /></ProtectedRoute>} />
-          <Route path="/operator/my-buses" element={<ProtectedRoute><MyBuses /></ProtectedRoute>} />
-          <Route path="/operator/add-bus" element={<ProtectedRoute><AddBus /></ProtectedRoute>} />
-          <Route path="/operator/bus-layout" element={<ProtectedRoute><BusSeatLayout /></ProtectedRoute>} />
-          <Route path="/operator/bus-review" element={<ProtectedRoute><BusReview /></ProtectedRoute>} />
-          <Route path="/operator/create-route" element={<ProtectedRoute><CreateRoute /></ProtectedRoute>} />
-          <Route path="/operator/schedules" element={<ProtectedRoute><Schedules /></ProtectedRoute>} />
-          <Route path="/search-results" element={<ProtectedRoute><SearchResults /></ProtectedRoute>} />
+          <Route path="/unauthorized" element={<Unauthorized />} />
+
+          <Route path="/dashboard" element={
+            <ProtectedRoute allowedRoles={['USER']}><Dashboard /></ProtectedRoute>
+          } />
+          <Route path="/search-results" element={
+            <ProtectedRoute allowedRoles={['USER']}><SearchResults /></ProtectedRoute>
+          } />
+
+          <Route path="/operator/dashboard" element={
+            <ProtectedRoute allowedRoles={['OPERATOR']}><OperatorDashboard /></ProtectedRoute>
+          } />
+          <Route path="/operator/my-buses" element={
+            <ProtectedRoute allowedRoles={['OPERATOR']}><MyBuses /></ProtectedRoute>
+          } />
+          <Route path="/operator/schedules" element={
+            <ProtectedRoute allowedRoles={['OPERATOR']}><Schedules /></ProtectedRoute>
+          } />
+          <Route path="/operator/create-route" element={
+            <ProtectedRoute allowedRoles={['OPERATOR']}><CreateRoute /></ProtectedRoute>
+          } />
+
+          {/* Bus wizard routes share BusWizardProvider so state persists across steps */}
+          <Route path="/operator/add-bus" element={
+            <ProtectedRoute allowedRoles={['OPERATOR']}>
+              <BusWizardProvider><AddBus /></BusWizardProvider>
+            </ProtectedRoute>
+          } />
+          <Route path="/operator/bus-layout" element={
+            <ProtectedRoute allowedRoles={['OPERATOR']}>
+              <BusWizardProvider><BusSeatLayout /></BusWizardProvider>
+            </ProtectedRoute>
+          } />
+          <Route path="/operator/bus-review" element={
+            <ProtectedRoute allowedRoles={['OPERATOR']}>
+              <BusWizardProvider><BusReview /></BusWizardProvider>
+            </ProtectedRoute>
+          } />
         </Routes>
       </Router>
     </AuthProvider>

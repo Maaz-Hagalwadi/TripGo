@@ -3,24 +3,26 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorSidebar from '../components/OperatorSidebar';
 import { getAmenities } from '../../../api/amenityService';
+import { useBusWizard } from '../context/BusWizardContext';
 import './OperatorDashboard.css';
 
 const AddBus = () => {
   const navigate = useNavigate();
   const { user, loading, logout } = useAuth();
+  const { wizardData, updateWizard } = useBusWizard();
   const [activeView, setActiveView] = useState('add-bus');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [selectedAmenities, setSelectedAmenities] = useState([]);
+  const [selectedAmenities, setSelectedAmenities] = useState(wizardData.amenityIds || []);
   const [amenities, setAmenities] = useState([]);
   const [loadingAmenities, setLoadingAmenities] = useState(true);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [busName, setBusName] = useState('');
-  const [busCode, setBusCode] = useState('');
-  const [vehicleNumber, setVehicleNumber] = useState('');
-  const [model, setModel] = useState('');
-  const [busType, setBusType] = useState('');
-  const [totalSeats, setTotalSeats] = useState('');
+  const [busName, setBusName] = useState(wizardData.busName || '');
+  const [busCode, setBusCode] = useState(wizardData.busCode || '');
+  const [vehicleNumber, setVehicleNumber] = useState(wizardData.vehicleNumber || '');
+  const [model, setModel] = useState(wizardData.model || '');
+  const [busType, setBusType] = useState(wizardData.busType || '');
+  const [totalSeats, setTotalSeats] = useState(wizardData.totalSeats || '');
   const [errors, setErrors] = useState({});
   const profileRef = useRef(null);
   const notificationRef = useRef(null);
@@ -103,9 +105,8 @@ const AddBus = () => {
     }
     
     setErrors({});
-    navigate('/operator/bus-layout', {
-      state: { busName, busCode, vehicleNumber, model, busType, totalSeats: parseInt(totalSeats), amenityIds: selectedAmenities }
-    });
+    updateWizard({ busName, busCode, vehicleNumber, model, busType, totalSeats: parseInt(totalSeats), amenityIds: selectedAmenities });
+    navigate('/operator/bus-layout');
   };
 
   return (

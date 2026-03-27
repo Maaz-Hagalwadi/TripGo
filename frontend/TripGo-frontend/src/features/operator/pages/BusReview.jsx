@@ -1,15 +1,17 @@
 import { useEffect, useState, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorSidebar from '../components/OperatorSidebar';
 import { createBus } from '../../../api/busService';
 import { getAmenities } from '../../../api/amenityService';
+import { useBusWizard } from '../context/BusWizardContext';
 import './OperatorDashboard.css';
 
 const BusReview = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const { user, loading, logout } = useAuth();
+  const { wizardData, resetWizard } = useBusWizard();
+  const { busName, busCode, vehicleNumber, model, totalSeats, busType, amenityIds, blockedSeats } = wizardData;
   const [activeView, setActiveView] = useState('add-bus');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -19,12 +21,6 @@ const BusReview = () => {
   const [amenitiesList, setAmenitiesList] = useState([]);
   const profileRef = useRef(null);
   const notificationRef = useRef(null);
-
-  const busData = location.state || {};
-  const { busName, busCode, vehicleNumber, model, totalSeats, busType, amenities, blockedSeats } = busData;
-
-  console.log('BusReview - busData:', busData);
-  console.log('BusReview - amenities:', amenities);
 
   useEffect(() => {
     if (loading) return;
@@ -83,11 +79,11 @@ const BusReview = () => {
         model,
         totalSeats: parseInt(totalSeats),
         busType,
-        amenityIds: amenities || []
+        amenityIds: amenityIds || []
       };
 
       await createBus(busPayload);
-      // Add delay to show loader
+      resetWizard();
       await new Promise(resolve => setTimeout(resolve, 1500));
       navigate('/operator/my-buses');
     } catch (error) {
@@ -277,8 +273,8 @@ const BusReview = () => {
                       <div>
                         <p className="text-slate-600 dark:text-slate-400 mb-2">Selected Amenities</p>
                         <div className="flex flex-wrap gap-2">
-                          {amenities && amenities.length > 0 ? (
-                            amenities.map((id) => {
+                          {amenityIds && amenityIds.length > 0 ? (
+                            amenityIds.map((id) => {
                               const amenity = amenitiesList.find(a => a.id === id);
                               return (
                                 <span key={id} className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
@@ -312,7 +308,7 @@ const BusReview = () => {
 
               <div className="bg-slate-50 dark:bg-black/30 p-6 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
                 <button 
-                  onClick={() => navigate('/operator/bus-layout', { state: busData })} 
+                  onClick={() => navigate('/operator/bus-layout')} 
                   className="px-6 py-2.5 rounded-lg font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5 transition-colors"
                 >
                   Back

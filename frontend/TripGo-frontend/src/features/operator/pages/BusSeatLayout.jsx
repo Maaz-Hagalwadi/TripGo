@@ -1,26 +1,26 @@
 import { useEffect, useState, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorSidebar from '../components/OperatorSidebar';
+import { useBusWizard } from '../context/BusWizardContext';
 import './OperatorDashboard.css';
 
 const BusSeatLayout = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const { user, loading, logout } = useAuth();
+  const { wizardData, updateWizard } = useBusWizard();
   const [activeView, setActiveView] = useState('add-bus');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [seats, setSeats] = useState([]);
-  const [selectedSeats, setSelectedSeats] = useState([]);
+  const [selectedSeats, setSelectedSeats] = useState(wizardData.blockedSeats || []);
   const [activeDeck, setActiveDeck] = useState('lower');
   const profileRef = useRef(null);
   const notificationRef = useRef(null);
 
-  const busData = location.state || {};
-  const busType = busData.busType || 'SEATER';
-  const totalSeats = parseInt(busData.totalSeats) || 40;
+  const busType = wizardData.busType || 'SEATER';
+  const totalSeats = parseInt(wizardData.totalSeats) || 40;
 
   useEffect(() => {
     if (loading) return;
@@ -203,13 +203,8 @@ const BusSeatLayout = () => {
   };
 
   const handleContinue = () => {
-    navigate('/operator/bus-review', {
-      state: {
-        ...busData,
-        amenities: busData.amenityIds || [],
-        blockedSeats: selectedSeats
-      }
-    });
+    updateWizard({ blockedSeats: selectedSeats });
+    navigate('/operator/bus-review');
   };
 
   return (
