@@ -2,7 +2,8 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorSidebar from '../components/OperatorSidebar';
-import { getBuses, deleteBus, updateBus, getAmenities } from '../../../api/amenityService';
+import { getBuses, deleteBus, updateBus } from '../../../api/busService';
+import { getAmenities } from '../../../api/amenityService';
 import './OperatorDashboard.css';
 
 const MyBuses = () => {

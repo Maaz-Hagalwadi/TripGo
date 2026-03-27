@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorSidebar from '../components/OperatorSidebar';
-import { getBuses } from '../../../api/amenityService';
+import { getBuses } from '../../../api/busService';
 import './OperatorDashboard.css';
 
 const OperatorDashboard = () => {
