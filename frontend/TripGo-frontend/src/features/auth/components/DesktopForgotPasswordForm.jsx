@@ -20,15 +20,17 @@ const DesktopForgotPasswordForm = () => {
       if (response.ok) {
         setErrors({ success: 'Reset email sent! Check your inbox.' });
       } else {
-        const errorText = await response.text();
-        if (errorText.includes('User not found')) {
+        const data = await response.json().catch(() => ({}));
+        const msg = data.message || '';
+        if (msg.includes('User not found')) {
           setErrors({ email: 'No account found with this email address' });
+        } else if (msg.includes('OAuth')) {
+          setErrors({ general: 'This account uses Google sign-in. Password reset is not available.' });
         } else {
-          setErrors({ general: errorText || 'Failed to send reset email. Please try again.' });
+          setErrors({ general: msg || 'Failed to send reset email. Please try again.' });
         }
       }
-    } catch (error) {
-      console.error('Network error:', error);
+    } catch {
       setErrors({ general: 'Network error. Please try again.' });
     }
   };

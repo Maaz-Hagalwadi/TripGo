@@ -55,15 +55,17 @@ const MobileResetPasswordLayout = () => {
         setErrors({ success: 'Password reset successful! Redirecting to login...' });
         setTimeout(() => navigate('/login'), 2000);
       } else {
-        const errorText = await response.text();
-        if (errorText.includes('Invalid or expired token')) {
+        const data = await response.json().catch(() => ({}));
+        const msg = data.message || '';
+        if (msg.includes('OAuth')) {
+          setErrors({ general: 'This account uses Google sign-in. Password reset is not available.' });
+        } else if (msg.includes('Invalid') || msg.includes('expired')) {
           setErrors({ general: 'Reset link has expired. Please request a new one.' });
         } else {
-          setErrors({ general: errorText || 'Password reset failed. Please try again.' });
+          setErrors({ general: msg || 'Password reset failed. Please try again.' });
         }
       }
-    } catch (error) {
-      console.error('Network error:', error);
+    } catch {
       setErrors({ general: 'Network error. Please try again.' });
     }
   };

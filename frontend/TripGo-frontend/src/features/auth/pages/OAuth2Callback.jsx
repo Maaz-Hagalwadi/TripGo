@@ -14,40 +14,35 @@ const OAuth2Callback = () => {
     if (handled.current) return;
     handled.current = true;
 
-    const handleCallback = async () => {
-      const token = searchParams.get('token');
-      const refreshToken = searchParams.get('refresh');
-      const error = searchParams.get('error');
+    const token = searchParams.get('token');
+    const refreshToken = searchParams.get('refresh');
+    const error = searchParams.get('error');
 
-      if (error) {
-        navigate(ROUTES.LOGIN, { replace: true });
-        return;
-      }
+    if (error || !token || !refreshToken) {
+      navigate(ROUTES.LOGIN, { replace: true });
+      return;
+    }
 
-      if (token && refreshToken) {
-        localStorage.setItem('accessToken', token);
-        localStorage.setItem('refreshToken', refreshToken);
-        const role = await checkAuth();
-        try {
-          const userData = await getCurrentUser();
-          if (!userData.phone) {
-            navigate(ROUTES.COMPLETE_PROFILE, { replace: true });
-            return;
-          }
-        } catch {
-          navigate(ROUTES.COMPLETE_PROFILE, { replace: true });
-          return;
-        }
-        if (role === 'OPERATOR') navigate(ROUTES.OPERATOR_DASHBOARD, { replace: true });
-        else if (role === 'ADMIN') navigate(ROUTES.ADMIN_OPERATOR_ACTION, { replace: true });
-        else navigate(ROUTES.DASHBOARD, { replace: true });
+    localStorage.setItem('accessToken', token);
+    localStorage.setItem('refreshToken', refreshToken);
+
+    const finish = async () => {
+      const role = await checkAuth();
+      const userData = await getCurrentUser().catch(() => null);
+      console.log('[OAuth2] role:', role, 'phone:', userData?.phone);
+      if (!userData || !userData.phone) {
+        navigate(ROUTES.COMPLETE_PROFILE, { replace: true });
+      } else if (role === 'OPERATOR') {
+        navigate(ROUTES.OPERATOR_DASHBOARD, { replace: true });
+      } else if (role === 'ADMIN') {
+        navigate(ROUTES.ADMIN_OPERATOR_ACTION, { replace: true });
       } else {
-        navigate(ROUTES.LOGIN, { replace: true });
+        navigate(ROUTES.DASHBOARD, { replace: true });
       }
     };
 
-    handleCallback();
-  }, []);
+    finish();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="bg-deep-black min-h-screen flex items-center justify-center">

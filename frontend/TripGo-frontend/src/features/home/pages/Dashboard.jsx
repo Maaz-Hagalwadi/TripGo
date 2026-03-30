@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import { ROUTES } from '../../../shared/constants/routes';
 import Header from '../../../shared/components/layout/HeaderAuth';
 import HeroSection from './HeroSection';
 import WhyChooseUs from './WhyChooseUs';
@@ -13,25 +14,10 @@ const Dashboard = () => {
 
   useEffect(() => {
     if (loading) return;
-    
-    console.log('Dashboard - loading:', loading, 'user:', user, 'role:', user?.role);
-    
-    if (!user) {
-      console.log('Dashboard - No user, redirecting to home');
-      navigate('/');
-      return;
-    }
-    
-    if (user.role === 'OPERATOR') {
-      console.log('Dashboard - OPERATOR role, redirecting to operator dashboard');
-      navigate('/operator/dashboard');
-      return;
-    }
-    
-    if (user.role && user.role !== 'USER') {
-      console.log('Dashboard - Not USER role, redirecting to home');
-      navigate('/');
-    }
+    if (!user) { navigate(ROUTES.HOME); return; }
+    if (!user.phone) { navigate(ROUTES.COMPLETE_PROFILE, { replace: true }); return; }
+    if (user.role === 'OPERATOR') { navigate(ROUTES.OPERATOR_DASHBOARD); return; }
+    if (user.role && user.role !== 'USER') { navigate(ROUTES.HOME); }
   }, [user, loading, navigate]);
 
   return (

@@ -80,8 +80,8 @@ const CompleteProfile = () => {
             <div className="space-y-2">
               <label className="text-sm font-semibold text-silver-text ml-1">First Name</label>
               <input
-                className={`w-full px-4 py-3.5 bg-input-gray border ${errors.firstName ? 'border-red-500' : 'border-white/10'} rounded-xl text-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`}
-                placeholder="John"
+                className={`w-full px-4 py-3.5 bg-input-gray border ${errors.firstName ? 'border-red-500' : 'border-white/10'} rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`}
+                placeholder="Enter first name"
                 value={formData.firstName}
                 onChange={handleChange('firstName')}
               />
@@ -90,8 +90,8 @@ const CompleteProfile = () => {
             <div className="space-y-2">
               <label className="text-sm font-semibold text-silver-text ml-1">Last Name</label>
               <input
-                className={`w-full px-4 py-3.5 bg-input-gray border ${errors.lastName ? 'border-red-500' : 'border-white/10'} rounded-xl text-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`}
-                placeholder="Doe"
+                className={`w-full px-4 py-3.5 bg-input-gray border ${errors.lastName ? 'border-red-500' : 'border-white/10'} rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`}
+                placeholder="Enter last name"
                 value={formData.lastName}
                 onChange={handleChange('lastName')}
               />
@@ -104,8 +104,8 @@ const CompleteProfile = () => {
             <div className="relative">
               <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">phone</span>
               <input
-                className={`w-full pl-12 pr-4 py-3.5 bg-input-gray border ${errors.phone ? 'border-red-500' : 'border-white/10'} rounded-xl text-white focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`}
-                placeholder="+1234567890"
+                className={`w-full pl-12 pr-4 py-3.5 bg-input-gray border ${errors.phone ? 'border-red-500' : 'border-white/10'} rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`}
+                placeholder="Enter phone number"
                 type="tel"
                 value={formData.phone}
                 onChange={handleChange('phone')}
