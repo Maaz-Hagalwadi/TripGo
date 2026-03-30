@@ -4,7 +4,7 @@ import { Box, Typography, Button, CircularProgress, Container } from '@mui/mater
 import { CheckCircle, Error } from '@mui/icons-material';
 import TripGoIcon from '../../../assets/icons/TripGoIcon';
 
-import { API_BASE_URL } from '../../config/env';
+import { API_BASE_URL } from '../../../config/env';
 
 const VerifyEmail = () => {
   const [searchParams] = useSearchParams();
