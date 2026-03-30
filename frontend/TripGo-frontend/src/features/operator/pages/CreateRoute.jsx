@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
-import OperatorSidebar from '../components/OperatorSidebar';
+import OperatorLayout from '../../../shared/components/OperatorLayout';
 import { getBuses } from '../../../api/busService';
 import { createRoute, addSegment, addFare, createSchedule } from '../../../api/routeService';
+import { toast } from 'sonner';
+import { ROUTES } from '../../../shared/constants/routes';
 import './OperatorDashboard.css';
 
 const CreateRoute = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const [step, setStep] = useState(1);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [buses, setBuses] = useState([]);
   
   // Step 1: Route Details
@@ -180,9 +181,8 @@ const CreateRoute = () => {
       };
       await createSchedule(routeId, payload);
       setShowSuccess(true);
-      setTimeout(() => {
-        navigate('/operator/schedules');
-      }, 2000);
+      toast.success('Route & Schedule created successfully!');
+      setTimeout(() => navigate(ROUTES.OPERATOR_SCHEDULES), 2000);
     } catch (error) {
       setErrorMessage(error.message);
     } finally {
@@ -191,17 +191,8 @@ const CreateRoute = () => {
   };
 
   return (
-    <div className="bg-background-light dark:bg-[#101e22] text-slate-900 dark:text-slate-100 min-h-screen flex">
-      <div className="operator-sidebar">
-        <OperatorSidebar activeItem="schedules" collapsed={sidebarCollapsed} onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)} />
-      </div>
-
-      <main className={`operator-main flex-1 flex flex-col min-w-0 overflow-hidden transition-all ${sidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
-        <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-[#101e22] flex items-center px-4 lg:px-8">
-          <h2 className="text-lg font-semibold">Create Route & Schedule</h2>
-        </header>
-
-        <div className="flex-1 overflow-y-auto p-4 lg:p-8">
+    <>
+      <OperatorLayout activeItem="schedules" title="Create Route & Schedule">
           {/* Progress Steps */}
           <div className="flex items-center justify-center mb-8">
             {[1, 2, 3, 4].map((s) => (
@@ -456,12 +447,11 @@ const CreateRoute = () => {
               </div>
             )}
           </div>
-        </div>
-      </main>
+      </OperatorLayout>
 
       {showSuccess && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-[#1a1a1a] rounded-xl p-8 max-w-sm w-full mx-4 text-center">
+          <div className="bg-white dark:bg-op-card rounded-xl p-8 max-w-sm w-full mx-4 text-center">
             <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
               <span className="material-symbols-outlined text-green-600 text-4xl">check_circle</span>
             </div>
@@ -469,7 +459,7 @@ const CreateRoute = () => {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
 
