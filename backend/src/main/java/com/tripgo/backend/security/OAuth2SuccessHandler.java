@@ -1,7 +1,11 @@
 package com.tripgo.backend.security;
 
+import com.tripgo.backend.model.entities.Role;
 import com.tripgo.backend.model.entities.User;
+import com.tripgo.backend.model.enums.RoleType;
+import com.tripgo.backend.repository.RoleRepository;
 import com.tripgo.backend.repository.UserRepository;
+
 import com.tripgo.backend.security.jwt.JwtTokenProvider;
 import com.tripgo.backend.security.service.CustomUserDetails;
 import com.tripgo.backend.security.service.RefreshTokenService;
@@ -17,6 +21,8 @@ import org.springframework.security.web.authentication.AuthenticationSuccessHand
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.util.Set;
+
 @Component
 @RequiredArgsConstructor
 public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
@@ -24,6 +30,7 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
     private final JwtTokenProvider jwtTokenProvider;
     private final UserRepository userRepository;
     private final RefreshTokenService refreshTokenService;
+    private final RoleRepository roleRepository;
 
     @Value("${app.frontend.url}")
     private String frontendUrl;
@@ -51,16 +58,21 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
                 : "";
 
         User user = userRepository.findByEmail(email)
-                .orElseGet(() -> userRepository.save(
-                        User.builder()
-                                .email(email)
-                                .username(email)
-                                .firstName(firstName)
-                                .lastName(lastName)
-                                .isEmailVerified(true)
-                                .password(null)
-                                .build()
-                ));
+                .orElseGet(() -> {
+                    Role userRole = roleRepository.findByName(RoleType.ROLE_USER)
+                            .orElseThrow(() -> new RuntimeException("ROLE_USER not found"));
+                    return userRepository.save(
+                            User.builder()
+                                    .email(email)
+                                    .username(email)
+                                    .firstName(firstName)
+                                    .lastName(lastName)
+                                    .isEmailVerified(true)
+                                    .password(null)
+                                    .roles(Set.of(userRole))
+                                    .build()
+                    );
+                });
 
         CustomUserDetails userDetails = new CustomUserDetails(user);
 
