@@ -4,7 +4,7 @@ import { Box, Container, Typography, CircularProgress } from '@mui/material';
 import { CheckCircle, Cancel } from '@mui/icons-material';
 import TripGoIcon from '../assets/icons/TripGoIcon';
 
-import { API_BASE_URL } from '../../config/env';
+import { API_BASE_URL } from '../config/env';
 
 const AdminOperatorAction = () => {
   const [searchParams] = useSearchParams();
