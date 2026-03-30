@@ -67,8 +67,8 @@ const Footer = () => {
           <div className={isMobile ? "text-center" : ""}>
             <h4 className="text-white font-bold mb-4 uppercase tracking-widest text-sm">Company</h4>
             <div className="flex flex-col gap-y-2 text-slate-400">
-              {footerLinks.company.map((link, index) => (
-                <a key={index} className="hover:text-primary transition-colors" href={link.href}>
+              {footerLinks.company.map((link) => (
+                <a key={link.name} className="hover:text-primary transition-colors" href={link.href}>
                   {link.name}
                 </a>
               ))}
@@ -79,8 +79,8 @@ const Footer = () => {
           <div className={isMobile ? "text-center" : ""}>
             <h4 className="text-white font-bold mb-4 uppercase tracking-widest text-sm">Support</h4>
             <div className="flex flex-col gap-y-2 text-slate-400">
-              {footerLinks.support.map((link, index) => (
-                <a key={index} className="hover:text-primary transition-colors" href={link.href}>
+              {footerLinks.support.map((link) => (
+                <a key={link.name} className="hover:text-primary transition-colors" href={link.href}>
                   {link.name}
                 </a>
               ))}
@@ -91,8 +91,8 @@ const Footer = () => {
           <div className={isMobile ? "text-center" : ""}>
             <h4 className="text-white font-bold mb-4 uppercase tracking-widest text-sm">Legal</h4>
             <div className="flex flex-col gap-y-2 text-slate-400">
-              {footerLinks.legal.map((link, index) => (
-                <a key={index} className="hover:text-primary transition-colors" href={link.href}>
+              {footerLinks.legal.map((link) => (
+                <a key={link.name} className="hover:text-primary transition-colors" href={link.href}>
                   {link.name}
                 </a>
               ))}
@@ -102,7 +102,7 @@ const Footer = () => {
         
         {/* Footer Bottom */}
         <div className={isMobile ? "pt-8 border-t border-white/5 text-center text-slate-500 text-sm" : "pt-10 border-t border-white/5 text-center text-slate-500 text-sm"}>
-          <p>© 2026 TripGo Inc. Engineered for the future of travel.</p>
+          <p>© {new Date().getFullYear()} TripGo Inc. Engineered for the future of travel.</p>
         </div>
       </div>
     </footer>

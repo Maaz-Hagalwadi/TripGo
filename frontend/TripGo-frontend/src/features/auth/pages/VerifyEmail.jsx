@@ -15,8 +15,6 @@ const VerifyEmail = () => {
   useEffect(() => {
     const urlStatus = searchParams.get('status');
     const token = searchParams.get('token');
-    console.log('Status from URL:', urlStatus);
-    console.log('Token from URL:', token);
     
     if (urlStatus) {
       // Backend already processed verification and redirected with status
@@ -26,10 +24,8 @@ const VerifyEmail = () => {
       }, 1000);
     } else if (token) {
       // Direct token verification (fallback)
-      console.log('Calling verification endpoint...');
       fetch(`${API_BASE_URL}/auth/verify-email?token=${token}`)
         .then(response => {
-          console.log('Response status:', response.status);
           if (response.ok) {
             setStatus('success');
           } else {
@@ -37,14 +33,12 @@ const VerifyEmail = () => {
           }
         })
         .catch((error) => {
-          console.error('Verification error:', error);
           setStatus('error');
         })
         .finally(() => {
           setTimeout(() => setLoading(false), 1000);
         });
     } else {
-      console.log('No status or token found in URL');
       setStatus('error');
       setTimeout(() => setLoading(false), 1000);
     }

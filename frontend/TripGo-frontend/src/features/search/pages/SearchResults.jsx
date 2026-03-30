@@ -173,9 +173,9 @@ const SearchResults = () => {
                 onChange={e => setMaxPrice(Number(e.target.value))}
                 className="w-full h-2 bg-input-gray rounded-lg appearance-none cursor-pointer accent-primary" />
               <div className="flex justify-between mt-2 text-xs text-slate-400 font-bold">
-                <span>$20</span>
-                <span className="text-primary">${maxPrice}</span>
-                <span>$150</span>
+                <span>₹20</span>
+                <span className="text-primary">₹{maxPrice}</span>
+                <span>₹150</span>
               </div>
             </div>
 
@@ -247,8 +247,8 @@ const SearchResults = () => {
               </div>
             )}
 
-            {!loadingBuses && !error && filteredBuses.map((bus, index) => (
-              <div key={index} className="bg-charcoal border border-white/5 rounded-2xl p-6 hover:border-primary/30 transition-all">
+            {!loadingBuses && !error && filteredBuses.map((bus) => (
+              <div key={bus.id ?? bus.busName} className="bg-charcoal border border-white/5 rounded-2xl p-6 hover:border-primary/30 transition-all">
                 <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-6">
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center">
@@ -276,7 +276,7 @@ const SearchResults = () => {
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-3 border-l border-white/5 pl-6">
-                    <p className="text-2xl font-black text-primary">${bus.price}</p>
+                    <p className="text-2xl font-black text-primary">₹{bus.price}</p>
                     <button className="w-full bg-white/10 hover:bg-primary hover:text-black text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all">
                       Select Seat
                     </button>
@@ -292,7 +292,7 @@ const SearchResults = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <span className="text-lg font-bold tracking-tight text-white">TripGo</span>
-            <div className="text-slate-500 text-sm">© 2024 TripGo Inc. All rights reserved.</div>
+            <div className="text-slate-500 text-sm">© {new Date().getFullYear()} TripGo Inc. All rights reserved.</div>
             <div className="flex gap-6">
               <a className="text-slate-400 hover:text-white transition-colors text-sm" href="#">Privacy</a>
               <a className="text-slate-400 hover:text-white transition-colors text-sm" href="#">Terms</a>

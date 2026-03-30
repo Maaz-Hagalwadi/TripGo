@@ -43,14 +43,6 @@ const MobileLayout = () => {
 
   const registerUser = async (formData) => {
     try {
-      console.log('Sending registration request:', {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        email: formData.email,
-        phone: formData.phone,
-        password: formData.password
-      });
-      
       const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: 'POST',
         headers: {
@@ -65,8 +57,6 @@ const MobileLayout = () => {
         })
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
       
       if (response.ok) {
         toast.success('Registration successful! Please check your email to verify your account.');

@@ -5,6 +5,7 @@ import { AuthProvider } from './shared/contexts/AuthContext';
 import ProtectedRoute from './shared/components/ProtectedRoute';
 import { BusWizardProvider } from './features/operator/context/BusWizardContext';
 import { ROUTES } from './shared/constants/routes';
+import ErrorBoundary from './shared/components/ErrorBoundary';
 
 const Home = lazy(() => import('./features/home/pages/Home'));
 const Dashboard = lazy(() => import('./features/home/pages/Dashboard'));
@@ -34,6 +35,7 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 
 function App() {
   return (
+    <ErrorBoundary>
     <AuthProvider>
       <Toaster position="top-right" richColors theme="dark" closeButton />
       <Router>
@@ -102,6 +104,7 @@ function App() {
         </Suspense>
       </Router>
     </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

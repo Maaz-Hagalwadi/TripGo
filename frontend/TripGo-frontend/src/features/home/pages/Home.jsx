@@ -19,7 +19,6 @@ const Home = () => {
       const refreshToken = searchParams.get('refresh');
 
       if (token && refreshToken) {
-        console.log('OAuth tokens found, processing...');
         setIsProcessingOAuth(true);
         localStorage.setItem('accessToken', token);
         localStorage.setItem('refreshToken', refreshToken);
@@ -32,16 +31,13 @@ const Home = () => {
   }, [searchParams, checkAuth]);
 
   useEffect(() => {
-    console.log('User data:', user);
     if (user?.role) {
-      console.log('Redirecting to dashboard for role:', user.role);
       if (user.role === 'OPERATOR') {
         navigate('/operator/dashboard');
       } else if (user.role === 'USER') {
         navigate('/dashboard');
       }
     } else if (user && !loading && !isProcessingOAuth) {
-      console.log('User exists but no role, redirecting to dashboard');
       navigate('/dashboard');
     }
   }, [user, navigate, loading, isProcessingOAuth]);

@@ -56,7 +56,6 @@ const CreateRoute = () => {
       const data = await getBuses();
       setBuses(data.filter(b => b.active) || []);
     } catch (error) {
-      console.error('Failed to fetch buses:', error);
     }
   };
 

@@ -29,7 +29,6 @@ const OAuth2Callback = () => {
     const finish = async () => {
       const role = await checkAuth();
       const userData = await getCurrentUser().catch(() => null);
-      console.log('[OAuth2] role:', role, 'phone:', userData?.phone);
       if (!userData || !userData.phone) {
         navigate(ROUTES.COMPLETE_PROFILE, { replace: true });
       } else if (role === 'OPERATOR') {
