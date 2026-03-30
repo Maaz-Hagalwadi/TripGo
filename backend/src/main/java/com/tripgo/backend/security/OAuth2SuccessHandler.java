@@ -94,14 +94,16 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
         // 🔹 Store refresh token in DB
         refreshTokenService.createRefreshToken(user, refreshToken);
 
+        boolean isSecure = request.isSecure() || frontendUrl.startsWith("https");
+
         // 🔹 Access token cookie
         response.addHeader("Set-Cookie",
                 ResponseCookie.from("ACCESS_TOKEN", accessToken)
                         .httpOnly(true)
-                        .secure(false)
+                        .secure(isSecure)
                         .path("/")
                         .maxAge(15 * 60)
-                        .sameSite("Strict")
+                        .sameSite(isSecure ? "None" : "Strict")
                         .build().toString()
         );
 
@@ -109,13 +111,13 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
         response.addHeader("Set-Cookie",
                 ResponseCookie.from("REFRESH_TOKEN", refreshToken)
                         .httpOnly(true)
-                        .secure(false)
+                        .secure(isSecure)
                         .path("/auth/refresh")
                         .maxAge(refreshTokenExpirationMs / 1000)
-                        .sameSite("Strict")
+                        .sameSite(isSecure ? "None" : "Strict")
                         .build().toString()
         );
 
-        response.sendRedirect(frontendUrl + "?token=" + accessToken + "&refresh=" + refreshToken);
+        response.sendRedirect(frontendUrl + "/oauth2/callback?token=" + accessToken + "&refresh=" + refreshToken);
     }
 }
