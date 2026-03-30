@@ -4,7 +4,7 @@ import { Box, Container, Typography, CircularProgress } from '@mui/material';
 import { CheckCircle, Cancel } from '@mui/icons-material';
 import TripGoIcon from '../assets/icons/TripGoIcon';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+import { API_BASE_URL } from '../../config/env';
 
 const AdminOperatorAction = () => {
   const [searchParams] = useSearchParams();

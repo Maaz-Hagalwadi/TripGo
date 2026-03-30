@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import TripGoIcon from '../../../assets/icons/TripGoIcon';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+import { API_BASE_URL } from '../../../config/env';
 
 const DesktopForm = () => {
   const navigate = useNavigate();
