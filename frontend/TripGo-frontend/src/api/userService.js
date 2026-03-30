@@ -1,24 +1,9 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+import { apiGet, apiPut } from './apiClient';
 
 export const getCurrentUser = async () => {
-  try {
-    const token = localStorage.getItem('accessToken');
-    const response = await fetch(`${API_BASE_URL}/users/me`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-      },
-    });
+  return apiGet('/users/me');
+};
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch user profile');
-    }
-
-    const data = await response.json();
-    return data;
-  } catch (error) {
-    console.error('Error fetching user profile:', error);
-    throw error;
-  }
+export const updateCurrentUser = async (data) => {
+  return apiPut('/users/me', data);
 };

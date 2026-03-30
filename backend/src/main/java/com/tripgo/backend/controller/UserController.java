@@ -9,6 +9,7 @@ import com.tripgo.backend.repository.UserRepository;
 import com.tripgo.backend.security.service.CustomUserDetails;
 import com.tripgo.backend.security.service.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -37,13 +38,18 @@ public class UserController {
 
     @PutMapping("/me")
     public UserProfileResponse updateProfile(
-            @RequestBody UpdateProfileRequest request,
+            @Valid @RequestBody UpdateProfileRequest request,
             Authentication authentication) {
 
         CustomUserDetails userDetails =
                 (CustomUserDetails) authentication.getPrincipal();
 
         User user = userDetails.getUser();
+
+        if (request.getPhone() != null && !request.getPhone().equals(user.getPhone())
+                && userRepository.existsByPhone(request.getPhone())) {
+            throw new RuntimeException("Phone number already in use");
+        }
 
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());

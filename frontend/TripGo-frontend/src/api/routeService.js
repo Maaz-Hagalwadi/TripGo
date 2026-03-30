@@ -1,325 +1,143 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
+import { apiGet, apiPost, apiPut, apiPatch, apiDelete, API_BASE_URL } from './apiClient';
 
-const refreshAccessToken = async () => {
-  try {
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (!refreshToken) return false;
-    
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ refreshToken }),
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      localStorage.setItem('accessToken', data.accessToken);
-      return true;
-    }
-    return false;
-  } catch (error) {
-    console.error('Token refresh failed:', error);
-    return false;
-  }
-};
+const FALLBACK_CITIES = [
+  { id: 1, name: 'Mumbai' },
+  { id: 2, name: 'Delhi' },
+  { id: 3, name: 'Bangalore' },
+  { id: 4, name: 'Pune' },
+  { id: 5, name: 'Hyderabad' },
+  { id: 6, name: 'Chennai' },
+  { id: 7, name: 'Kolkata' },
+  { id: 8, name: 'Ahmedabad' },
+  { id: 9, name: 'Jaipur' },
+  { id: 10, name: 'Surat' },
+];
 
-const fetchWithAuth = async (url, options = {}) => {
-  const token = localStorage.getItem('accessToken');
-  
-  let response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': token ? `Bearer ${token}` : '',
-      ...options.headers,
-    },
-  });
-
-  if (response.status === 401) {
-    const refreshed = await refreshAccessToken();
-    if (refreshed) {
-      const newToken = localStorage.getItem('accessToken');
-      response = await fetch(url, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': newToken ? `Bearer ${newToken}` : '',
-          ...options.headers,
-        },
-      });
-    } else {
-      window.location.href = '/login';
-    }
-  }
-
-  return response;
-};
-
-export const createRoute = async (routeData) => {
-  try {
-    const response = await fetchWithAuth(`${API_BASE_URL}/operator/routes`, {
-      method: 'POST',
-      body: JSON.stringify(routeData),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || 'Failed to create route');
-    }
-    
-    return response.json();
-  } catch (error) {
-    console.error('Error creating route:', error);
-    throw error;
-  }
-};
-
-export const addSegment = async (routeId, segmentData) => {
-  try {
-    const response = await fetchWithAuth(`${API_BASE_URL}/operator/routes/${routeId}/segments`, {
-      method: 'POST',
-      body: JSON.stringify(segmentData),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || 'Failed to add segment');
-    }
-    
-    return response.json();
-  } catch (error) {
-    console.error('Error adding segment:', error);
-    throw error;
-  }
-};
-
-export const addFare = async (routeId, fareData) => {
-  try {
-    const response = await fetchWithAuth(`${API_BASE_URL}/operator/routes/${routeId}/fares`, {
-      method: 'POST',
-      body: JSON.stringify(fareData),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || 'Failed to add fare');
-    }
-    
-    return response.json();
-  } catch (error) {
-    console.error('Error adding fare:', error);
-    throw error;
-  }
-};
-
-export const createSchedule = async (routeId, scheduleData) => {
-  try {
-    const response = await fetchWithAuth(`${API_BASE_URL}/operator/routes/${routeId}/schedule`, {
-      method: 'POST',
-      body: JSON.stringify(scheduleData),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || 'Failed to create schedule');
-    }
-    
-    return response.json();
-  } catch (error) {
-    console.error('Error creating schedule:', error);
-    throw error;
-  }
-};
-
-export const getRoutes = async () => {
-  try {
-    const response = await fetchWithAuth(`${API_BASE_URL}/operator/routes`, {
-      method: 'GET',
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch routes');
-    }
-    
-    return response.json();
-  } catch (error) {
-    console.error('Error fetching routes:', error);
-    throw error;
-  }
-};
-
-export const getRouteSegments = async (routeId) => {
-  try {
-    const response = await fetchWithAuth(`${API_BASE_URL}/operator/routes/${routeId}/segments`, {
-      method: 'GET',
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch segments');
-    }
-    
-    return response.json();
-  } catch (error) {
-    console.error('Error fetching segments:', error);
-    throw error;
-  }
-};
-
-export const recomputeDistance = async (routeId) => {
-  try {
-    const response = await fetchWithAuth(`${API_BASE_URL}/operator/routes/${routeId}/recompute-distance`, {
-      method: 'PATCH',
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to recompute distance');
-    }
-    
-    return response.json();
-  } catch (error) {
-    console.error('Error recomputing distance:', error);
-    throw error;
-  }
-};
-
-export const getRouteSchedules = async (routeId) => {
-  try {
-    const response = await fetchWithAuth(`${API_BASE_URL}/operator/schedules`, {
-      method: 'GET',
-    });
-    
-    if (!response.ok) {
-      console.warn('Schedule endpoint not available yet');
-      return [];
-    }
-    
-    const allSchedules = await response.json();
-    return allSchedules.filter(schedule => schedule.route?.id === routeId);
-  } catch (error) {
-    console.error('Error fetching schedules:', error);
-    return [];
-  }
-};
-
-export const getAllSchedules = async () => {
-  try {
-    const response = await fetchWithAuth(`${API_BASE_URL}/operator/schedules`, {
-      method: 'GET',
-    });
-    
-    if (!response.ok) {
-      return [];
-    }
-    
-    return response.json();
-  } catch (error) {
-    console.error('Error fetching schedules:', error);
-    return [];
-  }
-};
-
-export const getSchedule = async (scheduleId) => {
-  try {
-    const response = await fetchWithAuth(`${API_BASE_URL}/operator/schedules/${scheduleId}`, {
-      method: 'GET',
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch schedule');
-    }
-    
-    return response.json();
-  } catch (error) {
-    console.error('Error fetching schedule:', error);
-    throw error;
-  }
-};
-
-export const deleteSchedule = async (scheduleId) => {
-  try {
-    const response = await fetchWithAuth(`${API_BASE_URL}/operator/schedules/${scheduleId}`, {
-      method: 'DELETE',
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to delete schedule');
-    }
-    
-    return response.ok;
-  } catch (error) {
-    console.error('Error deleting schedule:', error);
-    throw error;
-  }
-};
-
-export const deleteRoute = async (routeId) => {
-  try {
-    const response = await fetchWithAuth(`${API_BASE_URL}/operator/routes/${routeId}`, {
-      method: 'DELETE',
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || errorData.error || 'Failed to delete route');
-    }
-    
-    return response.ok;
-  } catch (error) {
-    console.error('Error deleting route:', error);
-    throw error;
-  }
-};
-
+/**
+ * Get all cities. Falls back to a static list if the endpoint is unavailable.
+ * @returns {Promise<Array<{id: number, name: string}>>}
+ */
 export const getCities = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/cities`, {
-      method: 'GET',
-    });
-    
-    if (!response.ok) {
-      console.warn('Cities endpoint not available, using fallback');
-      return [
-        { id: 1, name: 'Mumbai' },
-        { id: 2, name: 'Delhi' },
-        { id: 3, name: 'Bangalore' },
-        { id: 4, name: 'Pune' },
-        { id: 5, name: 'Hyderabad' },
-        { id: 6, name: 'Chennai' },
-        { id: 7, name: 'Kolkata' },
-        { id: 8, name: 'Ahmedabad' },
-        { id: 9, name: 'Jaipur' },
-        { id: 10, name: 'Surat' }
-      ];
-    }
-    
+    const response = await fetch(`${API_BASE_URL}/cities`);
+    if (!response.ok) return FALLBACK_CITIES;
     const data = await response.json();
-    return data.length > 0 ? data : [
-      { id: 1, name: 'Mumbai' },
-      { id: 2, name: 'Delhi' },
-      { id: 3, name: 'Bangalore' },
-      { id: 4, name: 'Pune' },
-      { id: 5, name: 'Hyderabad' },
-      { id: 6, name: 'Chennai' },
-      { id: 7, name: 'Kolkata' },
-      { id: 8, name: 'Ahmedabad' },
-      { id: 9, name: 'Jaipur' },
-      { id: 10, name: 'Surat' }
-    ];
-  } catch (error) {
-    console.error('Error fetching cities:', error);
-    return [
-      { id: 1, name: 'Mumbai' },
-      { id: 2, name: 'Delhi' },
-      { id: 3, name: 'Bangalore' },
-      { id: 4, name: 'Pune' },
-      { id: 5, name: 'Hyderabad' },
-      { id: 6, name: 'Chennai' },
-      { id: 7, name: 'Kolkata' },
-      { id: 8, name: 'Ahmedabad' },
-      { id: 9, name: 'Jaipur' },
-      { id: 10, name: 'Surat' }
-    ];
+    return data.length > 0 ? data : FALLBACK_CITIES;
+  } catch {
+    return FALLBACK_CITIES;
   }
+};
+
+/**
+ * Create a new route.
+ * @param {{name: string, origin: string, destination: string}} routeData
+ * @returns {Promise<{id: number, name: string, origin: string, destination: string}>}
+ */
+export const createRoute = async (routeData) => {
+  return apiPost('/operator/routes', routeData);
+};
+
+/**
+ * Get all routes for the authenticated operator.
+ * @returns {Promise<Array<{id: number, name: string, origin: string, destination: string, totalDistanceKm: number}>>}
+ */
+export const getRoutes = async () => {
+  return apiGet('/operator/routes');
+};
+
+/**
+ * Delete a route by ID.
+ * @param {number} routeId
+ * @returns {Promise<void>}
+ */
+export const deleteRoute = async (routeId) => {
+  return apiDelete(`/operator/routes/${routeId}`);
+};
+
+/**
+ * Add a segment to a route.
+ * @param {number} routeId
+ * @param {{fromStop: string, toStop: string, distanceKm: number, durationMinutes: number}} segmentData
+ * @returns {Promise<{id: number, fromStop: string, toStop: string}>}
+ */
+export const addSegment = async (routeId, segmentData) => {
+  return apiPost(`/operator/routes/${routeId}/segments`, segmentData);
+};
+
+/**
+ * Get all segments for a route.
+ * @param {number} routeId
+ * @returns {Promise<Array<{id: number, fromStop: string, toStop: string, distanceKm: number, durationMinutes: number}>>}
+ */
+export const getRouteSegments = async (routeId) => {
+  return apiGet(`/operator/routes/${routeId}/segments`);
+};
+
+/**
+ * Recompute total distance for a route.
+ * @param {number} routeId
+ * @returns {Promise<{totalDistanceKm: number}>}
+ */
+export const recomputeDistance = async (routeId) => {
+  return apiPatch(`/operator/routes/${routeId}/recompute-distance`);
+};
+
+/**
+ * Add a fare to a route segment.
+ * @param {number} routeId
+ * @param {{segmentId: number, seatType: string, baseFare: number, gstPercent: number}} fareData
+ * @returns {Promise<{id: number, seatType: string, baseFare: number}>}
+ */
+export const addFare = async (routeId, fareData) => {
+  return apiPost(`/operator/routes/${routeId}/fares`, fareData);
+};
+
+/**
+ * Create a schedule for a route.
+ * @param {number} routeId
+ * @param {{busId: number, departureTime: string, arrivalTime: string, frequency: string}} scheduleData
+ * @returns {Promise<{id: number, departureTime: string, arrivalTime: string}>}
+ */
+export const createSchedule = async (routeId, scheduleData) => {
+  return apiPost(`/operator/routes/${routeId}/schedule`, scheduleData);
+};
+
+/**
+ * Get all schedules for the authenticated operator.
+ * @returns {Promise<Array<{id: number, bus: object, departureTime: string, arrivalTime: string, frequency: string, active: boolean}>>}
+ */
+export const getAllSchedules = async () => {
+  try {
+    return await apiGet('/operator/schedules');
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Get schedules filtered by route ID.
+ * @param {number} routeId
+ * @returns {Promise<Array>}
+ */
+export const getRouteSchedules = async (routeId) => {
+  const all = await getAllSchedules();
+  return all.filter((s) => s.route?.id === routeId);
+};
+
+/**
+ * Get a single schedule by ID.
+ * @param {number} scheduleId
+ * @returns {Promise<{id: number, bus: object, departureTime: string, arrivalTime: string}>}
+ */
+export const getSchedule = async (scheduleId) => {
+  return apiGet(`/operator/schedules/${scheduleId}`);
+};
+
+/**
+ * Delete a schedule by ID.
+ * @param {number} scheduleId
+ * @returns {Promise<void>}
+ */
+export const deleteSchedule = async (scheduleId) => {
+  return apiDelete(`/operator/schedules/${scheduleId}`);
 };
