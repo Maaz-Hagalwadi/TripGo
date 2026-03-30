@@ -1,16 +1,17 @@
-import { useMediaQuery, useTheme } from '@mui/material';
+import { useState, useEffect } from 'react';
 import DesktopForgotPasswordForm from '../components/DesktopForgotPasswordForm';
 import MobileForgotPasswordLayout from '../components/MobileForgotPasswordLayout';
 
 const ForgotPassword = () => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 600);
 
-  if (isMobile) {
-    return <MobileForgotPasswordLayout />;
-  }
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 600);
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
-  return <DesktopForgotPasswordForm />;
+  return isMobile ? <MobileForgotPasswordLayout /> : <DesktopForgotPasswordForm />;
 };
 
 export default ForgotPassword;

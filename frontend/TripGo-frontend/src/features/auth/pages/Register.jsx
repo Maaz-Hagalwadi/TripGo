@@ -1,16 +1,17 @@
-import { useMediaQuery, useTheme } from '@mui/material';
+import { useState, useEffect } from 'react';
 import DesktopForm from '../components/DesktopForm';
 import MobileLayout from '../components/MobileLayout';
 
 const Register = () => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 600);
 
-  if (isMobile) {
-    return <MobileLayout />;
-  }
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 600);
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
-  return <DesktopForm />;
+  return isMobile ? <MobileLayout /> : <DesktopForm />;
 };
 
 export default Register;

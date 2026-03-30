@@ -1,16 +1,17 @@
-import { useMediaQuery, useTheme } from '@mui/material';
+import { useState, useEffect } from 'react';
 import DesktopLoginForm from '../components/DesktopLoginForm';
 import MobileLoginLayout from '../components/MobileLoginLayout';
 
 const Login = () => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 600);
 
-  if (isMobile) {
-    return <MobileLoginLayout />;
-  }
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 600);
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
-  return <DesktopLoginForm />;
+  return isMobile ? <MobileLoginLayout /> : <DesktopLoginForm />;
 };
 
 export default Login;
