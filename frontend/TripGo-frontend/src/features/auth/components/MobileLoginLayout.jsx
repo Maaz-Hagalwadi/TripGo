@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { 
   Box, 
@@ -58,14 +59,13 @@ const MobileLoginLayout = () => {
       });
 
       if (result.success) {
-        setErrors({ success: 'Login successful! Redirecting...' });
+        toast.success('Login successful!');
         setLoginSuccess(true);
       } else {
-        setErrors({ general: result.error });
+        toast.error(result.error);
       }
-    } catch (error) {
-      console.error('Network error:', error);
-      setErrors({ general: 'Network error. Please try again.' });
+    } catch {
+      toast.error('Network error. Please try again.');
     }
   };
 
@@ -180,32 +180,6 @@ const MobileLoginLayout = () => {
                 Please enter your details to access your account.
               </Typography>
             </Box>
-
-            {errors.success && (
-              <Box sx={{ 
-                p: 2, 
-                mb: 2, 
-                bgcolor: 'rgba(76, 175, 80, 0.1)', 
-                border: '1px solid rgba(76, 175, 80, 0.3)', 
-                borderRadius: 2,
-                color: '#4caf50'
-              }}>
-                <Typography variant="body2">{errors.success}</Typography>
-              </Box>
-            )}
-            
-            {errors.general && (
-              <Box sx={{ 
-                p: 2, 
-                mb: 2, 
-                bgcolor: 'rgba(244, 67, 54, 0.1)', 
-                border: '1px solid rgba(244, 67, 54, 0.3)', 
-                borderRadius: 2,
-                color: '#f44336'
-              }}>
-                <Typography variant="body2">{errors.general}</Typography>
-              </Box>
-            )}
 
             <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <TextField

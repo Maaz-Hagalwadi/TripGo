@@ -1,6 +1,7 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import TripGoIcon from '../../../assets/icons/TripGoIcon';
 
 const DesktopResetPasswordForm = () => {
@@ -36,21 +37,17 @@ const DesktopResetPasswordForm = () => {
       });
 
       if (response.ok) {
-        setErrors({ success: 'Password reset successful! Redirecting to login...' });
+        toast.success('Password reset successful! Redirecting to login...');
         setTimeout(() => navigate('/login'), 2000);
       } else {
         const data = await response.json().catch(() => ({}));
         const msg = data.message || '';
-        if (msg.includes('OAuth')) {
-          setErrors({ general: 'This account uses Google sign-in. Password reset is not available.' });
-        } else if (msg.includes('Invalid') || msg.includes('expired')) {
-          setErrors({ general: 'Reset link has expired. Please request a new one.' });
-        } else {
-          setErrors({ general: msg || 'Password reset failed. Please try again.' });
-        }
+        if (msg.includes('OAuth')) toast.error('This account uses Google sign-in. Password reset is not available.');
+        else if (msg.includes('Invalid') || msg.includes('expired')) toast.error('Reset link has expired. Please request a new one.');
+        else toast.error(msg || 'Password reset failed. Please try again.');
       }
     } catch {
-      setErrors({ general: 'Network error. Please try again.' });
+      toast.error('Network error. Please try again.');
     }
   };
 
@@ -122,18 +119,6 @@ const DesktopResetPasswordForm = () => {
               <h1 className="text-3xl font-extrabold text-white mb-3">Reset Password</h1>
               <p className="text-slate-400">Enter your new password below.</p>
             </div>
-            
-            {errors.success && (
-              <div className="p-3 mb-4 bg-green-900/20 border border-green-500/30 rounded-xl text-green-400">
-                <p className="text-sm">{errors.success}</p>
-              </div>
-            )}
-            
-            {errors.general && (
-              <div className="p-3 mb-4 bg-red-900/20 border border-red-500/30 rounded-xl text-red-400">
-                <p className="text-sm">{errors.general}</p>
-              </div>
-            )}
             
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">

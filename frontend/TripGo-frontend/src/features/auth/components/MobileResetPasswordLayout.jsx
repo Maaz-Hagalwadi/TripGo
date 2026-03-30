@@ -1,6 +1,7 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { 
   Box, 
   Container, 
@@ -52,21 +53,17 @@ const MobileResetPasswordLayout = () => {
       });
 
       if (response.ok) {
-        setErrors({ success: 'Password reset successful! Redirecting to login...' });
+        toast.success('Password reset successful! Redirecting to login...');
         setTimeout(() => navigate('/login'), 2000);
       } else {
         const data = await response.json().catch(() => ({}));
         const msg = data.message || '';
-        if (msg.includes('OAuth')) {
-          setErrors({ general: 'This account uses Google sign-in. Password reset is not available.' });
-        } else if (msg.includes('Invalid') || msg.includes('expired')) {
-          setErrors({ general: 'Reset link has expired. Please request a new one.' });
-        } else {
-          setErrors({ general: msg || 'Password reset failed. Please try again.' });
-        }
+        if (msg.includes('OAuth')) toast.error('This account uses Google sign-in. Password reset is not available.');
+        else if (msg.includes('Invalid') || msg.includes('expired')) toast.error('Reset link has expired. Please request a new one.');
+        else toast.error(msg || 'Password reset failed. Please try again.');
       }
     } catch {
-      setErrors({ general: 'Network error. Please try again.' });
+      toast.error('Network error. Please try again.');
     }
   };
 
@@ -178,32 +175,6 @@ const MobileResetPasswordLayout = () => {
                 Enter your new password below.
               </Typography>
             </Box>
-
-            {errors.success && (
-              <Box sx={{ 
-                p: 2, 
-                mb: 2, 
-                bgcolor: 'rgba(76, 175, 80, 0.1)', 
-                border: '1px solid rgba(76, 175, 80, 0.3)', 
-                borderRadius: 2,
-                color: '#4caf50'
-              }}>
-                <Typography variant="body2">{errors.success}</Typography>
-              </Box>
-            )}
-            
-            {errors.general && (
-              <Box sx={{ 
-                p: 2, 
-                mb: 2, 
-                bgcolor: 'rgba(244, 67, 54, 0.1)', 
-                border: '1px solid rgba(244, 67, 54, 0.3)', 
-                borderRadius: 2,
-                color: '#f44336'
-              }}>
-                <Typography variant="body2">{errors.general}</Typography>
-              </Box>
-            )}
 
             <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <TextField

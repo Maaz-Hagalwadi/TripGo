@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import TripGoIcon from '../../../assets/icons/TripGoIcon';
 
@@ -17,9 +18,7 @@ const DesktopLoginForm = () => {
   const [loginSuccess, setLoginSuccess] = useState(false);
 
   useEffect(() => {
-    console.log('Login redirect check - loginSuccess:', loginSuccess, 'user:', user, 'role:', user?.role);
     if (loginSuccess && user?.role) {
-      console.log('Redirecting based on role:', user.role);
       const timer = setTimeout(() => {
         if (user.role === 'OPERATOR') {
           navigate('/operator/dashboard');
@@ -41,14 +40,13 @@ const DesktopLoginForm = () => {
       });
 
       if (result.success) {
-        setErrors({ success: 'Login successful! Redirecting...' });
+        toast.success('Login successful!');
         setLoginSuccess(true);
       } else {
-        setErrors({ general: result.error });
+        toast.error(result.error);
       }
-    } catch (error) {
-      console.error('Network error:', error);
-      setErrors({ general: 'Network error. Please try again.' });
+    } catch {
+      toast.error('Network error. Please try again.');
     }
   };
 
@@ -106,18 +104,6 @@ const DesktopLoginForm = () => {
               <h1 className="text-3xl font-extrabold text-white mb-3">Welcome Back</h1>
               <p className="text-slate-400">Please enter your details to access your account.</p>
             </div>
-            {errors.success && (
-              <div className="p-3 mb-4 bg-green-900/20 border border-green-500/30 rounded-xl text-green-400">
-                <p className="text-sm">{errors.success}</p>
-              </div>
-            )}
-            
-            {errors.general && (
-              <div className="p-3 mb-4 bg-red-900/20 border border-red-500/30 rounded-xl text-red-400">
-                <p className="text-sm">{errors.general}</p>
-              </div>
-            )}
-            
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-silver-text ml-1">Email or Phone</label>
@@ -172,9 +158,7 @@ const DesktopLoginForm = () => {
               >
                 {isLoading ? 'Signing In...' : 'Sign In'}
               </button>
-              {isLoading && (
-                <p className="text-center text-xs text-slate-400 mt-2">First login may take up to 60 seconds...</p>
-              )}
+              {isLoading && <p className="text-center text-xs text-slate-400 mt-2">First login may take up to 60 seconds...</p>}
             </form>
             <div className="mt-10">
               <div className="relative flex items-center mb-8">

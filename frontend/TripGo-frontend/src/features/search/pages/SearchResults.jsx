@@ -1,43 +1,45 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import HeaderAuth from '../../../shared/components/layout/HeaderAuth';
 import { searchBuses } from '../../../api/busService';
 import { useAuth } from '../../../shared/contexts/AuthContext';
-import TripGoIcon from '../../../assets/icons/TripGoIcon';
+
+const DEPARTURE_SLOTS = [
+  { label: 'Early Morning (6am – 12pm)', start: 6, end: 12 },
+  { label: 'Afternoon (12pm – 6pm)', start: 12, end: 18 },
+  { label: 'Night (6pm – 12am)', start: 18, end: 24 },
+];
+
+const BUS_TYPE_OPTIONS = ['AC Sleeper', 'Luxury Volvo', 'Seater', 'Semi Sleeper', 'Electric'];
+const AMENITY_OPTIONS = ['WiFi', 'USB Port', 'Meal', 'Blanket', 'AC'];
 
 const SearchResults = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, loading } = useAuth();
+
   const [buses, setBuses] = useState([]);
   const [loadingBuses, setLoadingBuses] = useState(true);
   const [error, setError] = useState(null);
   const [searchParams, setSearchParams] = useState({
     from: location.state?.from || '',
     to: location.state?.to || '',
-    date: location.state?.date || new Date().toISOString().split('T')[0]
+    date: location.state?.date || new Date().toISOString().split('T')[0],
   });
 
+  // Filter state
+  const [selectedSlots, setSelectedSlots] = useState([]);
+  const [selectedBusTypes, setSelectedBusTypes] = useState([]);
+  const [maxPrice, setMaxPrice] = useState(150);
+  const [selectedAmenities, setSelectedAmenities] = useState([]);
+  const [sortBy, setSortBy] = useState('cheapest');
+
   useEffect(() => {
-    console.log('SearchResults - User data:', user, 'loading:', loading);
     if (loading) return;
-    
-    if (!user) {
-      console.log('SearchResults - No user, redirecting');
-      navigate('/');
-      return;
-    }
-    
-    if (user.role && user.role !== 'USER') {
-      console.log('SearchResults - Blocking access for role:', user.role);
-      navigate('/');
-      return;
-    }
-    
-    if (searchParams.from && searchParams.to && searchParams.date) {
-      fetchBuses();
-    }
-  }, [user, loading, navigate, searchParams.from, searchParams.to, searchParams.date]);
+    if (!user) { navigate('/'); return; }
+    if (user.role && user.role !== 'USER') { navigate('/'); return; }
+    if (searchParams.from && searchParams.to && searchParams.date) fetchBuses();
+  }, [user, loading]);
 
   const fetchBuses = async () => {
     setLoadingBuses(true);
@@ -45,145 +47,182 @@ const SearchResults = () => {
     try {
       const data = await searchBuses(searchParams.from, searchParams.to, searchParams.date);
       setBuses(data || []);
-    } catch (err) {
+    } catch {
       setError('Failed to fetch buses. Please try again.');
-      console.error(err);
     } finally {
       setLoadingBuses(false);
     }
   };
 
-  const handleUpdateSearch = () => {
-    if (searchParams.from.trim() && searchParams.to.trim() && searchParams.date) {
-      fetchBuses();
+  const toggleItem = (setter, value) =>
+    setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
+
+  const filteredBuses = useMemo(() => {
+    let result = [...buses];
+
+    if (selectedSlots.length > 0) {
+      result = result.filter(bus => {
+        const hour = parseInt(bus.departureTime?.split(':')[0] ?? '0');
+        return selectedSlots.some(label => {
+          const slot = DEPARTURE_SLOTS.find(s => s.label === label);
+          return slot && hour >= slot.start && hour < slot.end;
+        });
+      });
     }
+
+    if (selectedBusTypes.length > 0) {
+      result = result.filter(bus =>
+        selectedBusTypes.some(t => bus.busType?.toLowerCase().includes(t.toLowerCase()))
+      );
+    }
+
+    result = result.filter(bus => (bus.price ?? 0) <= maxPrice);
+
+    if (selectedAmenities.length > 0) {
+      result = result.filter(bus =>
+        selectedAmenities.every(a =>
+          bus.amenities?.some(ba => ba.toLowerCase().includes(a.toLowerCase()))
+        )
+      );
+    }
+
+    if (sortBy === 'cheapest') result.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
+    else if (sortBy === 'earliest') result.sort((a, b) => (a.departureTime ?? '').localeCompare(b.departureTime ?? ''));
+
+    return result;
+  }, [buses, selectedSlots, selectedBusTypes, maxPrice, selectedAmenities, sortBy]);
+
+  const handleUpdateSearch = () => {
+    if (searchParams.from.trim() && searchParams.to.trim() && searchParams.date) fetchBuses();
   };
+
   return (
     <div className="bg-deep-black text-slate-100 min-h-screen">
-      {/* Header */}
       <HeaderAuth />
 
       {/* Search Bar */}
       <div className="bg-charcoal border-b border-white/5 py-4 sticky top-20 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
-            <div className="relative group">
+            <div className="relative">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-silver-text z-10 text-xl">location_on</span>
-              <input 
-                value={searchParams.from}
-                onChange={(e) => setSearchParams({...searchParams, from: e.target.value})}
-                className="w-full pl-10 pr-4 py-2.5 bg-input-gray border border-white/10 rounded-lg text-white text-sm placeholder-silver-text focus:ring-1 focus:ring-primary focus:border-transparent transition-all outline-none" 
-                placeholder="Departure City" 
-                type="text"
-              />
+              <input value={searchParams.from} onChange={e => setSearchParams(p => ({ ...p, from: e.target.value }))}
+                className="w-full pl-10 pr-4 py-2.5 bg-input-gray border border-white/10 rounded-lg text-white text-sm placeholder-silver-text focus:ring-1 focus:ring-primary outline-none"
+                placeholder="Departure City" type="text" />
             </div>
             <div className="relative">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-silver-text z-10 text-xl">directions_bus</span>
-              <input 
-                value={searchParams.to}
-                onChange={(e) => setSearchParams({...searchParams, to: e.target.value})}
-                className="w-full pl-10 pr-4 py-2.5 bg-input-gray border border-white/10 rounded-lg text-white text-sm placeholder-silver-text focus:ring-1 focus:ring-primary focus:border-transparent transition-all outline-none" 
-                placeholder="Destination City" 
-                type="text"
-              />
+              <input value={searchParams.to} onChange={e => setSearchParams(p => ({ ...p, to: e.target.value }))}
+                className="w-full pl-10 pr-4 py-2.5 bg-input-gray border border-white/10 rounded-lg text-white text-sm placeholder-silver-text focus:ring-1 focus:ring-primary outline-none"
+                placeholder="Destination City" type="text" />
             </div>
             <div className="relative">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-silver-text z-10 text-xl">calendar_today</span>
-              <input 
-                value={searchParams.date}
-                onChange={(e) => setSearchParams({...searchParams, date: e.target.value})}
-                className="w-full pl-10 pr-4 py-2.5 bg-input-gray border border-white/10 rounded-lg text-white text-sm placeholder-silver-text focus:ring-1 focus:ring-primary focus:border-transparent transition-all outline-none" 
-                type="date"
-              />
+              <input value={searchParams.date} onChange={e => setSearchParams(p => ({ ...p, date: e.target.value }))}
+                className="w-full pl-10 pr-4 py-2.5 bg-input-gray border border-white/10 rounded-lg text-white text-sm outline-none"
+                type="date" />
             </div>
-            <button 
-              onClick={handleUpdateSearch}
-              className="w-full bg-primary hover:bg-primary/90 text-black h-[42px] rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(0,212,255,0.2)]"
-            >
-              <span className="material-symbols-outlined text-lg">sync</span>
-              Update
+            <button onClick={handleUpdateSearch}
+              className="w-full bg-primary hover:bg-primary/90 text-black h-[42px] rounded-lg font-bold flex items-center justify-center gap-2 transition-all">
+              <span className="material-symbols-outlined text-lg">sync</span> Update
             </button>
           </div>
         </div>
       </div>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
+
           {/* Filters Sidebar */}
           <aside className="w-full lg:w-64 flex-shrink-0 space-y-8">
+
+            {/* Departure Time */}
             <div>
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Departure Time</h3>
               <div className="space-y-3">
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <input className="w-5 h-5 rounded border-white/10 bg-input-gray text-primary focus:ring-primary focus:ring-offset-deep-black" type="checkbox"/>
-                  <span className="text-sm text-slate-300 group-hover:text-white transition-colors">Early Morning (6am - 12pm)</span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <input className="w-5 h-5 rounded border-white/10 bg-input-gray text-primary focus:ring-primary focus:ring-offset-deep-black" type="checkbox"/>
-                  <span className="text-sm text-slate-300 group-hover:text-white transition-colors">Afternoon (12pm - 6pm)</span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <input className="w-5 h-5 rounded border-white/10 bg-input-gray text-primary focus:ring-primary focus:ring-offset-deep-black" type="checkbox"/>
-                  <span className="text-sm text-slate-300 group-hover:text-white transition-colors">Night (6pm - 12am)</span>
-                </label>
+                {DEPARTURE_SLOTS.map(({ label }) => (
+                  <label key={label} className="flex items-center gap-3 cursor-pointer group">
+                    <input type="checkbox" checked={selectedSlots.includes(label)}
+                      onChange={() => toggleItem(setSelectedSlots, label)}
+                      className="w-5 h-5 rounded border-white/10 bg-input-gray text-primary focus:ring-primary focus:ring-offset-deep-black" />
+                    <span className="text-sm text-slate-300 group-hover:text-white transition-colors">{label}</span>
+                  </label>
+                ))}
               </div>
             </div>
+
+            {/* Bus Type */}
             <div>
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Bus Type</h3>
               <div className="space-y-3">
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <input className="w-5 h-5 rounded border-white/10 bg-input-gray text-primary focus:ring-primary focus:ring-offset-deep-black" type="checkbox"/>
-                  <span className="text-sm text-slate-300 group-hover:text-white transition-colors">AC Sleeper</span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <input className="w-5 h-5 rounded border-white/10 bg-input-gray text-primary focus:ring-primary focus:ring-offset-deep-black" type="checkbox"/>
-                  <span className="text-sm text-slate-300 group-hover:text-white transition-colors">Luxury Volvo</span>
-                </label>
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <input className="w-5 h-5 rounded border-white/10 bg-input-gray text-primary focus:ring-primary focus:ring-offset-deep-black" type="checkbox"/>
-                  <span className="text-sm text-slate-300 group-hover:text-white transition-colors">Electric Express</span>
-                </label>
+                {BUS_TYPE_OPTIONS.map(type => (
+                  <label key={type} className="flex items-center gap-3 cursor-pointer group">
+                    <input type="checkbox" checked={selectedBusTypes.includes(type)}
+                      onChange={() => toggleItem(setSelectedBusTypes, type)}
+                      className="w-5 h-5 rounded border-white/10 bg-input-gray text-primary focus:ring-primary focus:ring-offset-deep-black" />
+                    <span className="text-sm text-slate-300 group-hover:text-white transition-colors">{type}</span>
+                  </label>
+                ))}
               </div>
             </div>
+
+            {/* Price Range */}
             <div>
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Price Range</h3>
-              <input className="w-full h-2 bg-input-gray rounded-lg appearance-none cursor-pointer accent-primary" type="range"/>
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Max Price</h3>
+              <input type="range" min={20} max={150} value={maxPrice}
+                onChange={e => setMaxPrice(Number(e.target.value))}
+                className="w-full h-2 bg-input-gray rounded-lg appearance-none cursor-pointer accent-primary" />
               <div className="flex justify-between mt-2 text-xs text-slate-400 font-bold">
                 <span>$20</span>
+                <span className="text-primary">${maxPrice}</span>
                 <span>$150</span>
               </div>
             </div>
+
+            {/* Amenities */}
             <div>
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Amenities</h3>
               <div className="flex flex-wrap gap-2">
-                <button className="px-3 py-1.5 rounded-lg border border-white/10 bg-input-gray text-xs text-slate-300 hover:border-primary/50 transition-all">WiFi</button>
-                <button className="px-3 py-1.5 rounded-lg border border-white/10 bg-input-gray text-xs text-slate-300 hover:border-primary/50 transition-all">USB Port</button>
-                <button className="px-3 py-1.5 rounded-lg border border-white/10 bg-input-gray text-xs text-slate-300 hover:border-primary/50 transition-all">Meal</button>
-                <button className="px-3 py-1.5 rounded-lg border border-white/10 bg-input-gray text-xs text-slate-300 hover:border-primary/50 transition-all">Blanket</button>
+                {AMENITY_OPTIONS.map(a => (
+                  <button key={a} onClick={() => toggleItem(setSelectedAmenities, a)}
+                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
+                      selectedAmenities.includes(a)
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-white/10 bg-input-gray text-slate-300 hover:border-primary/50'
+                    }`}>
+                    {a}
+                  </button>
+                ))}
               </div>
             </div>
+
+            {/* Reset */}
+            {(selectedSlots.length > 0 || selectedBusTypes.length > 0 || selectedAmenities.length > 0 || maxPrice < 150) && (
+              <button onClick={() => { setSelectedSlots([]); setSelectedBusTypes([]); setSelectedAmenities([]); setMaxPrice(150); }}
+                className="w-full py-2 text-xs font-bold text-slate-400 hover:text-white border border-white/10 rounded-lg transition-colors">
+                Reset Filters
+              </button>
+            )}
           </aside>
 
-          {/* Bus Results */}
+          {/* Results */}
           <div className="flex-1 space-y-4">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-white">
-                {loadingBuses ? 'Searching...' : `${buses.length} Buses found`}
+                {loadingBuses ? 'Searching...' : `${filteredBuses.length} Bus${filteredBuses.length !== 1 ? 'es' : ''} found`}
               </h2>
-              {buses.length > 0 && (
+              {filteredBuses.length > 0 && (
                 <div className="flex items-center gap-4 text-sm font-medium">
                   <span className="text-slate-400">Sort by:</span>
-                  <select className="bg-transparent border-none text-primary font-bold focus:ring-0 cursor-pointer">
-                    <option>Cheapest First</option>
-                    <option>Earliest First</option>
-                    <option>Fastest First</option>
+                  <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+                    className="bg-transparent border-none text-primary font-bold focus:ring-0 cursor-pointer">
+                    <option value="cheapest">Cheapest First</option>
+                    <option value="earliest">Earliest First</option>
                   </select>
                 </div>
               )}
             </div>
 
-            {/* Loading State */}
             {loadingBuses && (
               <div className="flex items-center justify-center py-20">
                 <div className="text-center">
@@ -193,7 +232,6 @@ const SearchResults = () => {
               </div>
             )}
 
-            {/* Error State */}
             {error && (
               <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-6 text-center">
                 <span className="material-symbols-outlined text-red-400 text-4xl mb-2">error</span>
@@ -201,21 +239,19 @@ const SearchResults = () => {
               </div>
             )}
 
-            {/* No Results */}
-            {!loadingBuses && !error && buses.length === 0 && (
+            {!loadingBuses && !error && filteredBuses.length === 0 && (
               <div className="bg-charcoal border border-white/5 rounded-2xl p-12 text-center">
                 <span className="material-symbols-outlined text-slate-600 text-6xl mb-4">search_off</span>
                 <h3 className="text-xl font-bold text-white mb-2">No Buses Found</h3>
-                <p className="text-slate-400">Try adjusting your search criteria or date</p>
+                <p className="text-slate-400">Try adjusting your filters or search criteria</p>
               </div>
             )}
 
-            {/* Bus Cards */}
-            {!loadingBuses && !error && buses.map((bus, index) => (
-              <div key={index} className="bg-charcoal border border-white/5 rounded-2xl p-6 hover:border-primary/30 transition-all group">
+            {!loadingBuses && !error && filteredBuses.map((bus, index) => (
+              <div key={index} className="bg-charcoal border border-white/5 rounded-2xl p-6 hover:border-primary/30 transition-all">
                 <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-6">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center p-2">
+                    <div className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center">
                       <span className="material-symbols-outlined text-3xl text-primary">directions_bus</span>
                     </div>
                     <div>
@@ -252,21 +288,11 @@ const SearchResults = () => {
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="bg-deep-black border-t border-white/5 pt-12 pb-8 mt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-            <div className="flex items-center gap-2">
-              <div className="text-primary">
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                  <path clipRule="evenodd" d="M12.0799 24L4 19.2479L9.95537 8.75216L18.04 13.4961L18.0446 4H29.9554L29.96 13.4961L38.0446 8.75216L44 19.2479L35.92 24L44 28.7521L38.0446 39.2479L29.96 34.5039L29.9554 44H18.0446L18.04 34.5039L9.95537 39.2479L4 28.7521L12.0799 24Z" fillRule="evenodd"></path>
-                </svg>
-              </div>
-              <span className="text-lg font-bold tracking-tight text-white">TripGo</span>
-            </div>
-            <div className="text-slate-500 text-sm">
-              © 2023 TripGo Inc. All rights reserved.
-            </div>
+            <span className="text-lg font-bold tracking-tight text-white">TripGo</span>
+            <div className="text-slate-500 text-sm">© 2024 TripGo Inc. All rights reserved.</div>
             <div className="flex gap-6">
               <a className="text-slate-400 hover:text-white transition-colors text-sm" href="#">Privacy</a>
               <a className="text-slate-400 hover:text-white transition-colors text-sm" href="#">Terms</a>

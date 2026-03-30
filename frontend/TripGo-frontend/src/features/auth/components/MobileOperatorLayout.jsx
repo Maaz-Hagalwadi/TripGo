@@ -1,6 +1,7 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { 
   Box, 
   Container, 
@@ -66,30 +67,23 @@ const MobileOperatorLayout = () => {
       });
 
       if (response.ok) {
-        setErrors({ success: 'Operator registration successful! Awaiting admin approval.' });
+        toast.success('Operator registration successful! Awaiting admin approval.');
         setTimeout(() => navigate('/login'), 3000);
       } else {
         const errorText = await response.text();
         try {
           const errorObj = JSON.parse(errorText);
-          if (errorObj.message && errorObj.message.includes('email:')) {
-            setErrors({ email: errorObj.message.split('email: ')[1] });
-          } else if (errorObj.message && errorObj.message.includes('phone:')) {
-            setErrors({ phone: 'Phone must be exactly 10 digits' });
-          } else if (errorText.includes('Email already in use')) {
-            setErrors({ email: 'Email already in use' });
-          } else if (errorText.includes('Phone already in use')) {
-            setErrors({ phone: 'Phone already in use' });
-          } else {
-            setErrors({ general: errorObj.message || 'Registration failed' });
-          }
+          if (errorObj.message?.includes('email:')) setErrors({ email: errorObj.message.split('email: ')[1] });
+          else if (errorObj.message?.includes('phone:')) setErrors({ phone: 'Phone must be exactly 10 digits' });
+          else if (errorText.includes('Email already in use')) setErrors({ email: 'Email already in use' });
+          else if (errorText.includes('Phone already in use')) setErrors({ phone: 'Phone already in use' });
+          else toast.error(errorObj.message || 'Registration failed');
         } catch {
-          setErrors({ general: 'Registration failed. Please try again.' });
+          toast.error('Registration failed. Please try again.');
         }
       }
-    } catch (error) {
-      console.error('Network error:', error);
-      setErrors({ general: 'Network error. Please try again.' });
+    } catch {
+      toast.error('Network error. Please try again.');
     }
   };
 
@@ -274,32 +268,6 @@ const MobileOperatorLayout = () => {
                 </Button>
               </Box>
             </Box>
-
-            {errors.success && (
-              <Box sx={{ 
-                p: 2, 
-                mb: 2, 
-                bgcolor: 'rgba(76, 175, 80, 0.1)', 
-                border: '1px solid rgba(76, 175, 80, 0.3)', 
-                borderRadius: 2,
-                color: '#4caf50'
-              }}>
-                <Typography variant="body2">{errors.success}</Typography>
-              </Box>
-            )}
-            
-            {errors.general && (
-              <Box sx={{ 
-                p: 2, 
-                mb: 2, 
-                bgcolor: 'rgba(244, 67, 54, 0.1)', 
-                border: '1px solid rgba(244, 67, 54, 0.3)', 
-                borderRadius: 2,
-                color: '#f44336'
-              }}>
-                <Typography variant="body2">{errors.general}</Typography>
-              </Box>
-            )}
 
             <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Typography variant="subtitle2" sx={{ color: 'white', fontWeight: 700, mt: 2 }}>

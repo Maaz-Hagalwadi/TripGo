@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { fetchCurrentUser, loginRequest, pingHealth } from '../services/authService';
+import { toast } from 'sonner';
 
 const AuthContext = createContext();
 
@@ -65,6 +66,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('refreshToken');
     setIsAuthenticated(false);
     setUser(null);
+    toast.success('Logged out successfully.');
   };
 
   return (

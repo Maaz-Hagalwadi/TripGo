@@ -1,6 +1,7 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import TripGoIcon from '../../../assets/icons/TripGoIcon';
 
 const DesktopOperatorForm = () => {
@@ -43,30 +44,23 @@ const DesktopOperatorForm = () => {
       });
 
       if (response.ok) {
-        setErrors({ success: 'Operator registration successful! Awaiting admin approval.' });
+        toast.success('Operator registration successful! Awaiting admin approval.');
         setTimeout(() => navigate('/login'), 3000);
       } else {
         const errorText = await response.text();
         try {
           const errorObj = JSON.parse(errorText);
-          if (errorObj.message && errorObj.message.includes('email:')) {
-            setErrors({ email: errorObj.message.split('email: ')[1] });
-          } else if (errorObj.message && errorObj.message.includes('phone:')) {
-            setErrors({ phone: 'Phone must be exactly 10 digits' });
-          } else if (errorText.includes('Email already in use')) {
-            setErrors({ email: 'Email already in use' });
-          } else if (errorText.includes('Phone already in use')) {
-            setErrors({ phone: 'Phone already in use' });
-          } else {
-            setErrors({ general: errorObj.message || 'Registration failed' });
-          }
+          if (errorObj.message?.includes('email:')) setErrors({ email: errorObj.message.split('email: ')[1] });
+          else if (errorObj.message?.includes('phone:')) setErrors({ phone: 'Phone must be exactly 10 digits' });
+          else if (errorText.includes('Email already in use')) setErrors({ email: 'Email already in use' });
+          else if (errorText.includes('Phone already in use')) setErrors({ phone: 'Phone already in use' });
+          else toast.error(errorObj.message || 'Registration failed');
         } catch {
-          setErrors({ general: 'Registration failed. Please try again.' });
+          toast.error('Registration failed. Please try again.');
         }
       }
-    } catch (error) {
-      console.error('Network error:', error);
-      setErrors({ general: 'Network error. Please try again.' });
+    } catch {
+      toast.error('Network error. Please try again.');
     }
   };
 
@@ -198,18 +192,6 @@ const DesktopOperatorForm = () => {
                 </button>
               </div>
             </div>
-            
-            {errors.success && (
-              <div className="p-3 mb-4 bg-green-900/20 border border-green-500/30 rounded-xl text-green-400">
-                <p className="text-sm">{errors.success}</p>
-              </div>
-            )}
-            
-            {errors.general && (
-              <div className="p-3 mb-4 bg-red-900/20 border border-red-500/30 rounded-xl text-red-400">
-                <p className="text-sm">{errors.general}</p>
-              </div>
-            )}
             
             <form onSubmit={handleSubmit} className="space-y-3">
               <div className="mb-4">

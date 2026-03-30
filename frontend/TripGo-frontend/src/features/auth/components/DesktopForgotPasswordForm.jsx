@@ -1,6 +1,7 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import TripGoIcon from '../../../assets/icons/TripGoIcon';
 
 const DesktopForgotPasswordForm = () => {
@@ -18,20 +19,16 @@ const DesktopForgotPasswordForm = () => {
       });
 
       if (response.ok) {
-        setErrors({ success: 'Reset email sent! Check your inbox.' });
+        toast.success('Reset email sent! Check your inbox.');
       } else {
         const data = await response.json().catch(() => ({}));
         const msg = data.message || '';
-        if (msg.includes('User not found')) {
-          setErrors({ email: 'No account found with this email address' });
-        } else if (msg.includes('OAuth')) {
-          setErrors({ general: 'This account uses Google sign-in. Password reset is not available.' });
-        } else {
-          setErrors({ general: msg || 'Failed to send reset email. Please try again.' });
-        }
+        if (msg.includes('User not found')) setErrors({ email: 'No account found with this email address' });
+        else if (msg.includes('OAuth')) toast.error('This account uses Google sign-in. Password reset is not available.');
+        else toast.error(msg || 'Failed to send reset email. Please try again.');
       }
     } catch {
-      setErrors({ general: 'Network error. Please try again.' });
+      toast.error('Network error. Please try again.');
     }
   };
 
@@ -104,18 +101,6 @@ const DesktopForgotPasswordForm = () => {
               <h1 className="text-3xl font-extrabold text-white mb-3">Forgot Password?</h1>
               <p className="text-slate-400">No worries, we'll send you reset instructions.</p>
             </div>
-            {errors.success && (
-              <div className="p-3 mb-4 bg-green-900/20 border border-green-500/30 rounded-xl text-green-400">
-                <p className="text-sm">{errors.success}</p>
-              </div>
-            )}
-            
-            {errors.general && (
-              <div className="p-3 mb-4 bg-red-900/20 border border-red-500/30 rounded-xl text-red-400">
-                <p className="text-sm">{errors.general}</p>
-              </div>
-            )}
-            
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>

@@ -1,6 +1,7 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { 
   Box, 
   Container, 
@@ -68,40 +69,25 @@ const MobileLayout = () => {
       console.log('Response headers:', response.headers);
       
       if (response.ok) {
-        const message = await response.text();
-        console.log('Success response:', message);
-        setErrors({ success: 'Registration successful! Please check your email to verify your account.' });
+        toast.success('Registration successful! Please check your email to verify your account.');
         setTimeout(() => navigate('/login'), 2000);
       } else {
         const errorText = await response.text();
-        console.log('Error response:', errorText);
-        
         try {
           const errorObj = JSON.parse(errorText);
-          if (errorObj.message && errorObj.message.includes('phone:')) {
-            setErrors({ phone: 'Phone must be exactly 10 digits' });
-          } else if (errorObj.message && errorObj.message.includes('email:')) {
-            setErrors({ email: errorObj.message.split('email: ')[1] });
-          } else if (errorText.includes('Email already in use')) {
-            setErrors({ email: 'Email already in use' });
-          } else if (errorText.includes('Phone already in use')) {
-            setErrors({ phone: 'Phone already in use' });
-          } else {
-            setErrors({ general: errorObj.message || 'Registration failed' });
-          }
+          if (errorObj.message?.includes('phone:')) setErrors({ phone: 'Phone must be exactly 10 digits' });
+          else if (errorObj.message?.includes('email:')) setErrors({ email: errorObj.message.split('email: ')[1] });
+          else if (errorText.includes('Email already in use')) setErrors({ email: 'Email already in use' });
+          else if (errorText.includes('Phone already in use')) setErrors({ phone: 'Phone already in use' });
+          else toast.error(errorObj.message || 'Registration failed');
         } catch {
-          if (errorText.includes('Email already in use')) {
-            setErrors({ email: 'Email already in use' });
-          } else if (errorText.includes('Phone already in use')) {
-            setErrors({ phone: 'Phone already in use' });
-          } else {
-            setErrors({ general: 'Registration failed. Please try again.' });
-          }
+          if (errorText.includes('Email already in use')) setErrors({ email: 'Email already in use' });
+          else if (errorText.includes('Phone already in use')) setErrors({ phone: 'Phone already in use' });
+          else toast.error('Registration failed. Please try again.');
         }
       }
     } catch (error) {
-      console.error('Network error:', error);
-      setErrors({ general: `Network error: ${error.message}` });
+      toast.error(`Network error: ${error.message}`);
     }
   };
 
@@ -300,32 +286,6 @@ const MobileLayout = () => {
                 </Button>
               </Box>
             </Box>
-
-            {errors.success && (
-              <Box sx={{ 
-                p: 2, 
-                mb: 2, 
-                bgcolor: 'rgba(76, 175, 80, 0.1)', 
-                border: '1px solid rgba(76, 175, 80, 0.3)', 
-                borderRadius: 2,
-                color: '#4caf50'
-              }}>
-                <Typography variant="body2">{errors.success}</Typography>
-              </Box>
-            )}
-            
-            {errors.general && (
-              <Box sx={{ 
-                p: 2, 
-                mb: 2, 
-                bgcolor: 'rgba(244, 67, 54, 0.1)', 
-                border: '1px solid rgba(244, 67, 54, 0.3)', 
-                borderRadius: 2,
-                color: '#f44336'
-              }}>
-                <Typography variant="body2">{errors.general}</Typography>
-              </Box>
-            )}
 
             <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>

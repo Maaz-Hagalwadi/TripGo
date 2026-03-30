@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { updateCurrentUser } from '../../../api/userService';
 import { ROUTES } from '../../../shared/constants/routes';
@@ -38,7 +39,7 @@ const CompleteProfile = () => {
       else if (role === 'ADMIN') navigate(ROUTES.ADMIN_OPERATOR_ACTION, { replace: true });
       else navigate(ROUTES.DASHBOARD, { replace: true });
     } catch (err) {
-      setErrors({ general: err.message || 'Failed to save profile. Please try again.' });
+      toast.error(err.message || 'Failed to save profile. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -68,12 +69,6 @@ const CompleteProfile = () => {
           <h1 className="text-2xl font-extrabold text-white mb-2">Complete Your Profile</h1>
           <p className="text-slate-400 text-sm">Just a few more details to get you started.</p>
         </div>
-
-        {errors.general && (
-          <div className="p-3 mb-6 bg-red-900/20 border border-red-500/30 rounded-xl text-red-400 text-sm">
-            {errors.general}
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid grid-cols-2 gap-4">

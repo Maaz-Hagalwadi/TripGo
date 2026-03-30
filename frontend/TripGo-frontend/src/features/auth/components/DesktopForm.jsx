@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import TripGoIcon from '../../../assets/icons/TripGoIcon';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
@@ -53,40 +54,25 @@ const DesktopForm = () => {
       console.log('Response headers:', response.headers);
       
       if (response.ok) {
-        const message = await response.text();
-        console.log('Success response:', message);
-        setErrors({ success: 'Registration successful! Please check your email to verify your account.' });
+        toast.success('Registration successful! Please check your email to verify your account.');
         setTimeout(() => navigate('/login'), 2000);
       } else {
         const errorText = await response.text();
-        console.log('Error response:', errorText);
-        
         try {
           const errorObj = JSON.parse(errorText);
-          if (errorObj.message && errorObj.message.includes('phone:')) {
-            setErrors({ phone: 'Phone must be exactly 10 digits' });
-          } else if (errorObj.message && errorObj.message.includes('email:')) {
-            setErrors({ email: errorObj.message.split('email: ')[1] });
-          } else if (errorText.includes('Email already in use')) {
-            setErrors({ email: 'Email already in use' });
-          } else if (errorText.includes('Phone already in use')) {
-            setErrors({ phone: 'Phone already in use' });
-          } else {
-            setErrors({ general: errorObj.message || 'Registration failed' });
-          }
+          if (errorObj.message?.includes('phone:')) setErrors({ phone: 'Phone must be exactly 10 digits' });
+          else if (errorObj.message?.includes('email:')) setErrors({ email: errorObj.message.split('email: ')[1] });
+          else if (errorText.includes('Email already in use')) setErrors({ email: 'Email already in use' });
+          else if (errorText.includes('Phone already in use')) setErrors({ phone: 'Phone already in use' });
+          else toast.error(errorObj.message || 'Registration failed');
         } catch {
-          if (errorText.includes('Email already in use')) {
-            setErrors({ email: 'Email already in use' });
-          } else if (errorText.includes('Phone already in use')) {
-            setErrors({ phone: 'Phone already in use' });
-          } else {
-            setErrors({ general: 'Registration failed. Please try again.' });
-          }
+          if (errorText.includes('Email already in use')) setErrors({ email: 'Email already in use' });
+          else if (errorText.includes('Phone already in use')) setErrors({ phone: 'Phone already in use' });
+          else toast.error('Registration failed. Please try again.');
         }
       }
     } catch (error) {
-      console.error('Network error:', error);
-      setErrors({ general: `Network error: ${error.message}` });
+      toast.error(`Network error: ${error.message}`);
     }
   };
 
@@ -220,18 +206,6 @@ const DesktopForm = () => {
                 </button>
               </div>
             </div>
-            {errors.success && (
-              <div className="p-3 mb-4 bg-green-900/20 border border-green-500/30 rounded-xl text-green-400">
-                <p className="text-sm">{errors.success}</p>
-              </div>
-            )}
-            
-            {errors.general && (
-              <div className="p-3 mb-4 bg-red-900/20 border border-red-500/30 rounded-xl text-red-400">
-                <p className="text-sm">{errors.general}</p>
-              </div>
-            )}
-            
             <form onSubmit={handleSubmit} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
@@ -392,9 +366,7 @@ const DesktopForm = () => {
                 )}
                 {isLoading ? 'Creating Account...' : 'Create Account'}
               </button>
-              {isLoading && (
-                <p className="text-center text-xs text-slate-400 mt-2">First registration may take up to 60 seconds...</p>
-              )}
+              {isLoading && <p className="text-center text-xs text-slate-400 mt-2">First registration may take up to 60 seconds...</p>}
             </form>
             <div className="relative my-3">
               <div className="absolute inset-0 flex items-center">

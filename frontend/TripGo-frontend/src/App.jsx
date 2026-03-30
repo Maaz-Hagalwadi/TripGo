@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import { AuthProvider } from './shared/contexts/AuthContext';
 import ProtectedRoute from './shared/components/ProtectedRoute';
 import { BusWizardProvider } from './features/operator/context/BusWizardContext';
@@ -33,6 +34,7 @@ import NotFound from './pages/NotFound';
 function App() {
   return (
     <AuthProvider>
+      <Toaster position="top-right" richColors theme="dark" closeButton />
       <Router>
         <Routes>
           {/* Public routes */}

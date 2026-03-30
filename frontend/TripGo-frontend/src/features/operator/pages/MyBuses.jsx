@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
 import DeleteBusModal from '../components/DeleteBusModal';
@@ -27,7 +28,6 @@ const MyBuses = () => {
   const [updating, setUpdating] = useState(false);
 
   const [busToView, setBusToView] = useState(null);
-  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     if (loading) return;
@@ -52,8 +52,8 @@ const MyBuses = () => {
   };
 
   const showSuccess = (msg) => {
-    setSuccessMessage(msg);
-    setTimeout(async () => { await fetchBuses(); setSuccessMessage(''); }, 1500);
+    toast.success(msg);
+    setTimeout(fetchBuses, 500);
   };
 
   const handleDeleteConfirm = async () => {
@@ -63,7 +63,7 @@ const MyBuses = () => {
       setBusToDelete(null);
       showSuccess('Bus Deleted Successfully!');
     } catch (err) {
-      alert(err.message || 'Failed to delete bus');
+      toast.error(err.message || 'Failed to delete bus');
     } finally {
       setDeleting(false);
     }
@@ -107,7 +107,7 @@ const MyBuses = () => {
       setBusToEdit(null);
       showSuccess('Bus Updated Successfully!');
     } catch (err) {
-      alert(err.message || 'Failed to update bus');
+      toast.error(err.message || 'Failed to update bus');
     } finally {
       setUpdating(false);
     }
@@ -244,14 +244,6 @@ const MyBuses = () => {
           onSave={handleUpdateBus}
           onCancel={() => setBusToEdit(null)}
         />
-      )}
-      {successMessage && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-op-card rounded-xl p-8 max-w-sm w-full mx-4 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-            <p className="text-lg font-semibold">{successMessage}</p>
-          </div>
-        </div>
       )}
     </OperatorLayout>
   );
