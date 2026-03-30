@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider } from './shared/contexts/AuthContext';
@@ -5,37 +6,38 @@ import ProtectedRoute from './shared/components/ProtectedRoute';
 import { BusWizardProvider } from './features/operator/context/BusWizardContext';
 import { ROUTES } from './shared/constants/routes';
 
-import Home from './features/home/pages/Home';
-import Dashboard from './features/home/pages/Dashboard';
+const Home = lazy(() => import('./features/home/pages/Home'));
+const Dashboard = lazy(() => import('./features/home/pages/Dashboard'));
 
-import Login from './features/auth/pages/Login';
-import Register from './features/auth/pages/Register';
-import ForgotPassword from './features/auth/pages/ForgotPassword';
-import ResetPassword from './features/auth/pages/ResetPassword';
-import VerifyEmail from './features/auth/pages/VerifyEmail';
-import OperatorRegister from './features/auth/pages/OperatorRegister';
-import OAuth2Callback from './features/auth/pages/OAuth2Callback';
+const Login = lazy(() => import('./features/auth/pages/Login'));
+const Register = lazy(() => import('./features/auth/pages/Register'));
+const ForgotPassword = lazy(() => import('./features/auth/pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./features/auth/pages/ResetPassword'));
+const VerifyEmail = lazy(() => import('./features/auth/pages/VerifyEmail'));
+const OperatorRegister = lazy(() => import('./features/auth/pages/OperatorRegister'));
+const OAuth2Callback = lazy(() => import('./features/auth/pages/OAuth2Callback'));
 
-import OperatorDashboard from './features/operator/pages/OperatorDashboard';
-import AddBus from './features/operator/pages/AddBus';
-import BusSeatLayout from './features/operator/pages/BusSeatLayout';
-import BusReview from './features/operator/pages/BusReview';
-import MyBuses from './features/operator/pages/MyBuses';
-import CreateRoute from './features/operator/pages/CreateRoute';
-import Schedules from './features/operator/pages/Schedules';
+const OperatorDashboard = lazy(() => import('./features/operator/pages/OperatorDashboard'));
+const AddBus = lazy(() => import('./features/operator/pages/AddBus'));
+const BusSeatLayout = lazy(() => import('./features/operator/pages/BusSeatLayout'));
+const BusReview = lazy(() => import('./features/operator/pages/BusReview'));
+const MyBuses = lazy(() => import('./features/operator/pages/MyBuses'));
+const CreateRoute = lazy(() => import('./features/operator/pages/CreateRoute'));
+const Schedules = lazy(() => import('./features/operator/pages/Schedules'));
 
-import SearchResults from './features/search/pages/SearchResults';
+const SearchResults = lazy(() => import('./features/search/pages/SearchResults'));
 
-import CompleteProfile from './features/auth/pages/CompleteProfile';
-import AdminOperatorAction from './pages/AdminOperatorAction';
-import Unauthorized from './pages/Unauthorized';
-import NotFound from './pages/NotFound';
+const CompleteProfile = lazy(() => import('./features/auth/pages/CompleteProfile'));
+const AdminOperatorAction = lazy(() => import('./pages/AdminOperatorAction'));
+const Unauthorized = lazy(() => import('./pages/Unauthorized'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 function App() {
   return (
     <AuthProvider>
       <Toaster position="top-right" richColors theme="dark" closeButton />
       <Router>
+        <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><span className="material-symbols-outlined animate-spin text-primary text-4xl">progress_activity</span></div>}>
         <Routes>
           {/* Public routes */}
           <Route path={ROUTES.HOME} element={<Home />} />
@@ -97,6 +99,7 @@ function App() {
           {/* 404 catch-all */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </Suspense>
       </Router>
     </AuthProvider>
   );

@@ -1,10 +1,82 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
 import { useBusWizard } from '../context/BusWizardContext';
 import { ROUTES } from '../../../shared/constants/routes';
 import './OperatorDashboard.css';
+
+const getSeatIcon = (seat) => {
+  if (seat.type === 'sleeper') return 'bed';
+  if (seat.type === 'semi-sleeper') return 'airline_seat_recline_extra';
+  return 'event_seat';
+};
+
+const SeatButton = memo(({ seat, isSelected, onToggle, className = '' }) => (
+  <button
+    onClick={() => onToggle(seat.id)}
+    className={`rounded-lg border-2 flex flex-col items-center justify-center transition-all ${className} ${
+      isSelected
+        ? 'border-red-500 bg-red-500/20 text-red-500'
+        : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-primary'
+    }`}
+  >
+    <span className="material-symbols-outlined text-xl">{getSeatIcon(seat)}</span>
+    <span className="text-[10px] font-bold">{seat.number}</span>
+  </button>
+));
+
+const SleeperDeck = memo(({ deck, seats, selectedSeats, onToggle }) => (
+  <div className="space-y-2">
+    {Array.from(new Set(seats.filter(s => s.deck === deck).map(s => s.row))).map(row => (
+      <div key={`${deck}-${row}`} className="flex gap-2">
+        {seats.filter(s => s.deck === deck && s.row === row && s.col === 0).map(seat => (
+          <SeatButton key={seat.id} seat={seat} isSelected={selectedSeats.includes(seat.id)} onToggle={onToggle} className="w-20 h-36" />
+        ))}
+        <div className="w-6 flex items-center justify-center">
+          <div className="h-full w-0.5 bg-slate-300 dark:bg-slate-700"></div>
+        </div>
+        <div className="flex gap-2">
+          {seats.filter(s => s.deck === deck && s.row === row && s.col > 0).map(seat => (
+            <SeatButton key={seat.id} seat={seat} isSelected={selectedSeats.includes(seat.id)} onToggle={onToggle} className="w-20 h-36" />
+          ))}
+        </div>
+      </div>
+    ))}
+  </div>
+));
+
+const generateSeats = (type, total) => {
+  const numTotal = parseInt(total);
+  if (type.includes('SLEEPER') && !type.includes('SEMI')) {
+    const generatedSeats = [];
+    const lowerDeckSeats = Math.floor(numTotal / 2);
+    const upperDeckSeats = numTotal - lowerDeckSeats;
+    const addDeck = (prefix, count, deck) => {
+      let row = 0, counter = 0;
+      while (counter < count) {
+        for (let col = 0; col < 3 && counter < count; col++) {
+          generatedSeats.push({ id: `${prefix}${row}-${col}`, row, col, deck, number: `${prefix}${counter + 1}`, type: 'sleeper', status: 'available' });
+          counter++;
+        }
+        row++;
+      }
+    };
+    addDeck('L', lowerDeckSeats, 'lower');
+    addDeck('U', upperDeckSeats, 'upper');
+    return generatedSeats;
+  } else {
+    const generatedSeats = [];
+    const seatsPerRow = 4;
+    const rows = Math.ceil(numTotal / seatsPerRow);
+    for (let i = 0; i < rows && generatedSeats.length < numTotal; i++) {
+      for (let j = 0; j < seatsPerRow && generatedSeats.length < numTotal; j++) {
+        generatedSeats.push({ id: `${i}-${j}`, row: i, col: j, number: generatedSeats.length + 1, type: type.includes('SEMI_SLEEPER') ? 'semi-sleeper' : 'seater', status: 'available' });
+      }
+    }
+    return generatedSeats;
+  }
+};
 
 const BusSeatLayout = () => {
   const navigate = useNavigate();
@@ -22,89 +94,20 @@ const BusSeatLayout = () => {
     if (!user || user.role !== 'OPERATOR') navigate(ROUTES.HOME);
   }, [user, loading, navigate]);
 
-  useEffect(() => { generateSeats(busType, totalSeats); }, [busType, totalSeats]);
+  useEffect(() => {
+    setSeats(generateSeats(busType, totalSeats));
+  }, [busType, totalSeats]);
 
-  const generateSeats = (type, total) => {
-    const numTotal = parseInt(total);
-    if (type.includes('SLEEPER') && !type.includes('SEMI')) {
-      const generatedSeats = [];
-      const lowerDeckSeats = Math.floor(numTotal / 2);
-      const upperDeckSeats = numTotal - lowerDeckSeats;
-      const addDeck = (prefix, count, deck) => {
-        let row = 0, counter = 0;
-        while (counter < count) {
-          for (let col = 0; col < 3 && counter < count; col++) {
-            generatedSeats.push({ id: `${prefix}${row}-${col}`, row, col, deck, number: `${prefix}${counter + 1}`, type: 'sleeper', status: 'available' });
-            counter++;
-          }
-          row++;
-        }
-      };
-      addDeck('L', lowerDeckSeats, 'lower');
-      addDeck('U', upperDeckSeats, 'upper');
-      setSeats(generatedSeats);
-    } else {
-      const generatedSeats = [];
-      const seatsPerRow = 4;
-      const rows = Math.ceil(numTotal / seatsPerRow);
-      for (let i = 0; i < rows && generatedSeats.length < numTotal; i++) {
-        for (let j = 0; j < seatsPerRow && generatedSeats.length < numTotal; j++) {
-          generatedSeats.push({ id: `${i}-${j}`, row: i, col: j, number: generatedSeats.length + 1, type: type.includes('SEMI_SLEEPER') ? 'semi-sleeper' : 'seater', status: 'available' });
-        }
-      }
-      setSeats(generatedSeats);
-    }
-  };
+  const toggleSeat = useCallback((seatId) => {
+    setSelectedSeats(prev => prev.includes(seatId) ? prev.filter(s => s !== seatId) : [...prev, seatId]);
+  }, []);
 
-  const toggleSeat = (seatId) => setSelectedSeats(prev => prev.includes(seatId) ? prev.filter(s => s !== seatId) : [...prev, seatId]);
-
-  const getSeatIcon = (seat) => {
-    if (seat.type === 'sleeper') return 'bed';
-    if (seat.type === 'semi-sleeper') return 'airline_seat_recline_extra';
-    return 'event_seat';
-  };
-
-  const handleContinue = () => {
+  const handleContinue = useCallback(() => {
     updateWizard({ blockedSeats: selectedSeats });
     navigate(ROUTES.OPERATOR_BUS_REVIEW);
-  };
+  }, [selectedSeats, updateWizard, navigate]);
 
   const isSleeper = busType.includes('SLEEPER') && !busType.includes('SEMI');
-
-  const SeatButton = ({ seat, className = '' }) => (
-    <button
-      key={seat.id}
-      onClick={() => toggleSeat(seat.id)}
-      className={`rounded-lg border-2 flex flex-col items-center justify-center transition-all ${className} ${
-        selectedSeats.includes(seat.id)
-          ? 'border-red-500 bg-red-500/20 text-red-500'
-          : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:border-primary'
-      }`}
-    >
-      <span className="material-symbols-outlined text-xl">{getSeatIcon(seat)}</span>
-      <span className="text-[10px] font-bold">{seat.number}</span>
-    </button>
-  );
-
-  const SleeperDeck = ({ deck }) => (
-    <div className="space-y-2">
-      {Array.from(new Set(seats.filter(s => s.deck === deck).map(s => s.row))).map(row => (
-        <div key={`${deck}-${row}`} className="flex gap-2">
-          {seats.filter(s => s.deck === deck && s.row === row && s.col === 0).map(seat => (
-            <SeatButton key={seat.id} seat={seat} className="w-20 h-36" />
-          ))}
-          <div className="w-6 flex items-center justify-center">
-            <div className="h-full w-0.5 bg-slate-300 dark:bg-slate-700"></div>
-          </div>
-          <div className="flex gap-2">
-            {seats.filter(s => s.deck === deck && s.row === row && s.col > 0).map(seat => (
-              <SeatButton key={seat.id} seat={seat} className="w-20 h-36" />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
 
   return (
     <OperatorLayout activeItem="add-bus" title="Seat Layout">
@@ -163,12 +166,12 @@ const BusSeatLayout = () => {
                 </div>
                 {/* Mobile single deck */}
                 <div className="deck-view-mobile max-w-4xl mx-auto">
-                  <SleeperDeck deck={activeDeck} />
+                  <SleeperDeck deck={activeDeck} seats={seats} selectedSeats={selectedSeats} onToggle={toggleSeat} />
                 </div>
                 {/* Desktop both decks */}
                 <div className="deck-view-desktop grid-cols-2 gap-8">
-                  <div><h4 className="text-center font-bold mb-4 text-slate-700 dark:text-slate-300">Lower Deck</h4><SleeperDeck deck="lower" /></div>
-                  <div><h4 className="text-center font-bold mb-4 text-slate-700 dark:text-slate-300">Upper Deck</h4><SleeperDeck deck="upper" /></div>
+                  <div><h4 className="text-center font-bold mb-4 text-slate-700 dark:text-slate-300">Lower Deck</h4><SleeperDeck deck="lower" seats={seats} selectedSeats={selectedSeats} onToggle={toggleSeat} /></div>
+                  <div><h4 className="text-center font-bold mb-4 text-slate-700 dark:text-slate-300">Upper Deck</h4><SleeperDeck deck="upper" seats={seats} selectedSeats={selectedSeats} onToggle={toggleSeat} /></div>
                 </div>
               </div>
             ) : (
@@ -180,7 +183,7 @@ const BusSeatLayout = () => {
                     </div>
                   </div>
                   <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${seats.length ? Math.max(...seats.map(s => s.col)) + 1 : 4}, minmax(0, 1fr))` }}>
-                    {seats.map(seat => <SeatButton key={seat.id} seat={seat} className="w-16 h-16" />)}
+                    {seats.map(seat => <SeatButton key={seat.id} seat={seat} isSelected={selectedSeats.includes(seat.id)} onToggle={toggleSeat} className="w-16 h-16" />)}
                   </div>
                 </div>
               </div>
