@@ -51,6 +51,9 @@ public class AuthenticationService {
     @Value("${app.jwt.refresh-token-expiration}")
     private long refreshTokenExpirationMs;
 
+    @Value("${app.backend.url}")
+    private String backendUrl;
+
     public void login(LoginRequest request, HttpServletResponse response) {
         // First check if user exists
         User user = userRepository.findByEmailOrPhone(request.getEmailOrPhone(), request.getEmailOrPhone())
@@ -156,7 +159,7 @@ public class AuthenticationService {
                 emailVerificationService.createToken(user);
 
         String verificationLink =
-                "http://localhost:8080/auth/verify-email?token=" + token.getToken();
+                backendUrl + "/auth/verify-email?token=" + token.getToken();
 
         emailService.sendUserVerificationEmail(user, verificationLink);
 
