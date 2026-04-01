@@ -23,6 +23,12 @@ public class EmailService {
     private final UserRepository userRepository;
     private final TemplateEngine templateEngine;
 
+    @org.springframework.beans.factory.annotation.Value("${app.backend.url}")
+    private String backendUrl;
+
+    @org.springframework.beans.factory.annotation.Value("${app.frontend.url}")
+    private String frontendUrl;
+
     @Async
     public void sendUserVerificationEmail(User user, String link) {
         sendTemplate(
@@ -87,9 +93,9 @@ public class EmailService {
                         Map.of(
                                 "operatorName", op.getName(),
                                 "operatorEmail", opUser.getEmail(),
-                                "approveUrl", "http://localhost:8080/admin/operators/" + op.getId() + "/approve",
-                                "rejectUrl", "http://localhost:8080/admin/operators/" + op.getId() + "/reject",
-                                "adminUrl", "http://localhost:5174/admin/operators"
+                                "approveUrl", backendUrl + "/admin/operators/" + op.getId() + "/approve",
+                                "rejectUrl", backendUrl + "/admin/operators/" + op.getId() + "/reject",
+                                "adminUrl", frontendUrl + "/admin/operators"
                         )
                 );
                 System.out.println("✅ DEBUG: Email sent successfully to " + admin.getEmail());
