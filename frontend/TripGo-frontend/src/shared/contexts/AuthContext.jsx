@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { fetchCurrentUser, loginRequest, pingHealth } from '../services/authService';
 import { toast } from 'sonner';
 
@@ -14,11 +14,37 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [suspendedWhileLoggedIn, setSuspendedWhileLoggedIn] = useState(false);
+  const userRef = useRef(null);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   useEffect(() => {
     checkAuth();
     const keepAlive = setInterval(pingHealth, 600000);
-    return () => clearInterval(keepAlive);
+    // Poll every 30 seconds to detect suspension while logged in
+    const statusPoll = setInterval(async () => {
+      const currentUser = userRef.current;
+      if (!currentUser || currentUser.role !== 'OPERATOR') return;
+      const token = localStorage.getItem('accessToken');
+      if (!token) return;
+      const result = await fetchCurrentUser(token);
+      if (!result) return;
+      const status = result.user?.operatorStatus || result.user?.status;
+      if (status === 'SUSPENDED') {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        setIsAuthenticated(false);
+        setUser(null);
+        setSuspendedWhileLoggedIn(true);
+      }
+    }, 30000);
+    return () => {
+      clearInterval(keepAlive);
+      clearInterval(statusPoll);
+    };
   }, []);
 
   const checkAuth = async () => {
@@ -70,7 +96,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, loading, login, logout, checkAuth }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, loading, login, logout, checkAuth, suspendedWhileLoggedIn, setSuspendedWhileLoggedIn }}>
       {children}
     </AuthContext.Provider>
   );

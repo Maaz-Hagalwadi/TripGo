@@ -10,6 +10,7 @@ export const ROUTES = {
   UNAUTHORIZED: '/unauthorized',
   COMPLETE_PROFILE: '/complete-profile',
   ADMIN_OPERATOR_ACTION: '/admin/operator-action',
+  ADMIN_DASHBOARD: '/admin/dashboard',
 
   DASHBOARD: '/dashboard',
   SEARCH_RESULTS: '/search-results',

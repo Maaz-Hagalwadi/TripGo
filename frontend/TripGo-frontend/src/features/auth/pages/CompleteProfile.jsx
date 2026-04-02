@@ -36,7 +36,7 @@ const CompleteProfile = () => {
       });
       const role = await checkAuth();
       if (role === 'OPERATOR') navigate(ROUTES.OPERATOR_DASHBOARD, { replace: true });
-      else if (role === 'ADMIN') navigate(ROUTES.ADMIN_OPERATOR_ACTION, { replace: true });
+      else if (role === 'ADMIN') navigate(ROUTES.ADMIN_DASHBOARD, { replace: true });
       else navigate(ROUTES.DASHBOARD, { replace: true });
     } catch (err) {
       toast.error(err.message || 'Failed to save profile. Please try again.');

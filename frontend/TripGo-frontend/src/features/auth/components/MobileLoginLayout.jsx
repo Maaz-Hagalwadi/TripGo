@@ -35,12 +35,15 @@ const MobileLoginLayout = () => {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
+  const [suspended, setSuspended] = useState(false);
 
   useEffect(() => {
     if (loginSuccess && user?.role) {
       const timer = setTimeout(() => {
         if (user.role === 'OPERATOR') {
           navigate('/operator/dashboard');
+        } else if (user.role === 'ADMIN') {
+          navigate('/admin/dashboard');
         } else if (user.role === 'USER') {
           navigate('/dashboard');
         } else {
@@ -62,7 +65,12 @@ const MobileLoginLayout = () => {
         toast.success('Login successful!');
         setLoginSuccess(true);
       } else {
-        toast.error(result.error);
+        const isSuspended = result.error?.toLowerCase().includes('suspend');
+        if (isSuspended) {
+          setSuspended(true);
+        } else {
+          toast.error(result.error);
+        }
       }
     } catch {
       toast.error('Network error. Please try again.');
@@ -180,6 +188,16 @@ const MobileLoginLayout = () => {
                 Please enter your details to access your account.
               </Typography>
             </Box>
+
+            {suspended && (
+              <Box sx={{ p: 2, mb: 3, bgcolor: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.3)', borderRadius: 2, display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+                <span className="material-symbols-outlined" style={{ color: '#fb923c', fontSize: 20, marginTop: 2 }}>block</span>
+                <Typography variant="caption" sx={{ color: '#fdba74', lineHeight: 1.6 }}>
+                  Your operator account has been suspended. Please contact our support team at{' '}
+                  <a href="mailto:support@tripgo.com" style={{ color: '#00d4ff', fontWeight: 700 }}>support@tripgo.com</a>
+                </Typography>
+              </Box>
+            )}
 
             <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <TextField

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import { ROUTES } from '../../../shared/constants/routes';
 import Header from '../../../shared/components/layout/Header';
 import HeroSection from './HeroSection';
 import WhyChooseUs from './WhyChooseUs';
@@ -34,6 +35,8 @@ const Home = () => {
     if (user?.role) {
       if (user.role === 'OPERATOR') {
         navigate('/operator/dashboard');
+      } else if (user.role === 'ADMIN') {
+        navigate(ROUTES.ADMIN_DASHBOARD);
       } else if (user.role === 'USER') {
         navigate('/dashboard');
       }

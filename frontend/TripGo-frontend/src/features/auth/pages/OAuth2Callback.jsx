@@ -34,7 +34,7 @@ const OAuth2Callback = () => {
       } else if (role === 'OPERATOR') {
         navigate(ROUTES.OPERATOR_DASHBOARD, { replace: true });
       } else if (role === 'ADMIN') {
-        navigate(ROUTES.ADMIN_OPERATOR_ACTION, { replace: true });
+        navigate(ROUTES.ADMIN_DASHBOARD, { replace: true });
       } else {
         navigate(ROUTES.DASHBOARD, { replace: true });
       }

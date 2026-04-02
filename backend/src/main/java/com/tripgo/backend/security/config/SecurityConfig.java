@@ -55,6 +55,7 @@ public class SecurityConfig {
                                 "/admin/operators/*/reject",
                                 "/search/**")
                         .permitAll()
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
                         .requestMatchers("/operator/**").hasRole("OPERATOR")
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())

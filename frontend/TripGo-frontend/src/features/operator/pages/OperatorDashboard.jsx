@@ -6,9 +6,27 @@ import { getBuses } from '../../../api/busService';
 import { ROUTES } from '../../../shared/constants/routes';
 import './OperatorDashboard.css';
 
+const SuspendedModal = ({ onClose }) => (
+  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="bg-white dark:bg-op-card border border-orange-500/30 rounded-2xl p-10 max-w-md w-full text-center shadow-2xl">
+      <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+        <span className="material-symbols-outlined text-orange-500 text-3xl">block</span>
+      </div>
+      <h2 className="text-xl font-bold mb-3">Account Suspended</h2>
+      <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
+        Your operator account has been suspended. Please contact our support team at{' '}
+        <a href="mailto:support@tripgo.com" className="text-primary font-semibold hover:underline">support@tripgo.com</a>
+      </p>
+      <button onClick={onClose} className="mt-6 px-6 py-2.5 bg-primary text-black font-bold rounded-xl hover:bg-primary/90 transition-all">
+        Go to Login
+      </button>
+    </div>
+  </div>
+);
+
 const OperatorDashboard = () => {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
+  const { user, loading, suspendedWhileLoggedIn, setSuspendedWhileLoggedIn } = useAuth();
   const [buses, setBuses] = useState([]);
   const [loadingBuses, setLoadingBuses] = useState(true);
 
@@ -16,6 +34,23 @@ const OperatorDashboard = () => {
     if (loading) return;
     if (!user || (user.role && user.role !== 'OPERATOR')) navigate(ROUTES.DASHBOARD, { replace: true });
   }, [user, loading, navigate]);
+
+  if (!loading && user?.operatorStatus === 'SUSPENDED') {
+    return (
+      <div className="bg-op-bg min-h-screen flex items-center justify-center p-6">
+        <div className="bg-white dark:bg-op-card border border-orange-500/30 rounded-2xl p-10 max-w-md w-full text-center shadow-2xl">
+          <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-orange-500 text-3xl">block</span>
+          </div>
+          <h2 className="text-xl font-bold mb-3">Account Suspended</h2>
+          <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
+            Your operator account has been suspended. Please contact our support team at{' '}
+            <a href="mailto:support@tripgo.com" className="text-primary font-semibold hover:underline">support@tripgo.com</a>
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => { fetchBuses(); }, []);
 
@@ -35,6 +70,12 @@ const OperatorDashboard = () => {
 
   return (
     <OperatorLayout activeItem="overview" title="Overview">
+      {suspendedWhileLoggedIn && (
+        <SuspendedModal onClose={() => {
+          setSuspendedWhileLoggedIn(false);
+          navigate(ROUTES.LOGIN);
+        }} />
+      )}
       <div className="space-y-8">
 
         {/* KPI Cards */}

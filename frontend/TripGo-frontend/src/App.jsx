@@ -30,6 +30,7 @@ const SearchResults = lazy(() => import('./features/search/pages/SearchResults')
 
 const CompleteProfile = lazy(() => import('./features/auth/pages/CompleteProfile'));
 const AdminOperatorAction = lazy(() => import('./pages/AdminOperatorAction'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const Unauthorized = lazy(() => import('./pages/Unauthorized'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
@@ -57,6 +58,9 @@ function App() {
           {/* Admin route — protected, ADMIN role only */}
           <Route path={ROUTES.ADMIN_OPERATOR_ACTION} element={
             <ProtectedRoute allowedRoles={['ADMIN']}><AdminOperatorAction /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.ADMIN_DASHBOARD} element={
+            <ProtectedRoute allowedRoles={['ADMIN']}><AdminDashboard /></ProtectedRoute>
           } />
 
           {/* User routes */}
