@@ -17,6 +17,7 @@ const Dashboard = () => {
     if (!user) { navigate(ROUTES.HOME); return; }
     if (!user.phone) { navigate(ROUTES.COMPLETE_PROFILE, { replace: true }); return; }
     if (user.role === 'OPERATOR') { navigate(ROUTES.OPERATOR_DASHBOARD); return; }
+    if (user.role === 'ADMIN') { navigate(ROUTES.ADMIN_DASHBOARD); return; }
     if (user.role && user.role !== 'USER') { navigate(ROUTES.HOME); }
   }, [user, loading, navigate]);
 

@@ -16,12 +16,15 @@ const DesktopLoginForm = () => {
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [loginSuccess, setLoginSuccess] = useState(false);
+  const [suspended, setSuspended] = useState(false);
 
   useEffect(() => {
     if (loginSuccess && user?.role) {
       const timer = setTimeout(() => {
         if (user.role === 'OPERATOR') {
           navigate('/operator/dashboard');
+        } else if (user.role === 'ADMIN') {
+          navigate('/admin/dashboard');
         } else if (user.role === 'USER') {
           navigate('/dashboard');
         } else {
@@ -43,7 +46,12 @@ const DesktopLoginForm = () => {
         toast.success('Login successful!');
         setLoginSuccess(true);
       } else {
-        toast.error(result.error);
+        const isSuspended = result.error?.toLowerCase().includes('suspend');
+        if (isSuspended) {
+          setSuspended(true);
+        } else {
+          toast.error(result.error);
+        }
       }
     } catch {
       toast.error('Network error. Please try again.');
@@ -104,6 +112,16 @@ const DesktopLoginForm = () => {
               <h1 className="text-3xl font-extrabold text-white mb-3">Welcome Back</h1>
               <p className="text-slate-400">Please enter your details to access your account.</p>
             </div>
+
+            {suspended && (
+              <div className="p-4 mb-6 bg-orange-500/10 border border-orange-500/30 rounded-xl flex items-start gap-3">
+                <span className="material-symbols-outlined text-orange-400 mt-0.5">block</span>
+                <p className="text-orange-300 text-sm leading-relaxed">
+                  Your operator account has been suspended. Please contact our support team at{' '}
+                  <a href="mailto:support@tripgo.com" className="font-bold underline hover:text-orange-200">support@tripgo.com</a>
+                </p>
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-silver-text ml-1">Email or Phone</label>

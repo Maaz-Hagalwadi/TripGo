@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #dc3545;">Account Suspended</h2>
+
+        <p>Dear <strong th:text="${operatorName}">Operator</strong>,</p>
+
+        <p>Your operator account on TripGo has been <strong>suspended</strong> by our admin team.</p>
+
+        <p>You will not be able to log in or access your dashboard until the suspension is lifted.</p>
+
+        <p>If you believe this is a mistake or would like more information, please reach out to our support team.</p>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <a href="mailto:support@tripgo.com"
+               style="background: #dc3545;
+                      color: white;
+                      padding: 12px 30px;
+                      text-decoration: none;
+                      border-radius: 5px;
+                      display: inline-block;
+                      font-weight: bold;">
+                Contact Support
+            </a>
+        </div>
+
+        <p>Thanks,<br>TripGo Team</p>
+    </div>
+</body>
+</html>

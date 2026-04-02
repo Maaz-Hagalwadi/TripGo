@@ -74,6 +74,7 @@ public class AuthenticationService {
                 switch (op.getStatus()) {
                     case PENDING -> throw new RuntimeException("Operator account is awaiting admin approval");
                     case REJECTED -> throw new RuntimeException("Your operator application was rejected");
+                    case SUSPENDED -> throw new RuntimeException("Your operator account has been suspended. Please contact our support team at support@tripgo.com");
                     case APPROVED -> {} // allowed
                 }
             }

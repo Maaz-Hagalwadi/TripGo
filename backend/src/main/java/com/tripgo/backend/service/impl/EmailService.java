@@ -121,6 +121,16 @@ public class EmailService {
     }
 
     @Async
+    public void sendOperatorSuspended(Operator op) {
+        sendTemplate(
+                op.getContactEmail(),
+                "Your Operator Account Has Been Suspended",
+                "operator-suspended",
+                Map.of("operatorName", op.getName())
+        );
+    }
+
+    @Async
     public void sendOperatorRejected(Operator op) {
         User opUser = userRepository.findByOperator(op).orElseThrow();
 
