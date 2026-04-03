@@ -11,6 +11,7 @@ const defaultState = {
   totalSeats: '',
   amenityIds: [],
   blockedSeats: [],
+  seatMarks: {}, // { [seatNumber]: { isLadiesOnly, isWindow, isAisle, isBlocked } }
 };
 
 const load = () => {

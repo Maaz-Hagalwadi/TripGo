@@ -126,12 +126,6 @@ const MyBuses = () => {
       activeItem="my-buses"
       title="My Buses"
       searchPlaceholder="Search buses..."
-      headerChildren={
-        <button onClick={fetchBuses} className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors text-sm">
-          <span className="material-symbols-outlined text-[18px]">refresh</span>
-          Refresh
-        </button>
-      }
     >
       {/* Filter Tabs */}
       <div className="flex items-center gap-3 mb-6">

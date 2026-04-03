@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
-import { createBus } from '../../../api/busService';
+import { createBus, generateLayout, getBusSeats, markSeat } from '../../../api/busService';
 import { getAmenities } from '../../../api/amenityService';
 import { useBusWizard } from '../context/BusWizardContext';
 import { toast } from 'sonner';
@@ -13,7 +13,7 @@ const BusReview = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const { wizardData, resetWizard } = useBusWizard();
-  const { busName, busCode, vehicleNumber, model, totalSeats, busType, amenityIds, blockedSeats } = wizardData;
+  const { busName, busCode, vehicleNumber, model, totalSeats, busType, amenityIds, blockedSeats, seatMarks } = wizardData;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [amenitiesList, setAmenitiesList] = useState([]);
 
@@ -26,16 +26,50 @@ const BusReview = () => {
     getAmenities().then(setAmenitiesList).catch(() => {});
   }, []);
 
+  const getLayoutTemplate = (type) => {
+    if (type?.includes('SLEEPER') && !type?.includes('SEMI')) return 'SLEEPER_2X1';
+    return 'SEATER_2X2';
+  };
+
   const handleSubmit = async () => {
     setIsSubmitting(true);
     try {
-      await createBus({ name: busName, busCode, vehicleNumber, model, totalSeats: parseInt(totalSeats), busType, amenityIds: amenityIds || [] });
+      const seats_count = parseInt(totalSeats);
+      const bus = await createBus({ name: busName, busCode, vehicleNumber, model, totalSeats: seats_count, busType, amenityIds: amenityIds || [] });
+
+      // Generate seat layout in DB
+      const template = getLayoutTemplate(busType);
+      const rows = template === 'SLEEPER_2X1' ? Math.ceil(seats_count / 6) : Math.ceil(seats_count / 4);
+      await generateLayout(bus.id, template, rows);
+
+      // Apply seat marks if any were configured
+      console.log('[BusReview] seatMarks from wizard:', seatMarks);
+      if (seatMarks && Object.keys(seatMarks).length > 0) {
+        const seatsData = await getBusSeats(bus.id);
+        console.log('[BusReview] getBusSeats response:', seatsData);
+        const combined = [
+          ...(seatsData.seats ?? []),
+          ...(seatsData.lowerDeck ?? []),
+          ...(seatsData.upperDeck ?? []),
+        ];
+        console.log('[BusReview] combined seats:', combined.map(s => s.seatNumber));
+        console.log('[BusReview] seatMarks keys:', Object.keys(seatMarks));
+        const toMark = combined.filter(s => seatMarks[s.seatNumber]);
+        console.log('[BusReview] seats to mark:', toMark.map(s => ({ seatNumber: s.seatNumber, id: s.id, marks: seatMarks[s.seatNumber] })));
+        const results = await Promise.allSettled(
+          toMark.map(s => markSeat(bus.id, s.id, seatMarks[s.seatNumber]))
+        );
+        console.log('[BusReview] markSeat results:', results);
+      }
+
       resetWizard();
       toast.success('Bus added successfully!');
       navigate(ROUTES.OPERATOR_MY_BUSES);
     } catch (error) {
       const message = error.message || 'Failed to add bus. Please try again.';
-      toast.error(message.includes('duplicate') || message.includes('already exists') ? 'Bus code already exists. Please use a different code.' : message);
+      toast.error(message.includes('duplicate key') || message.includes('duplicate') || message.includes('already exists') || message.includes('unique constraint')
+        ? 'Bus code already exists. Please go back and use a different bus code.'
+        : message);
     } finally {
       setIsSubmitting(false);
     }
@@ -43,97 +77,102 @@ const BusReview = () => {
 
   return (
     <OperatorLayout activeItem="add-bus" title="Review & Submit">
-      <div className="max-w-6xl mx-auto">
-        <header className="mb-8">
-          <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
-            <button onClick={() => navigate(ROUTES.OPERATOR_ADD_BUS)} className="hover:text-primary transition-colors">Add Bus</button>
-            <span className="material-symbols-outlined text-xs">chevron_right</span>
-            <button onClick={() => navigate(ROUTES.OPERATOR_BUS_LAYOUT)} className="hover:text-primary transition-colors">Seat Layout</button>
-            <span className="material-symbols-outlined text-xs">chevron_right</span>
-            <span className="text-slate-200 dark:text-slate-100 font-medium">Review</span>
-          </div>
-          <h2 className="text-3xl font-extrabold">Review Bus Details</h2>
-          <p className="text-slate-600 dark:text-slate-400 mt-1">Please review all information before submitting</p>
-        </header>
+      <div className="max-w-2xl mx-auto">
 
         {/* Progress */}
-        <div className="mb-10">
+        <div className="mb-6">
           <div className="flex items-center justify-between relative">
             <div className="absolute top-1/2 left-0 w-full h-0.5 bg-primary -translate-y-1/2 z-0"></div>
             {['Bus Info', 'Layout', 'Review'].map((label, i) => (
               <div key={label} className="relative z-10 flex flex-col items-center">
-                <div className="size-10 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm ring-4 ring-white dark:ring-op-bg">
-                  {i < 2 ? '✓' : i + 1}
+                <div className="size-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-xs ring-4 ring-white dark:ring-op-bg">
+                  {i < 2 ? '✓' : '3'}
                 </div>
-                <span className="mt-2 text-xs font-bold text-primary uppercase tracking-widest">{label}</span>
+                <span className="mt-1 text-[10px] font-bold text-primary uppercase tracking-widest">{label}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="bg-white dark:bg-op-card rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-          <div className="p-6 lg:p-8">
-            <div className="grid md:grid-cols-2 gap-8">
+        {/* Bus Header Card */}
+        <div className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden mb-3">
+          <div className="bg-primary/5 dark:bg-primary/10 px-5 py-4 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-primary text-3xl">directions_bus</span>
               <div>
-                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary">directions_bus</span>
-                  Bus Information
-                </h3>
-                <div className="space-y-3">
-                  {[
-                    ['Bus Name', busName],
-                    ['Bus Code', busCode],
-                    ['Vehicle Number', vehicleNumber],
-                    ['Model', model],
-                    ['Bus Type', busType?.replace(/_/g, ' ')],
-                    ['Total Seats', totalSeats],
-                  ].map(([label, value]) => (
-                    <div key={label} className="flex justify-between py-2 border-b border-slate-200 dark:border-slate-800">
-                      <span className="text-slate-600 dark:text-slate-400">{label}</span>
-                      <span className="font-semibold">{value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary">star</span>
-                  Amenities & Seats
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-slate-600 dark:text-slate-400 mb-2">Selected Amenities</p>
-                    <div className="flex flex-wrap gap-2">
-                      {amenityIds?.length > 0 ? amenityIds.map(id => {
-                        const amenity = amenitiesList.find(a => a.id === id);
-                        return <span key={id} className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">{amenity?.code || `Amenity ${id}`}</span>;
-                      }) : <span className="text-slate-500">No amenities selected</span>}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-slate-600 dark:text-slate-400 mb-2">Blocked Seats</p>
-                    <div className="flex flex-wrap gap-2">
-                      {blockedSeats?.length > 0 ? blockedSeats.map(seat => (
-                        <span key={seat} className="px-3 py-1 bg-red-500/10 text-red-500 rounded-full text-sm font-medium">{seat}</span>
-                      )) : <span className="text-slate-500">No seats blocked</span>}
-                    </div>
-                  </div>
-                </div>
+                <p className="font-extrabold text-lg leading-tight">{busName}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">{busCode} · {vehicleNumber}</p>
               </div>
             </div>
+            <span className="px-3 py-1 bg-primary/10 border border-primary/20 text-primary rounded-full text-xs font-bold">
+              {busType?.replace(/_/g, ' ')}
+            </span>
           </div>
 
-          <div className="bg-slate-50 dark:bg-black/30 p-6 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
-            <button onClick={() => navigate(ROUTES.OPERATOR_BUS_LAYOUT)} className="px-6 py-2.5 rounded-lg font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5 transition-colors">
-              Back
-            </button>
-            <button onClick={handleSubmit} disabled={isSubmitting} className="bg-primary hover:bg-primary/90 text-white px-8 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed">
-              {isSubmitting ? 'Submitting...' : 'Submit Bus'}
-              <span className="material-symbols-outlined text-sm">check_circle</span>
-            </button>
+          {/* Details Grid */}
+          <div className="grid grid-cols-2 divide-x divide-y divide-slate-100 dark:divide-slate-800">
+            {[
+              { icon: 'precision_manufacturing', label: 'Model',       value: model },
+              { icon: 'event_seat',              label: 'Total Seats', value: totalSeats },
+            ].map(({ icon, label, value }) => (
+              <div key={label} className="flex items-center gap-3 px-5 py-3">
+                <span className="material-symbols-outlined text-slate-400 text-lg">{icon}</span>
+                <div>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider">{label}</p>
+                  <p className="font-bold text-sm">{value}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
+
+        {/* Amenities */}
+        <div className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800 px-5 py-4 mb-3">
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Amenities</p>
+          <div className="flex flex-wrap gap-2">
+            {amenityIds?.length > 0 ? amenityIds.map(id => {
+              const amenity = amenitiesList.find(a => a.id === id);
+              return (
+                <span key={id} className="flex items-center gap-1 px-3 py-1 bg-primary/10 border border-primary/20 text-primary rounded-full text-xs font-semibold">
+                  <span className="material-symbols-outlined text-sm">check</span>
+                  {amenity?.code || id}
+                </span>
+              );
+            }) : <span className="text-slate-400 text-sm">No amenities selected</span>}
+          </div>
+        </div>
+
+        {/* Seat Marks */}
+        {seatMarks && Object.keys(seatMarks).length > 0 && (
+          <div className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800 px-5 py-4 mb-3">
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Seat Marks ({Object.keys(seatMarks).length})</p>
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(seatMarks).map(([num, marks]) => {
+                const flags = ['isBlocked','isLadiesOnly','isWindow','isAisle'].filter(k => marks[k]);
+                return (
+                  <span key={num} className="px-2.5 py-1 bg-primary/10 border border-primary/20 text-primary rounded-lg text-xs font-bold">
+                    {num}: {flags.map(f => f.replace('is','')).join(', ')}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-3 mt-4">
+          <button onClick={() => navigate(ROUTES.OPERATOR_BUS_LAYOUT)}
+            className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-700 font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
+            Back
+          </button>
+          <button onClick={handleSubmit} disabled={isSubmitting}
+            className="flex-2 px-8 py-3 rounded-xl bg-primary hover:bg-primary/90 text-black font-extrabold flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20 disabled:opacity-50">
+            {isSubmitting
+              ? <><span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> Submitting...</>
+              : <><span className="material-symbols-outlined text-sm">check_circle</span> Confirm & Submit</>}
+          </button>
+        </div>
+
       </div>
     </OperatorLayout>
   );

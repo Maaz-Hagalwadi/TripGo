@@ -92,6 +92,18 @@ export const addFare = async (routeId, fareData) => {
   return apiPost(`/operator/routes/${routeId}/fares`, fareData);
 };
 
+export const getFares = async (routeId) => {
+  return apiGet(`/operator/routes/${routeId}/fares`);
+};
+
+export const deleteFare = async (routeId, fareId) => {
+  return apiDelete(`/operator/routes/${routeId}/fares/${fareId}`);
+};
+
+export const updateFare = async (routeId, fareId, fareData) => {
+  return apiPut(`/operator/routes/${routeId}/fares/${fareId}`, fareData);
+};
+
 /**
  * Create a schedule for a route.
  * @param {number} routeId
@@ -140,4 +152,16 @@ export const getSchedule = async (scheduleId) => {
  */
 export const deleteSchedule = async (scheduleId) => {
   return apiDelete(`/operator/schedules/${scheduleId}`);
+};
+
+export const getPoints = async (scheduleId) => {
+  return apiGet(`/operator/schedules/${scheduleId}/points`);
+};
+
+export const addPoint = async (scheduleId, data) => {
+  return apiPost(`/operator/schedules/${scheduleId}/points`, data);
+};
+
+export const deletePoint = async (scheduleId, pointId) => {
+  return apiDelete(`/operator/schedules/${scheduleId}/points/${pointId}`);
 };

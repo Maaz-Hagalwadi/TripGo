@@ -57,7 +57,7 @@ const Home = () => {
   }
 
   return (
-    <div className="min-h-screen bg-deep-black">
+    <div className="min-h-screen theme-bg">
       <Header />
       <HeroSection />
       <WhyChooseUs />

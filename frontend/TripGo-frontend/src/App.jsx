@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider } from './shared/contexts/AuthContext';
+import { ThemeProvider } from './shared/contexts/ThemeContext';
 import ProtectedRoute from './shared/components/ProtectedRoute';
 import { BusWizardProvider } from './features/operator/context/BusWizardContext';
 import { ROUTES } from './shared/constants/routes';
@@ -37,6 +38,7 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 function App() {
   return (
     <ErrorBoundary>
+    <ThemeProvider>
     <AuthProvider>
       <Toaster position="top-right" richColors theme="dark" closeButton />
       <Router>
@@ -108,6 +110,7 @@ function App() {
         </Suspense>
       </Router>
     </AuthProvider>
+    </ThemeProvider>
     </ErrorBoundary>
   );
 }

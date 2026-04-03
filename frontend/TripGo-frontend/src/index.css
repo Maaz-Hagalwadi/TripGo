@@ -4,19 +4,45 @@
 
 :root {
   --primary-color: #00d4ff;
-  --background-dark: #050505;
+  --bg-page: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-charcoal: #f1f5f9;
+  --bg-input: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --border-color: rgba(0,0,0,0.08);
+}
+
+.dark {
+  --bg-page: #050505;
+  --bg-card: #1a1a1a;
+  --bg-charcoal: #1a1a1a;
+  --bg-input: #2A2A2A;
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --border-color: rgba(255,255,255,0.05);
 }
 
 body {
   font-family: "Plus Jakarta Sans", sans-serif;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
 }
+
+.theme-bg       { background-color: var(--bg-page); }
+.theme-card     { background-color: var(--bg-card); }
+.theme-charcoal { background-color: var(--bg-charcoal); }
+.theme-input    { background-color: var(--bg-input); }
+.theme-text     { color: var(--text-primary); }
+.theme-subtext  { color: var(--text-secondary); }
+.theme-border   { border-color: var(--border-color); }
 
 ::-webkit-scrollbar {
   width: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #050505;
+  background: var(--bg-page);
 }
 
 ::-webkit-scrollbar-thumb {
@@ -29,6 +55,6 @@ body {
 }
 
 input::placeholder {
-  color: #E0E0E0 !important;
+  color: var(--text-secondary) !important;
   opacity: 1;
 }

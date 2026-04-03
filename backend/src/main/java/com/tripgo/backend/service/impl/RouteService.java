@@ -295,6 +295,37 @@ public class RouteService {
         );
     }
 
+    public FareResponse updateFare(UUID routeId, UUID fareId, AddFareRequest req) {
+        Fare fare = fareRepository.findById(fareId)
+                .filter(f -> f.getRoute().getId().equals(routeId))
+                .orElseThrow(() -> new RuntimeException("Fare not found"));
+
+        fare.setBaseFare(req.baseFare());
+        fare.setGstPercent(req.gstPercent());
+        fare.setSeatType(req.seatType());
+
+        if (req.segmentId() != null) {
+            RouteSegment segment = segmentRepository.findById(req.segmentId())
+                    .orElseThrow(() -> new RuntimeException("Segment not found"));
+            fare.setRouteSegment(segment);
+        }
+
+        fare = fareRepository.save(fare);
+
+        BigDecimal gstAmount = fare.getBaseFare().multiply(fare.getGstPercent()).divide(BigDecimal.valueOf(100));
+        BigDecimal totalFare = fare.getBaseFare().add(gstAmount);
+
+        return new FareResponse(
+                fare.getId(),
+                routeId,
+                fare.getRouteSegment() != null ? fare.getRouteSegment().getId() : null,
+                fare.getSeatType(),
+                fare.getBaseFare(),
+                fare.getGstPercent(),
+                totalFare
+        );
+    }
+
     public void deleteRoute(UUID routeId, User user) {
         Route route = routeRepository.findById(routeId)
                 .orElseThrow(() -> new RuntimeException("Route not found"));

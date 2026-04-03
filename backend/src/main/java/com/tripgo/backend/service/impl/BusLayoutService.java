@@ -4,9 +4,12 @@ import com.tripgo.backend.model.entities.Bus;
 import com.tripgo.backend.model.entities.Seat;
 import com.tripgo.backend.repository.BusRepository;
 import com.tripgo.backend.repository.SeatRepository;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -17,65 +20,58 @@ public class BusLayoutService {
     private final SeatRepository seatRepository;
     private final BusRepository busRepository;
 
+    @Transactional
     public void generateLayout(UUID busId, String template, int rows) {
 
         Bus bus = busRepository.findById(busId)
                 .orElseThrow(() -> new RuntimeException("Bus not found"));
 
-        switch (template) {
-            case "SLEEPER_2X1" -> generateSleeper(bus, rows);
-            case "SEATER_2X2" -> generateSeater(bus, rows);
+        seatRepository.deleteByBus(bus);
+
+        List<Seat> seats = switch (template) {
+            case "SLEEPER_2X1" -> buildSleeper(bus, rows);
+            case "SEATER_2X2" -> buildSeater(bus, rows);
             default -> throw new RuntimeException("Invalid template");
-        }
+        };
+
+        seatRepository.saveAll(seats);
     }
 
-    private void generateSleeper(Bus bus, int rows) {
-        int upperCounter = 1;
-        int lowerCounter = 1;
+    private List<Seat> buildSleeper(Bus bus, int rows) {
+        List<Seat> seats = new ArrayList<>();
+        int upperCounter = 1, lowerCounter = 1;
 
-        for (int deck = 0; deck < 2; deck++) { // 0=Upper, 1=Lower
+        for (int deck = 0; deck < 2; deck++) {
             for (int row = 1; row <= rows; row++) {
-
-                // Left sleeper (1 bed)
-                storeSeat(bus,
-                        deck == 0 ? "U" + upperCounter++ : "L" + lowerCounter++,
-                        row, 1, deck == 0);
-
-                // Right sleeper (2 beds)
-                storeSeat(bus,
-                        deck == 0 ? "U" + upperCounter++ : "L" + lowerCounter++,
-                        row, 2, deck == 0);
-
-                storeSeat(bus,
-                        deck == 0 ? "U" + upperCounter++ : "L" + lowerCounter++,
-                        row, 3, deck == 0);
+                for (int col = 1; col <= 3; col++) {
+                    boolean isUpper = deck == 0;
+                    String seatNumber = isUpper ? "U" + upperCounter++ : "L" + lowerCounter++;
+                    seats.add(buildSeat(bus, seatNumber, row, col, isUpper ? "SLEEPER_UPPER" : "SLEEPER_LOWER"));
+                }
             }
         }
+        return seats;
     }
 
-    private void generateSeater(Bus bus, int rows) {
+    private List<Seat> buildSeater(Bus bus, int rows) {
+        List<Seat> seats = new ArrayList<>();
+        String[] cols = {"A", "B", "C", "D"};
         for (int row = 1; row <= rows; row++) {
-            storeSeat(bus, row + "A", row, 1, false);
-            storeSeat(bus, row + "B", row, 2, false);
-            storeSeat(bus, row + "C", row, 3, false);
-            storeSeat(bus, row + "D", row, 4, false);
+            for (int col = 0; col < cols.length; col++) {
+                seats.add(buildSeat(bus, row + cols[col], row, col + 1, "SEATER"));
+            }
         }
+        return seats;
     }
 
-    private void storeSeat(Bus bus, String seatNumber, int row, int col, boolean upperDeck) {
-        Seat seat = Seat.builder()
+    private Seat buildSeat(Bus bus, String seatNumber, int row, int col, String seatType) {
+        return Seat.builder()
                 .bus(bus)
                 .seatNumber(seatNumber)
                 .rowNo(String.valueOf(row))
-                .seatType(upperDeck ? "SLEEPER_UPPER" : "SLEEPER_LOWER")
-                .seatPosition(Map.of(
-                        "row", row,
-                        "col", col,
-                        "deck", upperDeck ? "UPPER" : "LOWER"
-                ))
+                .seatType(seatType)
+                .seatPosition(Map.of("row", row, "col", col))
                 .build();
-
-        seatRepository.save(seat);
     }
 }
 
