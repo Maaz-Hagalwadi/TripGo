@@ -2,8 +2,10 @@ import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import useClickOutside from '../../hooks/useClickOutside';
 import { updateCurrentUser } from '../../../api/userService';
+import ThemeToggle from '../ui/ThemeToggle';
 
 const ProfileModal = ({ user, onClose, onNameUpdate }) => {
   const ref = useRef(null);
@@ -170,6 +172,9 @@ const OperatorHeader = ({ title, searchPlaceholder = 'Search buses, routes, or b
             </div>
           )}
         </div>
+
+        {/* Theme Toggle */}
+        <ThemeToggle />
 
         {/* Profile */}
         <div className="flex items-center gap-3 pl-6 border-l border-slate-200 dark:border-slate-800 relative" ref={profileRef}>

@@ -9,6 +9,8 @@ import com.tripgo.backend.dto.response.FareResponse;
 import com.tripgo.backend.dto.response.RouteScheduleResponse;
 import com.tripgo.backend.dto.response.SegmentResponse;
 import com.tripgo.backend.model.entities.*;
+import com.tripgo.backend.model.entities.Fare;
+import com.tripgo.backend.repository.FareRepository;
 import com.tripgo.backend.repository.RouteRepository;
 import com.tripgo.backend.repository.RouteSegmentRepository;
 import com.tripgo.backend.security.service.CustomUserDetails;
@@ -29,8 +31,9 @@ import java.util.UUID;
 public class RouteController {
 
     private final RouteService routeService;
-    private  final RouteRepository routeRepository;
+    private final RouteRepository routeRepository;
     private final RouteSegmentRepository segmentRepository;
+    private final FareRepository fareRepository;
 
     @PostMapping
     public RouteResponse createRoute(@RequestBody CreateRouteRequest req, Authentication auth) {
@@ -54,6 +57,26 @@ public class RouteController {
         return routeService.addSegment(routeId, req);
     }
 
+
+    @GetMapping("/{routeId}/fares")
+    public List<FareResponse> listFares(@PathVariable UUID routeId, Authentication auth) {
+        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+        Route route = routeRepository.findById(routeId)
+                .orElseThrow(() -> new RuntimeException("Route not found"));
+        return fareRepository.findByRouteOrderBySeatType(route).stream()
+                .map(f -> new FareResponse(
+                        f.getId(),
+                        f.getRoute().getId(),
+                        f.getRouteSegment() != null ? f.getRouteSegment().getId() : null,
+                        f.getSeatType(),
+                        f.getBaseFare(),
+                        f.getGstPercent(),
+                        f.getBaseFare() != null && f.getGstPercent() != null
+                                ? f.getBaseFare().add(f.getBaseFare().multiply(f.getGstPercent().divide(java.math.BigDecimal.valueOf(100))))
+                                : f.getBaseFare()
+                ))
+                .toList();
+    }
 
     @PostMapping("/{routeId}/fares")
     public FareResponse addFare(@PathVariable UUID routeId,
@@ -82,6 +105,26 @@ public class RouteController {
     public List<SegmentResponse> listSegments(@PathVariable UUID routeId, Authentication auth) {
         User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
         return routeService.listSegments(routeId, user);
+    }
+
+    @PutMapping("/{routeId}/fares/{fareId}")
+    public FareResponse updateFare(@PathVariable UUID routeId,
+                                   @PathVariable UUID fareId,
+                                   @RequestBody AddFareRequest req,
+                                   Authentication auth) {
+        return routeService.updateFare(routeId, fareId, req);
+    }
+
+    @DeleteMapping("/{routeId}/fares/{fareId}")
+    public ResponseEntity<Void> deleteFare(@PathVariable UUID routeId,
+                                           @PathVariable UUID fareId,
+                                           Authentication auth) {
+        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+        Fare fare = fareRepository.findById(fareId)
+                .filter(f -> f.getRoute().getId().equals(routeId))
+                .orElseThrow(() -> new RuntimeException("Fare not found"));
+        fareRepository.delete(fare);
+        return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/{routeId}")

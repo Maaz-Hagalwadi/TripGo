@@ -26,6 +26,7 @@ public class BusService {
     private final BusRepository busRepository;
     private final AmenityMasterRepository amenityRepository;
     private final UserRepository userRepository;
+    private final EmailService emailService;
 
     public BusResponse createBus(CreateBusRequest req, User user) {
 
@@ -47,6 +48,8 @@ public class BusService {
                         .amenities(amenities)
                         .build()
         );
+
+        emailService.notifyAdminsBusAdded(bus, user);
 
         return toResponse(bus);
     }

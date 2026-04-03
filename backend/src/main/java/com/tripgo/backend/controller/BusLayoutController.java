@@ -1,6 +1,7 @@
 package com.tripgo.backend.controller;
 
 import com.tripgo.backend.dto.request.GenerateLayoutRequest;
+import com.tripgo.backend.dto.request.SeatMarkRequest;
 import com.tripgo.backend.model.entities.Bus;
 import com.tripgo.backend.model.entities.Seat;
 import com.tripgo.backend.model.entities.User;
@@ -14,7 +15,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -40,6 +40,44 @@ public class BusLayoutController {
         return ResponseEntity.ok(Map.of(
                 "status", "success",
                 "message", "Layout generated"
+        ));
+    }
+
+    @PatchMapping("/{busId}/seats/{seatId}/mark")
+    public ResponseEntity<?> markSeat(
+            @PathVariable UUID busId,
+            @PathVariable UUID seatId,
+            @RequestBody SeatMarkRequest req,
+            Authentication auth) {
+
+        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+
+        Bus bus = busRepository.findById(busId)
+                .orElseThrow(() -> new RuntimeException("Bus not found"));
+
+        if (user.getOperator() == null ||
+                !bus.getOperator().getId().equals(user.getOperator().getId())) {
+            return ResponseEntity.status(403).body("Not your bus");
+        }
+
+        Seat seat = seatRepository.findById(seatId)
+                .filter(s -> s.getBus().getId().equals(busId))
+                .orElseThrow(() -> new RuntimeException("Seat not found"));
+
+        if (req.isLadiesOnly() != null) seat.setIsLadiesOnly(req.isLadiesOnly());
+        if (req.isWindow() != null)     seat.setIsWindow(req.isWindow());
+        if (req.isAisle() != null)      seat.setIsAisle(req.isAisle());
+        if (req.isBlocked() != null)    seat.setIsBlocked(req.isBlocked());
+
+        seatRepository.save(seat);
+
+        return ResponseEntity.ok(Map.of(
+                "seatId", seat.getId(),
+                "seatNumber", seat.getSeatNumber(),
+                "isLadiesOnly", Boolean.TRUE.equals(seat.getIsLadiesOnly()),
+                "isWindow", Boolean.TRUE.equals(seat.getIsWindow()),
+                "isAisle", Boolean.TRUE.equals(seat.getIsAisle()),
+                "isBlocked", Boolean.TRUE.equals(seat.getIsBlocked())
         ));
     }
 

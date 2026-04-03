@@ -77,12 +77,12 @@ const DesktopLoginForm = () => {
   };
 
   return (
-    <div className="bg-deep-black text-slate-100 min-h-screen flex items-center justify-center p-4">
+    <div className="theme-bg theme-text min-h-screen flex items-center justify-center p-4">
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] glow-accent blur-3xl"></div>
         <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] glow-accent blur-3xl"></div>
       </div>
-      <div className="max-w-6xl w-full bg-charcoal/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-row min-h-[800px]">
+      <div className="max-w-6xl w-full theme-card/40 backdrop-blur-xl border theme-border rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-row min-h-[800px]">
         <div 
           className="flex w-1/2 relative bg-cover bg-center items-center p-12 overflow-hidden"
           style={{
@@ -106,7 +106,7 @@ const DesktopLoginForm = () => {
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-deep-black to-transparent opacity-60"></div>
         </div>
-        <div className="w-1/2 p-8 md:p-16 flex flex-col justify-center bg-deep-black/60">
+        <div className="w-1/2 p-8 md:p-16 flex flex-col justify-center theme-bg/60">
           <div className="max-w-md w-full mx-auto">
             <div className="mb-6">
               <h1 className="text-3xl font-extrabold text-white mb-3">Welcome Back</h1>

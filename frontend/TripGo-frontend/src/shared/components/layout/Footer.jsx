@@ -35,7 +35,7 @@ const Footer = () => {
   };
 
   return (
-    <footer className="bg-deep-black border-t border-white/5 pt-20 pb-10">
+    <footer className="theme-bg border-t theme-border pt-20 pb-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className={isMobile ? "grid grid-cols-1 gap-8 mb-12" : "grid grid-cols-4 gap-12 mb-20"}>
           {/* Brand Section */}

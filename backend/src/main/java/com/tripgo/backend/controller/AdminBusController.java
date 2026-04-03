@@ -4,6 +4,7 @@ import com.tripgo.backend.dto.response.AmenityDTO;
 import com.tripgo.backend.dto.response.BusResponse;
 import com.tripgo.backend.model.entities.Bus;
 import com.tripgo.backend.repository.BusRepository;
+import com.tripgo.backend.service.impl.EmailService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +19,7 @@ import java.util.UUID;
 public class AdminBusController {
 
     private final BusRepository busRepository;
+    private final EmailService emailService;
 
     @GetMapping
     public List<BusResponse> listBuses(@RequestParam(required = false) Boolean active) {
@@ -39,10 +41,9 @@ public class AdminBusController {
     public BusResponse approveBus(@PathVariable UUID id) {
         Bus bus = busRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Bus not found"));
-
         bus.setActive(true);
         busRepository.save(bus);
-
+        emailService.sendBusApproved(bus);
         return toResponse(bus);
     }
 
@@ -50,10 +51,9 @@ public class AdminBusController {
     public BusResponse rejectBus(@PathVariable UUID id) {
         Bus bus = busRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Bus not found"));
-
         bus.setActive(false);
         busRepository.save(bus);
-
+        emailService.sendBusRejected(bus);
         return toResponse(bus);
     }
 

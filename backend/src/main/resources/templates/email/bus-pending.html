@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #ff6600;">New Bus Pending Approval</h2>
+
+        <p>An operator has added a new bus that requires your approval:</p>
+
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p><strong>Bus Name:</strong> <span th:text="${busName}">Bus</span></p>
+            <p><strong>Bus Code:</strong> <span th:text="${busCode}">CODE</span></p>
+            <p><strong>Vehicle Number:</strong> <span th:text="${vehicleNumber}">VH123</span></p>
+            <p><strong>Bus Type:</strong> <span th:text="${busType}">SEATER</span></p>
+            <p><strong>Operator:</strong> <span th:text="${operatorName}">Operator</span></p>
+            <p><strong>Operator Email:</strong> <span th:text="${operatorEmail}">email@example.com</span></p>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <a th:href="${approveUrl}"
+               style="background: #28a745; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; margin: 0 10px;">
+                ✅ Approve Bus
+            </a>
+            <a th:href="${rejectUrl}"
+               style="background: #dc3545; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; display: inline-block; font-weight: bold; margin: 0 10px;">
+                ❌ Reject Bus
+            </a>
+        </div>
+
+        <div style="text-align: center; margin: 20px 0;">
+            <a th:href="${adminUrl}" style="color: #007bff; text-decoration: none; font-size: 14px;">
+                Or review in Admin Dashboard
+            </a>
+        </div>
+
+        <p>TripGo Admin System</p>
+    </div>
+</body>
+</html>

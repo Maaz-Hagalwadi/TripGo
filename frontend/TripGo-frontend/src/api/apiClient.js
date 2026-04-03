@@ -84,6 +84,10 @@ export const fetchWithAuth = async (url, options = {}) => {
   }
 
   if (response.status >= 500) {
+    const msg = await parseErrorMessage(response);
+    if (msg.includes('duplicate key') || msg.includes('already exists') || msg.includes('unique constraint')) {
+      throw new Error(msg);
+    }
     throw new Error('Server error. Please try again later.');
   }
 
@@ -134,10 +138,14 @@ export const apiPut = async (endpoint, body) => {
 /**
  * Convenience method for authenticated PATCH requests.
  * @param {string} endpoint
+ * @param {object} [body]
  * @returns {Promise<any>}
  */
-export const apiPatch = async (endpoint) => {
-  const response = await fetchWithAuth(`${API_BASE_URL}${endpoint}`, { method: 'PATCH' });
+export const apiPatch = async (endpoint, body) => {
+  const response = await fetchWithAuth(`${API_BASE_URL}${endpoint}`, {
+    method: 'PATCH',
+    ...(body !== undefined && { body: JSON.stringify(body) }),
+  });
   if (!response.ok) throw new Error(await parseErrorMessage(response));
   return response.json();
 };

@@ -23,14 +23,6 @@ const BUS_TYPE_GROUPS = [
   { label: 'Special', options: [['ELECTRIC','Electric'],['MINI_BUS','Mini Bus'],['DELUXE','Deluxe'],['SUPER_DELUXE','Super Deluxe']] },
 ];
 
-const FIELDS = [
-  { name: 'busName', label: 'Bus Name', placeholder: 'Enter bus name', type: 'text' },
-  { name: 'busCode', label: 'Bus Code', placeholder: 'Enter bus code', type: 'text' },
-  { name: 'vehicleNumber', label: 'Vehicle Number', placeholder: 'Enter vehicle number', type: 'text' },
-  { name: 'model', label: 'Model', placeholder: 'Enter model', type: 'text' },
-  { name: 'totalSeats', label: 'Total Seats', placeholder: 'Enter total seats', type: 'number' },
-];
-
 const AddBus = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
@@ -72,135 +64,132 @@ const AddBus = () => {
     navigate(ROUTES.OPERATOR_BUS_LAYOUT);
   };
 
-  const inputClass = (fieldName) =>
-    `w-full px-4 py-3 rounded-lg border ${errors[fieldName] ? 'border-red-500' : 'border-slate-300 dark:border-slate-700'} bg-white dark:bg-black/40 text-slate-900 dark:text-slate-200 placeholder:text-slate-500 dark:placeholder:text-slate-600 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all`;
-
   return (
     <OperatorLayout activeItem="add-bus" title="Add Bus">
-      <div className="max-w-4xl mx-auto">
-
-        {/* Breadcrumb */}
-        <header className="mb-8">
-          <div className="flex items-center gap-2 text-slate-500 text-sm mb-2">
-            <button onClick={() => navigate(ROUTES.OPERATOR_DASHBOARD)} className="hover:text-primary transition-colors">Fleet Management</button>
-            <span className="material-symbols-outlined text-xs">chevron_right</span>
-            <span className="text-slate-200 dark:text-slate-100 font-medium">Add New Bus</span>
-          </div>
-          <h2 className="text-3xl font-extrabold">Add Bus Information</h2>
-          <p className="text-slate-600 dark:text-slate-400 mt-1">Register a new vehicle by filling out the details below.</p>
-        </header>
+      <div className="max-w-2xl mx-auto">
 
         {/* Progress Steps */}
-        <div className="mb-10">
+        <div className="mb-6">
           <div className="flex items-center justify-between relative">
             <div className="absolute top-1/2 left-0 w-full h-0.5 bg-slate-200 dark:bg-slate-800 -translate-y-1/2 z-0"></div>
-            <div className="absolute top-1/2 left-0 w-1/3 h-0.5 bg-primary -translate-y-1/2 z-0 shadow-[0_0_10px_rgba(19,127,236,0.5)]"></div>
-            {[{ label: 'Bus Info', active: true }, { label: 'Layout', active: false }, { label: 'Review', active: false }].map(({ label, active }, i) => (
+            <div className="absolute top-1/2 left-0 w-1/3 h-0.5 bg-primary -translate-y-1/2 z-0"></div>
+            {[{ label: 'Bus Info', active: true }, { label: 'Layout' }, { label: 'Review' }].map(({ label, active }, i) => (
               <div key={label} className="relative z-10 flex flex-col items-center">
-                <div className={`size-10 rounded-full flex items-center justify-center font-bold text-sm ring-4 ring-white dark:ring-op-bg ${active ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-op-card border-2 border-slate-300 dark:border-slate-700 text-slate-500'}`}>{i + 1}</div>
-                <span className={`mt-2 text-xs font-bold uppercase tracking-widest ${active ? 'text-primary' : 'text-slate-500'}`}>{label}</span>
+                <div className={`size-8 rounded-full flex items-center justify-center font-bold text-xs ring-4 ring-white dark:ring-op-bg ${
+                  active ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-op-card border-2 border-slate-300 dark:border-slate-700 text-slate-500'
+                }`}>{i + 1}</div>
+                <span className={`mt-1 text-[10px] font-bold uppercase tracking-widest ${active ? 'text-primary' : 'text-slate-500'}`}>{label}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="bg-white dark:bg-op-card rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-            <div className="p-6 lg:p-8">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
 
-              {/* Basic Information */}
-              <div className="mb-10">
-                <div className="flex items-center gap-2 mb-6">
-                  <span className="material-symbols-outlined text-primary">info</span>
-                  <h3 className="text-lg font-bold">Basic Information</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {FIELDS.map(({ name, label, placeholder, type }) => (
-                    <div key={name} className="space-y-2">
-                      <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">{label}</label>
-                      <input
-                        {...register(name)}
-                        type={type}
-                        placeholder={placeholder}
-                        min={type === 'number' ? 1 : undefined}
-                        className={inputClass(name)}
-                      />
-                      {errors[name] && <p className="text-red-500 text-xs">{errors[name].message}</p>}
-                    </div>
-                  ))}
-
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Bus Type</label>
-                    <select {...register('busType')} className={inputClass('busType') + ' appearance-none cursor-pointer'}>
-                      <option value="">Select Bus Type</option>
-                      {BUS_TYPE_GROUPS.map(({ label, options }) => (
-                        <optgroup key={label} label={label}>
-                          {options.map(([value, text]) => (
-                            <option key={value} value={value}>{text}</option>
-                          ))}
-                        </optgroup>
-                      ))}
-                    </select>
-                    {errors.busType && <p className="text-red-500 text-xs">{errors.busType.message}</p>}
-                  </div>
-                </div>
+          {/* Basic Info Card */}
+          <div className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+                <span className="material-symbols-outlined text-primary text-base">directions_bus</span>
               </div>
-
-              {/* Amenities */}
-              <div>
-                <div className="flex items-center gap-2 mb-6">
-                  <span className="material-symbols-outlined text-primary">feature_search</span>
-                  <h3 className="text-lg font-bold">Amenities & Features</h3>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                  {loadingAmenities ? (
-                    <div className="col-span-full text-center py-8 text-slate-500">Loading amenities...</div>
-                  ) : amenities.length === 0 ? (
-                    <div className="col-span-full text-center py-8 text-slate-500">No amenities available</div>
-                  ) : amenities.map((amenity) => (
-                    <div
-                      key={amenity.id}
-                      onClick={() => toggleAmenity(amenity.id)}
-                      className={`flex flex-col items-center justify-center p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        selectedAmenities.includes(amenity.id)
-                          ? 'border-primary bg-primary/10 text-primary hover:bg-primary/20'
-                          : 'border-slate-300 dark:border-slate-800 bg-slate-50 dark:bg-black/40 text-slate-600 dark:text-white hover:border-slate-400 dark:hover:border-slate-600'
-                      }`}
-                    >
-                      <span className={`material-symbols-outlined mb-2 text-2xl transition-transform ${selectedAmenities.includes(amenity.id) ? 'scale-110' : ''}`}>
-                        {AMENITY_ICONS[amenity.code] || 'check_circle'}
-                      </span>
-                      <span className={`text-[10px] font-extrabold uppercase tracking-widest text-center ${selectedAmenities.includes(amenity.id) ? 'text-primary' : 'text-slate-500 dark:text-slate-400'}`}>
-                        {amenity.description}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <h3 className="font-bold text-sm">Bus Details</h3>
             </div>
+            <div className="p-5 grid grid-cols-2 gap-4">
+              {/* Bus Name full width */}
+              <div className="col-span-2">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Bus Name</label>
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">directions_bus</span>
+                  <input {...register('busName')} placeholder="Enter bus name" className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm outline-none focus:ring-2 focus:ring-primary bg-slate-50 dark:bg-slate-800 transition-all ${errors.busName ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'}`} />
+                </div>
+                {errors.busName && <p className="text-red-500 text-xs mt-1">{errors.busName.message}</p>}
+              </div>
 
-            {/* Footer Actions */}
-            <div className="bg-slate-50 dark:bg-black/30 p-6 border-t border-slate-200 dark:border-slate-800 flex justify-between items-center">
-              <button type="button" onClick={() => navigate(ROUTES.OPERATOR_DASHBOARD)} className="px-6 py-2.5 rounded-lg font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/5 transition-colors">
-                Cancel
-              </button>
-              <button type="submit" className="bg-primary hover:bg-primary/90 text-white px-8 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all shadow-lg shadow-primary/20">
-                Next: Generate Layout
-                <span className="material-symbols-outlined text-sm">arrow_forward</span>
-              </button>
+              {[{ name: 'busCode', label: 'Bus Code', icon: 'tag', placeholder: 'Enter bus code' },
+                { name: 'vehicleNumber', label: 'Vehicle Number', icon: 'pin', placeholder: 'Enter vehicle number' },
+                { name: 'model', label: 'Model', icon: 'build', placeholder: 'Enter model' },
+                { name: 'totalSeats', label: 'Total Seats', icon: 'event_seat', placeholder: 'Enter total seats', type: 'number' },
+              ].map(({ name, label, icon, placeholder, type }) => (
+                <div key={name}>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">{label}</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">{icon}</span>
+                    <input {...register(name)} type={type || 'text'} placeholder={placeholder} min={type === 'number' ? 1 : undefined}
+                      className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm outline-none focus:ring-2 focus:ring-primary bg-slate-50 dark:bg-slate-800 transition-all ${errors[name] ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'}`} />
+                  </div>
+                  {errors[name] && <p className="text-red-500 text-xs mt-1">{errors[name].message}</p>}
+                </div>
+              ))}
+
+              {/* Bus Type full width */}
+              <div className="col-span-2">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Bus Type</label>
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">category</span>
+                  <select {...register('busType')} className={`w-full pl-10 pr-4 py-2.5 rounded-xl border text-sm outline-none focus:ring-2 focus:ring-primary bg-slate-50 dark:bg-slate-800 appearance-none transition-all ${errors.busType ? 'border-red-500' : 'border-slate-200 dark:border-slate-700'}`}>
+                    <option value="">Select Bus Type</option>
+                    {BUS_TYPE_GROUPS.map(({ label, options }) => (
+                      <optgroup key={label} label={label}>
+                        {options.map(([value, text]) => <option key={value} value={value}>{text}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+                {errors.busType && <p className="text-red-500 text-xs mt-1">{errors.busType.message}</p>}
+              </div>
             </div>
           </div>
+
+          {/* Amenities Card */}
+          <div className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div className="flex items-center gap-3 px-5 py-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center">
+                <span className="material-symbols-outlined text-primary text-base">feature_search</span>
+              </div>
+              <h3 className="font-bold text-sm">Amenities</h3>
+            </div>
+            <div className="p-5">
+              {loadingAmenities ? (
+                <div className="flex justify-center py-6">
+                  <span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span>
+                </div>
+              ) : amenities.length === 0 ? (
+                <p className="text-slate-400 text-sm text-center py-4">No amenities available</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {amenities.map(amenity => {
+                    const selected = selectedAmenities.includes(amenity.id);
+                    return (
+                      <button key={amenity.id} type="button" onClick={() => toggleAmenity(amenity.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold transition-all ${
+                          selected
+                            ? 'bg-primary/10 border-primary/30 text-primary'
+                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:border-primary/30'
+                        }`}>
+                        <span className="material-symbols-outlined text-sm">{AMENITY_ICONS[amenity.code] || 'check_circle'}</span>
+                        {amenity.description || amenity.code}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex gap-3 pt-1">
+            <button type="button" onClick={() => navigate(ROUTES.OPERATOR_DASHBOARD)}
+              className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
+              Cancel
+            </button>
+            <button type="submit"
+              className="flex-1 py-3 rounded-xl bg-primary hover:bg-primary/90 text-black font-extrabold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20">
+              Next: Seat Layout
+              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+            </button>
+          </div>
+
         </form>
-
-        {/* Tip */}
-        <div className="mt-8 p-4 rounded-lg bg-primary/5 border border-primary/20 flex gap-4">
-          <span className="material-symbols-outlined text-primary">lightbulb</span>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            <span className="font-bold text-primary">Tip:</span> Make sure the vehicle number matches your registration certificate. This will be used for automated compliance checks.
-          </p>
-        </div>
-
       </div>
     </OperatorLayout>
   );

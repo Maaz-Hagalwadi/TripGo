@@ -47,4 +47,10 @@ public class Seat {
 
     @Column(name = "is_aisle")
     private Boolean isAisle;
+
+    @Column(name = "is_ladies_only")
+    private Boolean isLadiesOnly;
+
+    @Column(name = "is_blocked")
+    private Boolean isBlocked;
 }

@@ -39,7 +39,7 @@ const HeaderAuth = () => {
   const unreadCount = notifications.filter(n => n.unread).length;
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-white/5 bg-deep-black/95 backdrop-blur-xl shadow-2xl">
+    <header className="sticky top-0 z-50 w-full border-b theme-border theme-bg/95 backdrop-blur-xl shadow-2xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
           {/* Logo */}

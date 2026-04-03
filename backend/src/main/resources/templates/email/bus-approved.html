@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #28a745;">Your Bus Has Been Approved ✅</h2>
+        <p>Hi <span th:text="${operatorName}">Operator</span>,</p>
+        <p>Your bus has been approved and is now active on TripGo.</p>
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <p><strong>Bus Name:</strong> <span th:text="${busName}">Bus</span></p>
+            <p><strong>Bus Code:</strong> <span th:text="${busCode}">CODE</span></p>
+        </div>
+        <p>You can now assign this bus to schedules.</p>
+        <p>TripGo Team</p>
+    </div>
+</body>
+</html>

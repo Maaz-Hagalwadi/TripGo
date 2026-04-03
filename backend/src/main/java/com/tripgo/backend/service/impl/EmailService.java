@@ -1,5 +1,6 @@
 package com.tripgo.backend.service.impl;
 
+import com.tripgo.backend.model.entities.Bus;
 import com.tripgo.backend.model.entities.Operator;
 import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.repository.UserRepository;
@@ -103,6 +104,59 @@ public class EmailService {
                 System.out.println("❌ ERROR: Failed to send email to " + admin.getEmail() + ": " + e.getMessage());
             }
         }
+    }
+
+    @Async
+    public void notifyAdminsBusAdded(Bus bus, User operatorUser) {
+        List<User> admins = userRepository.findAllAdmins();
+        for (User admin : admins) {
+            sendTemplate(
+                    admin.getEmail(),
+                    "New Bus Pending Approval - " + bus.getName(),
+                    "bus-pending",
+                    Map.of(
+                            "busName", bus.getName(),
+                            "busCode", bus.getBusCode(),
+                            "vehicleNumber", bus.getVehicleNumber(),
+                            "busType", bus.getBusType().name(),
+                            "operatorName", bus.getOperator().getName(),
+                            "operatorEmail", operatorUser.getEmail(),
+                            "approveUrl", frontendUrl + "/admin/buses?approve=" + bus.getId(),
+                            "rejectUrl", frontendUrl + "/admin/buses?reject=" + bus.getId(),
+                            "adminUrl", frontendUrl + "/admin/buses"
+                    )
+            );
+        }
+    }
+
+    @Async
+    public void sendBusApproved(Bus bus) {
+        User opUser = userRepository.findByOperator(bus.getOperator()).orElseThrow();
+        sendTemplate(
+                opUser.getEmail(),
+                "Your Bus Has Been Approved - " + bus.getName(),
+                "bus-approved",
+                Map.of(
+                        "operatorName", bus.getOperator().getName(),
+                        "busName", bus.getName(),
+                        "busCode", bus.getBusCode()
+                )
+        );
+    }
+
+    @Async
+    public void sendBusRejected(Bus bus) {
+        User opUser = userRepository.findByOperator(bus.getOperator()).orElseThrow();
+        sendTemplate(
+                opUser.getEmail(),
+                "Your Bus Has Been Rejected - " + bus.getName(),
+                "bus-rejected",
+                Map.of(
+                        "operatorName", bus.getOperator().getName(),
+                        "busName", bus.getName(),
+                        "busCode", bus.getBusCode()
+                )
+        );
     }
 
     @Async

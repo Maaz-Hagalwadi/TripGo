@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiDelete, API_BASE_URL } from './apiClient';
+import { apiGet, apiPost, apiPut, apiDelete, apiPatch, API_BASE_URL } from './apiClient';
 
 /**
  * Search available buses for a route.
@@ -49,4 +49,28 @@ export const updateBus = async (busId, busData) => {
  */
 export const deleteBus = async (busId) => {
   return apiDelete(`/operator/buses/${busId}`);
+};
+
+/**
+ * Get all seats for a bus.
+ * @param {string|number} busId
+ * @returns {Promise<Array<{id: string, seatNumber: string}>>}
+ */
+export const getBusSeats = async (busId) => {
+  return apiGet(`/operator/buses/${busId}/seats`);
+};
+
+/**
+ * Mark a seat with properties.
+ * @param {string|number} busId
+ * @param {string} seatId - UUID
+ * @param {{isLadiesOnly?: boolean, isWindow?: boolean, isAisle?: boolean, isBlocked?: boolean}} marks
+ * @returns {Promise<any>}
+ */
+export const markSeat = async (busId, seatId, marks) => {
+  return apiPatch(`/operator/buses/${busId}/seats/${seatId}/mark`, marks);
+};
+
+export const generateLayout = async (busId, template, rows) => {
+  return apiPost(`/operator/buses/${busId}/layout/generate`, { template, rows });
 };

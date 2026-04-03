@@ -55,8 +55,11 @@ const AdminDashboard = () => {
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState(null);
   const [modal, setModal] = useState(null);
+  const [actionLoadingId, setActionLoadingId] = useState(null);
   const [operatorFilter, setOperatorFilter] = useState('ALL');
   const [busFilter, setBusFilter] = useState('ALL');
+  const [showAllPendingBuses, setShowAllPendingBuses] = useState(false);
+  const [showAllPendingOperators, setShowAllPendingOperators] = useState(false);
   const [dismissedBusIds, setDismissedBusIds] = useState(() => {
     try { return JSON.parse(localStorage.getItem('dismissedBusIds')) || []; }
     catch { return []; }
@@ -97,14 +100,15 @@ const AdminDashboard = () => {
     }
   };
 
-  const confirm = (message, action, busIdToRemove = null) => {
+  const confirm = (message, action, busIdToRemove = null, actionId = null, successMsg = null) => {
     setModal({
       message,
       onConfirm: async () => {
         setModal(null);
+        setActionLoadingId(actionId);
         try {
           await action();
-          toast.success(message.replace('?', ' successful!'));
+          toast.success(successMsg || 'Action completed successfully.');
           if (busIdToRemove) {
             setBuses(prev => prev.filter(b => b.id !== busIdToRemove));
             const updated = dismissedBusIds.filter(id => id !== busIdToRemove);
@@ -116,6 +120,8 @@ const AdminDashboard = () => {
         } catch (err) {
           setError(err.message);
           toast.error(err.message || 'Action failed');
+        } finally {
+          setActionLoadingId(null);
         }
       }
     });
@@ -125,9 +131,9 @@ const AdminDashboard = () => {
     setBuses(prev => prev.filter(b => b.id !== busId));
   };
 
-  const pendingOperators = operators.filter(o => o.status === 'PENDING');
+  const pendingOperators = operators.filter(o => o.status === 'PENDING').reverse();
   const approvedOperators = operators.filter(o => o.status === 'APPROVED');
-  const inactiveBuses = buses.filter(b => !b.active && !dismissedBusIds.includes(b.id));
+  const inactiveBuses = buses.filter(b => !b.active && !dismissedBusIds.includes(b.id)).reverse();
   const allInactiveBuses = buses.filter(b => !b.active);
 
   if (loading) return (
@@ -141,6 +147,11 @@ const AdminDashboard = () => {
   return (
     <AdminLayout activeItem={activeItem} title={pageTitle}>
       <div className="space-y-8">
+        {dataLoading && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+            <span className="material-symbols-outlined animate-spin text-primary text-5xl">progress_activity</span>
+          </div>
+        )}
 
         {/* Overview Tab */}
         {activeItem === 'overview' && (
@@ -202,11 +213,22 @@ const AdminDashboard = () => {
               <div className="xl:col-span-2 space-y-8">
                 {/* Pending Operator Approvals */}
                 <div className="space-y-4">
-                <h3 className="text-xl font-bold tracking-tight">Pending Operator Approvals</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold tracking-tight">Pending Operator Approvals</h3>
+                  {pendingOperators.length > 5 && (
+                    <button
+                      onClick={() => setShowAllPendingOperators(p => !p)}
+                      className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                    >
+                      {showAllPendingOperators ? 'Show Less' : `View All (${pendingOperators.length})`}
+                      <span className="material-symbols-outlined text-sm">{showAllPendingOperators ? 'expand_less' : 'expand_more'}</span>
+                    </button>
+                  )}
+                </div>
                 <div className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800">
                   {dataLoading ? (
-                    <div className="p-6 space-y-3 animate-pulse">
-                      {[1,2,3].map(i => <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800 rounded-lg"></div>)}
+                    <div className="flex items-center justify-center py-12">
+                      <span className="material-symbols-outlined animate-spin text-primary text-4xl">progress_activity</span>
                     </div>
                   ) : pendingOperators.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-center px-6">
@@ -216,24 +238,36 @@ const AdminDashboard = () => {
                     </div>
                   ) : (
                     <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {pendingOperators.slice(0, 5).map(op => (
+                      {(showAllPendingOperators ? pendingOperators : pendingOperators.slice(0, 5)).map(op => (
                         <div key={op.id} className="flex items-center justify-between px-6 py-4">
                           <div>
                             <p className="font-semibold text-sm">{op.name}</p>
                             <p className="text-xs text-slate-400">{op.contactEmail}</p>
                           </div>
                           <div className="flex gap-2">
-                            <button onClick={() => confirm(`Approve "${op.name}"?`, () => approveOperator(op.id))}
-                              className="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-500 rounded-lg text-xs font-bold transition-all">
-                              Approve
+                            <button onClick={() => confirm(`Approve "${op.name}"?`, () => approveOperator(op.id), null, `approve-op-${op.id}`, `Operator "${op.name}" has been approved.`)}
+                              disabled={actionLoadingId === `approve-op-${op.id}`}
+                              className="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-500 rounded-lg text-xs font-bold transition-all disabled:opacity-60 flex items-center gap-1">
+                              {actionLoadingId === `approve-op-${op.id}` ? <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> : 'Approve'}
                             </button>
-                            <button onClick={() => confirm(`Reject "${op.name}"?`, () => rejectOperator(op.id))}
-                              className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 rounded-lg text-xs font-bold transition-all">
-                              Reject
+                            <button onClick={() => confirm(`Reject "${op.name}"?`, () => rejectOperator(op.id), null, `reject-op-${op.id}`, `Operator "${op.name}" has been rejected.`)}
+                              disabled={actionLoadingId === `reject-op-${op.id}`}
+                              className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 rounded-lg text-xs font-bold transition-all disabled:opacity-60 flex items-center gap-1">
+                              {actionLoadingId === `reject-op-${op.id}` ? <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> : 'Reject'}
                             </button>
                           </div>
                         </div>
                       ))}
+                      {!showAllPendingOperators && pendingOperators.length > 5 && (
+                        <div className="px-6 py-3 text-center">
+                          <button
+                            onClick={() => setShowAllPendingOperators(true)}
+                            className="text-xs font-semibold text-primary hover:underline"
+                          >
+                            + {pendingOperators.length - 5} more pending — View All
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -241,11 +275,22 @@ const AdminDashboard = () => {
 
                 {/* Pending Bus Approvals */}
                 <div className="space-y-4">
-                <h3 className="text-xl font-bold tracking-tight">Pending Bus Approvals</h3>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-bold tracking-tight">Pending Bus Approvals</h3>
+                  {inactiveBuses.length > 5 && (
+                    <button
+                      onClick={() => setShowAllPendingBuses(p => !p)}
+                      className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
+                    >
+                      {showAllPendingBuses ? 'Show Less' : `View All (${inactiveBuses.length})`}
+                      <span className="material-symbols-outlined text-sm">{showAllPendingBuses ? 'expand_less' : 'expand_more'}</span>
+                    </button>
+                  )}
+                </div>
                 <div className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800">
                   {dataLoading ? (
-                    <div className="p-6 space-y-3 animate-pulse">
-                      {[1,2,3].map(i => <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800 rounded-lg"></div>)}
+                    <div className="flex items-center justify-center py-12">
+                      <span className="material-symbols-outlined animate-spin text-primary text-4xl">progress_activity</span>
                     </div>
                   ) : inactiveBuses.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-16 text-center px-6">
@@ -255,16 +300,17 @@ const AdminDashboard = () => {
                     </div>
                   ) : (
                     <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {inactiveBuses.slice(0, 5).map(bus => (
+                      {(showAllPendingBuses ? inactiveBuses : inactiveBuses.slice(0, 5)).map(bus => (
                         <div key={bus.id} className="flex items-center justify-between px-6 py-4">
                           <div>
                             <p className="font-semibold text-sm">{bus.name}</p>
                             <p className="text-xs text-slate-400">{bus.busType} · {bus.totalSeats} seats · {bus.vehicleNumber || 'No plate'}</p>
                           </div>
                           <div className="flex gap-2">
-                            <button onClick={() => confirm(`Approve bus "${bus.name}"?`, () => approveBus(bus.id), bus.id)}
-                              className="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-500 rounded-lg text-xs font-bold transition-all">
-                              Approve
+                            <button onClick={() => confirm(`Approve bus "${bus.name}"?`, () => approveBus(bus.id), bus.id, `approve-bus-${bus.id}`, `Bus "${bus.name}" has been approved.`)}
+                              disabled={actionLoadingId === `approve-bus-${bus.id}`}
+                              className="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-500 rounded-lg text-xs font-bold transition-all disabled:opacity-60 flex items-center gap-1">
+                              {actionLoadingId === `approve-bus-${bus.id}` ? <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> : 'Approve'}
                             </button>
                             <button onClick={() => {
                               const updated = [...dismissedBusIds, bus.id];
@@ -277,6 +323,16 @@ const AdminDashboard = () => {
                           </div>
                         </div>
                       ))}
+                      {!showAllPendingBuses && inactiveBuses.length > 5 && (
+                        <div className="px-6 py-3 text-center">
+                          <button
+                            onClick={() => setShowAllPendingBuses(true)}
+                            className="text-xs font-semibold text-primary hover:underline"
+                          >
+                            + {inactiveBuses.length - 5} more pending — View All
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -288,9 +344,8 @@ const AdminDashboard = () => {
                 <div className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
                   <h4 className="text-sm font-bold uppercase tracking-wider text-slate-400">Operator Status</h4>
                   {dataLoading ? (
-                    <div className="animate-pulse space-y-3">
-                      <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded"></div>
-                      <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded"></div>
+                    <div className="flex items-center justify-center py-8">
+                      <span className="material-symbols-outlined animate-spin text-primary text-3xl">progress_activity</span>
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -408,17 +463,17 @@ const AdminDashboard = () => {
                           <td className="px-6 py-4">
                             <div className="flex gap-2 flex-wrap">
                               {op.status === 'PENDING' && <>
-                                <button onClick={() => confirm(`Approve "${op.name}"?`, () => approveOperator(op.id))}
+                                <button onClick={() => confirm(`Approve "${op.name}"?`, () => approveOperator(op.id), null, null, `Operator "${op.name}" has been approved.`)}
                                   className="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-500 rounded-lg text-xs font-bold transition-all">Approve</button>
-                                <button onClick={() => confirm(`Reject "${op.name}"?`, () => rejectOperator(op.id))}
+                                <button onClick={() => confirm(`Reject "${op.name}"?`, () => rejectOperator(op.id), null, null, `Operator "${op.name}" has been rejected.`)}
                                   className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-500 rounded-lg text-xs font-bold transition-all">Reject</button>
                               </>}
                               {op.status === 'APPROVED' && (
-                                <button onClick={() => confirm(`Suspend "${op.name}"?`, () => suspendOperator(op.id))}
+                                <button onClick={() => confirm(`Suspend "${op.name}"?`, () => suspendOperator(op.id), null, null, `Operator "${op.name}" has been suspended.`)}
                                   className="px-3 py-1.5 bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 text-orange-500 rounded-lg text-xs font-bold transition-all">Suspend</button>
                               )}
                               {(op.status === 'REJECTED' || op.status === 'SUSPENDED') && (
-                                <button onClick={() => confirm(`Re-approve "${op.name}"?`, () => approveOperator(op.id))}
+                                <button onClick={() => confirm(`Re-approve "${op.name}"?`, () => approveOperator(op.id), null, null, `Operator "${op.name}" has been re-approved.`)}
                                   className="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-500 rounded-lg text-xs font-bold transition-all">Re-approve</button>
                               )}
                             </div>
@@ -484,7 +539,7 @@ const AdminDashboard = () => {
                           <td className="px-6 py-4"><StatusBadge status={bus.active ? 'ACTIVE' : 'INACTIVE'} /></td>
                           <td className="px-6 py-4">
                             {!bus.active ? (
-                              <button onClick={() => confirm(`Approve bus "${bus.name}"?`, () => approveBus(bus.id), bus.id)}
+                              <button onClick={() => confirm(`Approve bus "${bus.name}"?`, () => approveBus(bus.id), bus.id, null, `Bus "${bus.name}" has been approved.`)}
                                 className="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 text-green-500 rounded-lg text-xs font-bold transition-all">
                                 Approve
                               </button>
