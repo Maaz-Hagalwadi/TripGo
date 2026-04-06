@@ -80,7 +80,9 @@ public class AdminBusController {
                 bus.getAmenities().stream()
                         .sorted(Comparator.comparing(a -> a.getCode()))
                         .map(a -> new AmenityDTO(a.getId(), a.getCode(), a.getDescription()))
-                        .toList()
+                        .toList(),
+                bus.getCreatedAt(),
+                bus.getUpdatedAt()
         );
     }
 }

@@ -321,7 +321,9 @@ public class RouteService {
                                 a.getCode(),
                                 a.getDescription()
                         ))
-                        .toList()
+                        .toList(),
+                bus.getCreatedAt(),
+                bus.getUpdatedAt()
         );
     }
 
