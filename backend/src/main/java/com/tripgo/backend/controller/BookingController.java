@@ -172,8 +172,10 @@ public class BookingController {
         bookingRepository.save(booking);
 
         // Save each passenger + booking seat
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> passengers = (List<Map<String, Object>>) body.get("passengers");
+        List<?> rawPassengers = (List<?>) body.get("passengers");
+        List<Map<String, Object>> passengers = rawPassengers.stream()
+                .map(p -> (Map<String, Object>) p)
+                .toList();
 
         List<Map<String, Object>> bookedSeats = new ArrayList<>();
 
@@ -239,27 +241,26 @@ public class BookingController {
 
         List<Map<String, Object>> bookings = bookingRepository.findByUser(user).stream()
                 .map(b -> {
-                    List<BookingSeat> seats = bookingSeatRepository
-                            .findByBookingId(b.getId());
+                    List<BookingSeat> seats = bookingSeatRepository.findByBookingId(b.getId());
 
-                    return Map.<String, Object>of(
-                            "bookingId", b.getId(),
-                            "status", b.getStatus(),
-                            "from", b.getRouteSchedule().getRoute().getOrigin(),
-                            "to", b.getRouteSchedule().getRoute().getDestination(),
-                            "departureTime", b.getRouteSchedule().getDepartureTime(),
-                            "arrivalTime", b.getRouteSchedule().getArrivalTime(),
-                            "busName", b.getRouteSchedule().getBus().getName(),
-                            "totalAmount", b.getTotalAmount(),
-                            "payableAmount", b.getPayableAmount(),
-                            "bookedAt", b.getCreatedAt(),
-                            "seats", seats.stream().map(s -> Map.of(
-                                    "seatNumber", s.getSeatNumber(),
-                                    "passenger", s.getPassenger() != null
-                                            ? s.getPassenger().getFirstName() + " " + (s.getPassenger().getLastName() != null ? s.getPassenger().getLastName() : "")
-                                            : "Unknown"
-                            )).toList()
-                    );
+                    Map<String, Object> result = new LinkedHashMap<>();
+                    result.put("bookingId", b.getId());
+                    result.put("status", b.getStatus());
+                    result.put("from", b.getRouteSchedule().getRoute().getOrigin());
+                    result.put("to", b.getRouteSchedule().getRoute().getDestination());
+                    result.put("departureTime", b.getRouteSchedule().getDepartureTime());
+                    result.put("arrivalTime", b.getRouteSchedule().getArrivalTime());
+                    result.put("busName", b.getRouteSchedule().getBus().getName());
+                    result.put("totalAmount", b.getTotalAmount());
+                    result.put("payableAmount", b.getPayableAmount());
+                    result.put("bookedAt", b.getCreatedAt());
+                    result.put("seats", seats.stream().map(s -> Map.of(
+                            "seatNumber", s.getSeatNumber(),
+                            "passenger", s.getPassenger() != null
+                                    ? s.getPassenger().getFirstName() + " " + (s.getPassenger().getLastName() != null ? s.getPassenger().getLastName() : "")
+                                    : "Unknown"
+                    )).toList());
+                    return result;
                 })
                 .toList();
 
