@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from './apiClient';
+import { apiGet, apiPost, API_BASE_URL } from './apiClient';
 
 export const getScheduleSeats = async (scheduleId) => {
   return apiGet(`/booking/schedules/${encodeURIComponent(scheduleId)}/seats`);
@@ -38,4 +38,44 @@ export const getSchedulePointsForBooking = async (scheduleId) => {
       return { boardingPoints: [], droppingPoints: [] };
     }
   }
+};
+
+const parsePublicJson = async (response, fallbackMessage) => {
+  if (!response.ok) {
+    try {
+      const data = await response.json();
+      throw new Error(data?.message || data?.error || fallbackMessage);
+    } catch {
+      throw new Error(fallbackMessage);
+    }
+  }
+  return response.json();
+};
+
+export const getScheduleRouteStops = async (scheduleId) => {
+  const response = await fetch(`${API_BASE_URL}/booking/schedules/${encodeURIComponent(scheduleId)}/route-stops`);
+  return parsePublicJson(response, 'Failed to load route stops');
+};
+
+export const getSchedulePolicies = async (scheduleId) => {
+  const response = await fetch(`${API_BASE_URL}/booking/schedules/${encodeURIComponent(scheduleId)}/policies`);
+  return parsePublicJson(response, 'Failed to load schedule policies');
+};
+
+export const getScheduleFeatures = async (scheduleId) => {
+  const response = await fetch(`${API_BASE_URL}/booking/schedules/${encodeURIComponent(scheduleId)}/features`);
+  return parsePublicJson(response, 'Failed to load schedule features');
+};
+
+export const getBusRatingSummary = async (busId) => {
+  const response = await fetch(`${API_BASE_URL}/buses/${encodeURIComponent(busId)}/rating-summary`);
+  return parsePublicJson(response, 'Failed to load bus rating summary');
+};
+
+export const getMyCompletedTrips = async () => {
+  return apiGet('/booking/my-completed-trips');
+};
+
+export const submitTripRating = async (scheduleId, payload) => {
+  return apiPost(`/booking/trips/${encodeURIComponent(scheduleId)}/rating`, payload);
 };

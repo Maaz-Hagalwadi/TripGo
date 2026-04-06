@@ -19,7 +19,7 @@ const HeroSection = () => {
           Book premium bus tickets across 500+ cities. Experience comfort at every mile.
         </p>
         
-        <SearchBar />
+        <SearchBar showQuickDates={false} />
       </div>
     </section>
   );
