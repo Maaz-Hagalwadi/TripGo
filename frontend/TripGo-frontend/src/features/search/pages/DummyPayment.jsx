@@ -27,27 +27,27 @@ const DummyPayment = () => {
 
   return (
     <UserLayout activeItem="search" title="Payment">
-      <div className="mx-auto max-w-5xl space-y-6 rounded-[32px] bg-[linear-gradient(180deg,#f7fbff_0%,#eef4ff_100%)] p-4 text-slate-900 dark:bg-black dark:text-slate-100 md:p-6">
+      <div className="mx-auto max-w-5xl space-y-6 rounded-[32px] bg-[linear-gradient(180deg,#f7fbff_0%,#eef4ff_100%)] p-4 text-slate-900 dark:bg-[linear-gradient(180deg,#040404_0%,#0b0b0b_100%)] dark:text-slate-100 md:p-6">
         <div className="grid gap-6 lg:grid-cols-[1.3fr_0.9fr]">
-          <div className="rounded-[28px] bg-[linear-gradient(140deg,#ffffff,#eef7ff)] p-6 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-black dark:ring-slate-900">
+          <div className="rounded-[28px] bg-[linear-gradient(140deg,#ffffff,#eef7ff)] p-6 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(135deg,#050404,#0b0b0b)] dark:ring-slate-950">
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary/80">Dummy Payment</p>
             <h1 className="mt-2 text-3xl font-black text-slate-900 dark:text-white">Complete your booking</h1>
             <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">This is a frontend-only payment placeholder. Clicking pay will simulate a successful payment flow.</p>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-slate-950 dark:ring-slate-900">
+              <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-black/70 dark:ring-slate-950">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Route</p>
                 <p className="mt-2 font-bold text-slate-900 dark:text-white">{booking?.searchParams?.from} to {booking?.searchParams?.to}</p>
                 <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{booking?.bus?.busName}</p>
               </div>
-              <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-slate-950 dark:ring-slate-900">
+              <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-black/70 dark:ring-slate-950">
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Seats</p>
                 <p className="mt-2 font-bold text-slate-900 dark:text-white">{(booking?.selectedSeats || []).join(', ')}</p>
                 <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">{booking?.selectedType || 'Seat type not selected'}</p>
               </div>
             </div>
 
-            <div className="mt-6 rounded-3xl bg-white/80 p-5 ring-1 ring-slate-200/70 dark:bg-slate-950 dark:ring-slate-900">
+            <div className="mt-6 rounded-3xl bg-white/80 p-5 ring-1 ring-slate-200/70 dark:bg-black/70 dark:ring-slate-950">
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Payment method</p>
@@ -57,17 +57,17 @@ const DummyPayment = () => {
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 {['UPI', 'Card', 'Netbanking'].map((item) => (
-                  <div key={item} className="rounded-2xl bg-slate-50 px-4 py-4 text-center text-sm font-semibold text-slate-700 ring-1 ring-slate-200/70 dark:bg-black dark:text-slate-200 dark:ring-slate-900">{item}</div>
+                  <div key={item} className="rounded-2xl bg-slate-50 px-4 py-4 text-center text-sm font-semibold text-slate-700 ring-1 ring-slate-200/70 dark:bg-black/70 dark:text-slate-200 dark:ring-slate-950">{item}</div>
                 ))}
               </div>
             </div>
           </div>
 
-          <div className="rounded-[28px] bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-black dark:ring-slate-900">
+          <div className="rounded-[28px] bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,#040404_0%,#0b0b0b_100%)] dark:ring-slate-950">
             <h2 className="text-xl font-black text-slate-900 dark:text-white">Fare Summary</h2>
             <div className="mt-5 space-y-3 text-sm text-slate-600 dark:text-slate-300">
-              <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200/70 dark:bg-slate-950 dark:ring-slate-900"><span>Seat count</span><span className="font-bold text-slate-900 dark:text-white">{booking?.selectedSeats?.length || 0}</span></div>
-              <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200/70 dark:bg-slate-950 dark:ring-slate-900"><span>Per seat fare</span><span className="font-bold text-slate-900 dark:text-white">₹{Math.round(Number(booking?.selectedFare?.totalFare || 0))}</span></div>
+              <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200/70 dark:bg-black/70 dark:ring-slate-950"><span>Seat count</span><span className="font-bold text-slate-900 dark:text-white">{booking?.selectedSeats?.length || 0}</span></div>
+              <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200/70 dark:bg-black/70 dark:ring-slate-950"><span>Per seat fare</span><span className="font-bold text-slate-900 dark:text-white">₹{Math.round(Number(booking?.selectedFare?.totalFare || 0))}</span></div>
               <div className="flex items-center justify-between rounded-2xl bg-primary/10 px-4 py-4"><span className="text-primary">Total payable</span><span className="text-2xl font-black text-slate-900 dark:text-white">₹{totalFare}</span></div>
             </div>
             <button onClick={() => { toast.success('Dummy payment successful. Booking confirmed in demo mode.'); navigate(ROUTES.DASHBOARD); }} className="mt-6 w-full rounded-2xl bg-primary px-4 py-3 text-base font-black text-black hover:bg-primary/90">Pay ₹{totalFare}</button>

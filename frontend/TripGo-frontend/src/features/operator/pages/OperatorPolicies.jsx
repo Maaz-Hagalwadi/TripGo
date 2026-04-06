@@ -37,9 +37,22 @@ const RULE_FIELDS = [
   ['pickup', 'Pickup'],
 ];
 
-const normalizePolicyResponse = (policy) => ({
-  cancellation: Array.isArray(policy?.cancellation) && policy.cancellation.length
-    ? policy.cancellation.map((item) => ({
+const normalizePolicyResponse = (policy) => {
+  const cancellationItems = Array.isArray(policy?.cancellation) && policy.cancellation.length
+    ? policy.cancellation
+    : Array.isArray(policy?.cancellationSlabs) && policy.cancellationSlabs.length
+      ? policy.cancellationSlabs
+      : [];
+
+  const restStopItems = Array.isArray(policy?.restStops) && policy.restStops.length
+    ? policy.restStops
+    : Array.isArray(policy?.restStopDetails) && policy.restStopDetails.length
+      ? policy.restStopDetails
+      : [];
+
+  return ({
+  cancellation: cancellationItems.length
+    ? cancellationItems.map((item) => ({
         label: item?.label || '',
         hoursBeforeDeparture: item?.hoursBeforeDeparture ?? '',
         refundPercent: item?.refundPercent ?? '',
@@ -58,24 +71,18 @@ const normalizePolicyResponse = (policy) => ({
     smoking: policy?.rules?.smoking || '',
     pickup: policy?.rules?.pickup || '',
   },
-  restStops: Array.isArray(policy?.restStops) && policy.restStops.length
-    ? policy.restStops.map((item) => ({
+  restStops: restStopItems.length
+    ? restStopItems.map((item) => ({
         name: item?.name || '',
         location: item?.location || '',
         durationMinutes: item?.durationMinutes ?? '',
       }))
     : [{ name: '', location: '', durationMinutes: '' }],
 });
+};
 
 const buildPayload = (form) => ({
   cancellation: form.cancellation
-    .filter((item) => item.label || item.hoursBeforeDeparture !== '' || item.refundPercent !== '')
-    .map((item) => ({
-      label: item.label || `Before ${item.hoursBeforeDeparture} hrs`,
-      hoursBeforeDeparture: Number(item.hoursBeforeDeparture || 0),
-      refundPercent: Number(item.refundPercent || 0),
-    })),
-  cancellationSlabs: form.cancellation
     .filter((item) => item.label || item.hoursBeforeDeparture !== '' || item.refundPercent !== '')
     .map((item) => ({
       label: item.label || `Before ${item.hoursBeforeDeparture} hrs`,
@@ -87,24 +94,8 @@ const buildPayload = (form) => ({
     feePercent: Number(form.dateChange.feePercent || 0),
     minHoursBeforeDeparture: Number(form.dateChange.minHoursBeforeDeparture || 0),
   },
-  dateChangeAllowed: Boolean(form.dateChange.allowed),
-  dateChangeFeePercent: Number(form.dateChange.feePercent || 0),
-  dateChangeMinHoursBeforeDeparture: Number(form.dateChange.minHoursBeforeDeparture || 0),
   rules: { ...form.rules },
-  luggagePolicy: form.rules.luggage || '',
-  childrenPolicy: form.rules.children || '',
-  petsAllowed: !/not allowed|no/i.test(form.rules.pets || ''),
-  liquorAllowed: !/not allowed|no/i.test(form.rules.liquor || ''),
-  smokingAllowed: !/not allowed|no/i.test(form.rules.smoking || ''),
-  pickupNotes: form.rules.pickup || '',
   restStops: form.restStops
-    .filter((item) => item.name || item.location || item.durationMinutes !== '')
-    .map((item) => ({
-      name: item.name || '',
-      location: item.location || '',
-      durationMinutes: Number(item.durationMinutes || 0),
-    })),
-  restStopDetails: form.restStops
     .filter((item) => item.name || item.location || item.durationMinutes !== '')
     .map((item) => ({
       name: item.name || '',
@@ -210,7 +201,7 @@ const OperatorPolicies = () => {
               <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary">Operator Setup</p>
               <h1 className="mt-2 text-2xl font-black text-slate-900 dark:text-white">Manage cancellation & trip policies</h1>
               <p className="mt-2 max-w-2xl text-sm text-slate-500 dark:text-slate-400">
-                Policies are now saved to the backend schedule policy table and shown directly on the user booking flow.
+                Policies are saved directly to the backend schedule policy table as jsonb-backed arrays and shown on the user booking flow.
               </p>
             </div>
             <button
