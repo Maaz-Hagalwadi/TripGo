@@ -14,6 +14,7 @@ export const ROUTES = {
   ADMIN_OPERATORS: '/admin/operators',
 
   DASHBOARD: '/dashboard',
+  USER_BOOKINGS: '/bookings',
   SEARCH_RESULTS: '/search-results',
   BOOKING: '/booking',
   USER_PROFILE: '/user/profile',

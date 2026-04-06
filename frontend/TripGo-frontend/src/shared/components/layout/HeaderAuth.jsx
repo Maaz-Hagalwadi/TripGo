@@ -58,10 +58,10 @@ const HeaderAuth = () => {
             >
               Dashboard
             </button>
-            <button className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">
+            <button onClick={() => navigate('/bookings')} className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">
               My Bookings
             </button>
-            <button className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">
+            <button onClick={() => navigate('/user/support')} className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">
               Support
             </button>
           </nav>
@@ -141,11 +141,11 @@ const HeaderAuth = () => {
                   </div>
                   
                   <div className="py-2">
-                    <button className="w-full px-4 py-3 text-left text-slate-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-3">
+                    <button onClick={() => navigate('/user/profile')} className="w-full px-4 py-3 text-left text-slate-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-3">
                       <span className="material-symbols-outlined text-lg">person</span>
                       My Profile
                     </button>
-                    <button className="w-full px-4 py-3 text-left text-slate-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-3">
+                    <button onClick={() => navigate('/bookings')} className="w-full px-4 py-3 text-left text-slate-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-3">
                       <span className="material-symbols-outlined text-lg">confirmation_number</span>
                       My Bookings
                     </button>
@@ -153,7 +153,7 @@ const HeaderAuth = () => {
                       <span className="material-symbols-outlined text-lg">payment</span>
                       Payment Methods
                     </button>
-                    <button className="w-full px-4 py-3 text-left text-slate-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-3">
+                    <button onClick={() => navigate('/user/settings')} className="w-full px-4 py-3 text-left text-slate-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-3">
                       <span className="material-symbols-outlined text-lg">settings</span>
                       Settings
                     </button>
