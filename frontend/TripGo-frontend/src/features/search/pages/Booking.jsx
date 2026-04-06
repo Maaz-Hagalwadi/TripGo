@@ -219,10 +219,14 @@ const formatRestStopText = (featuresInfo, policiesInfo, bus) => {
   return featuresInfo?.restStopName || (featuresInfo?.hasRestStop === false ? 'This bus has no rest stop' : bus?.restStopName || 'This bus has no rest stop');
 };
 
+const INPUT_SHELL_CLASS = 'w-full rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-white/[0.04] dark:text-white dark:ring-white/10';
+const SUBTLE_PANEL_CLASS = 'rounded-2xl bg-slate-50 ring-1 ring-slate-200/70 dark:bg-white/[0.03] dark:ring-white/10';
+const SOFT_BUTTON_CLASS = 'rounded-xl bg-slate-100 px-4 py-2 text-slate-700 hover:bg-slate-200 dark:bg-white/[0.05] dark:text-slate-200 dark:hover:bg-white/[0.09]';
+
 const DetailCard = ({ icon, title, subtitle, children, className = '' }) => (
-  <div className={`rounded-3xl bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-black dark:ring-slate-900 ${className}`}>
+  <div className={`rounded-[30px] bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,rgba(12,12,12,0.96)_0%,rgba(6,6,6,0.98)_100%)] dark:shadow-[0_30px_70px_rgba(0,0,0,0.45)] dark:ring-white/10 ${className}`}>
     <div className="mb-4 flex items-start gap-3">
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 dark:bg-slate-950">
+      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 dark:bg-white/[0.05]">
         <span className="material-symbols-outlined text-primary">{icon}</span>
       </div>
       <div>
@@ -414,9 +418,9 @@ const Booking = () => {
 
   return (
     <UserLayout activeItem="search" title="Booking Flow">
-      <div className="space-y-6 rounded-[32px] bg-[linear-gradient(180deg,#f7fbff_0%,#eef4ff_100%)] p-4 text-slate-900 dark:bg-black dark:text-slate-100 md:p-6">
+      <div className="space-y-6 bg-[linear-gradient(180deg,#f7fbff_0%,#eef4ff_100%)] p-4 text-slate-900 dark:bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.14),transparent_0%,transparent_32%),linear-gradient(180deg,#040404_0%,#0b0b0b_100%)] dark:text-slate-100 md:rounded-[32px] md:p-6">
         <div className="grid gap-4 xl:grid-cols-[1.65fr_0.9fr]">
-          <div className="rounded-[28px] bg-[linear-gradient(135deg,#ffffff,#f4f8ff)] p-5 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-black dark:ring-slate-900">
+          <div className="rounded-[30px] bg-[linear-gradient(135deg,#ffffff,#f4f8ff)] p-5 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(135deg,rgba(9,9,9,0.96),rgba(17,17,17,0.92))] dark:shadow-[0_30px_70px_rgba(0,0,0,0.45)] dark:ring-white/10">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.25em] text-primary/80">Trip Summary</p>
@@ -429,7 +433,7 @@ const Booking = () => {
                   {totalRatings > 0 ? <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600 dark:bg-slate-950 dark:text-slate-300">⭐ {averageRating.toFixed(1)} · {totalRatings} ratings</span> : null}
                 </div>
               </div>
-              <div className="rounded-3xl bg-slate-100 px-5 py-4 text-right dark:bg-slate-950">
+              <div className="rounded-3xl bg-slate-100 px-5 py-4 text-right dark:bg-white/[0.04] dark:ring-1 dark:ring-white/10">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Fare</p>
                 <p className="mt-1 text-3xl font-black text-primary">₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}</p>
                 {!!selectedSeats.length ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">{selectedSeats.length} seat{selectedSeats.length > 1 ? 's' : ''} selected</p> : null}
@@ -442,7 +446,7 @@ const Booking = () => {
                 ['Arrival', formatInstant(bus?.arrivalTime)],
                 ['Step', step === 'seats' ? '1. Select & lock seats' : '2. Passenger & points'],
               ].map(([label, value]) => (
-                <div key={label} className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-slate-950 dark:ring-slate-900">
+                <div key={label} className={`${SUBTLE_PANEL_CLASS} p-4`}>
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">{label}</p>
                   <p className="mt-2 text-base font-bold text-slate-900 dark:text-white">{value}</p>
                 </div>
@@ -452,7 +456,7 @@ const Booking = () => {
             {loadingMeta ? <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">Updating route and policy details...</p> : null}
           </div>
 
-          <div className="rounded-[28px] bg-[linear-gradient(180deg,#eaf7ff,rgba(255,255,255,0.9))] p-5 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-sky-100 dark:bg-black dark:ring-slate-900">
+          <div className="rounded-[30px] bg-[linear-gradient(180deg,#eaf7ff,rgba(255,255,255,0.9))] p-5 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-sky-100 dark:bg-[linear-gradient(180deg,rgba(12,18,30,0.95)_0%,rgba(7,7,7,0.98)_100%)] dark:shadow-[0_30px_70px_rgba(0,0,0,0.45)] dark:ring-sky-500/20">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary/80">Seat Lock</p>
@@ -465,7 +469,7 @@ const Booking = () => {
                 ? <>Make payment within <span className="font-black text-slate-900 dark:text-white">{formatCountdown(lockSecondsLeft)}</span> or the seat lock will expire.</>
                 : 'Select your seats and lock them to start the payment countdown.'}
             </p>
-            <div className="mt-5 rounded-2xl bg-white/80 p-4 ring-1 ring-slate-200/70 dark:bg-slate-950 dark:ring-slate-900">
+            <div className="mt-5 rounded-2xl bg-white/80 p-4 ring-1 ring-slate-200/70 dark:bg-white/[0.04] dark:ring-white/10">
               <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
                 <span>Available now</span>
                 <span className="font-bold text-emerald-600 dark:text-emerald-300">{remainingAvailableSeatCount}</span>
@@ -474,9 +478,9 @@ const Booking = () => {
                 <div className="h-2 rounded-full bg-gradient-to-r from-primary to-emerald-400 transition-all" style={{ width: `${seats.length ? Math.max(10, (remainingAvailableSeatCount / seats.length) * 100) : 10}%` }} />
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px] text-slate-600 dark:text-slate-300">
-                <div className="rounded-xl bg-slate-100 px-2 py-2 dark:bg-slate-950">{remainingAvailableSeatCount}<div className="text-slate-500">free</div></div>
-                <div className="rounded-xl bg-slate-100 px-2 py-2 dark:bg-slate-950">{bookedSeatCount}<div className="text-slate-500">booked</div></div>
-                <div className="rounded-xl bg-slate-100 px-2 py-2 dark:bg-slate-950">{blockedSeatCount}<div className="text-slate-500">blocked</div></div>
+                <div className="rounded-xl bg-slate-100 px-2 py-2 dark:bg-white/[0.04]">{remainingAvailableSeatCount}<div className="text-slate-500">free</div></div>
+                <div className="rounded-xl bg-slate-100 px-2 py-2 dark:bg-white/[0.04]">{bookedSeatCount}<div className="text-slate-500">booked</div></div>
+                <div className="rounded-xl bg-slate-100 px-2 py-2 dark:bg-white/[0.04]">{blockedSeatCount}<div className="text-slate-500">blocked</div></div>
               </div>
             </div>
           </div>
@@ -502,7 +506,7 @@ const Booking = () => {
             ) : seats.length === 0 ? (
               <p className="text-sm text-slate-600 dark:text-slate-300">Seat layout is not available for this bus yet.</p>
             ) : (
-              <div className="overflow-x-auto rounded-3xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-black/20 dark:ring-white/5">
+              <div className="overflow-x-auto rounded-3xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-white/[0.03] dark:ring-white/10">
                 {hasLayoutData ? (
                   isSleeper ? (
                     <div className="flex gap-8">
@@ -550,7 +554,7 @@ const Booking = () => {
               </div>
             )}
             <div className="mt-5 flex justify-end gap-3">
-              <button onClick={() => navigate(-1)} className="rounded-xl bg-slate-100 px-4 py-2 text-slate-700 hover:bg-slate-200 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900">Back</button>
+              <button onClick={() => navigate(-1)} className={SOFT_BUTTON_CLASS}>Back</button>
               <button
                 onClick={async () => {
                   if (!selectedSeats.length) return toast.error('Please select seat(s)');
@@ -586,29 +590,29 @@ const Booking = () => {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Country Code</label>
-                    <div className="flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-500 ring-1 ring-slate-200/70 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-900">
+                    <div className={`flex items-center gap-2 px-3 py-2 text-sm text-slate-500 dark:text-slate-300 ${SUBTLE_PANEL_CLASS}`}>
                       <span className="material-symbols-outlined text-base text-slate-400 dark:text-slate-500">lock</span>
                       <input value={contact.countryCode} readOnly className="w-full bg-transparent outline-none" />
                     </div>
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Phone *</label>
-                    <input value={contact.phone} onChange={(e) => setContact((p) => ({ ...p, phone: e.target.value.replace(/[^\d]/g, '').slice(0, 10) }))} placeholder="10-digit mobile number" className="w-full rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-slate-950 dark:text-white dark:ring-slate-900" />
+                    <input value={contact.phone} onChange={(e) => setContact((p) => ({ ...p, phone: e.target.value.replace(/[^\d]/g, '').slice(0, 10) }))} placeholder="10-digit mobile number" className={INPUT_SHELL_CLASS} />
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Email ID *</label>
-                    <input type="email" value={contact.email} onChange={(e) => setContact((p) => ({ ...p, email: e.target.value }))} placeholder="Enter email id" className="w-full rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-slate-950 dark:text-white dark:ring-slate-900" />
+                    <input type="email" value={contact.email} onChange={(e) => setContact((p) => ({ ...p, email: e.target.value }))} placeholder="Enter email id" className={INPUT_SHELL_CLASS} />
                   </div>
                   <div>
                     <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">State of Residence *</label>
-                    <select value={contact.stateOfResidence} onChange={(e) => setContact((p) => ({ ...p, stateOfResidence: e.target.value }))} className="w-full rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-slate-950 dark:text-white dark:ring-slate-900">
+                    <select value={contact.stateOfResidence} onChange={(e) => setContact((p) => ({ ...p, stateOfResidence: e.target.value }))} className={INPUT_SHELL_CLASS}>
                       <option value="">Select state</option>
                       {INDIA_STATES.map((state) => <option key={state} value={state}>{state}</option>)}
                     </select>
                   </div>
                 </div>
 
-                <div className="mt-5 flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200/70 dark:bg-slate-950 dark:ring-slate-900">
+                <div className={`mt-5 flex items-center justify-between px-4 py-3 ${SUBTLE_PANEL_CLASS}`}>
                   <div>
                     <p className="text-sm font-semibold text-slate-900 dark:text-white">Send booking details and trip updates on WhatsApp</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">Disabled by default. Turn it on only if the traveler wants WhatsApp alerts.</p>
@@ -619,11 +623,11 @@ const Booking = () => {
                 </div>
 
                 <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Passenger Name *</label><input value={passenger.name} onChange={(e) => setPassenger((p) => ({ ...p, name: e.target.value }))} placeholder="Enter passenger name" className="w-full rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-slate-950 dark:text-white dark:ring-slate-900" /></div>
-                  <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Age *</label><input type="number" min="1" value={passenger.age} onChange={(e) => setPassenger((p) => ({ ...p, age: e.target.value }))} placeholder="Enter age" className="w-full rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-slate-950 dark:text-white dark:ring-slate-900" /></div>
-                  <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Gender *</label><select value={passenger.gender} onChange={(e) => setPassenger((p) => ({ ...p, gender: e.target.value }))} className="w-full rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-slate-950 dark:text-white dark:ring-slate-900"><option value="">Select gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option><option value="OTHER">Other</option></select></div>
-                  <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Phone *</label><input value={passenger.phone} onChange={(e) => setPassenger((p) => ({ ...p, phone: e.target.value.replace(/[^\d]/g, '').slice(0, 10) }))} placeholder="Enter phone number" className="w-full rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-slate-950 dark:text-white dark:ring-slate-900" /></div>
-                  <div className="md:col-span-2"><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Email *</label><input type="email" value={passenger.email} onChange={(e) => setPassenger((p) => ({ ...p, email: e.target.value }))} placeholder="Enter email" className="w-full rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-slate-950 dark:text-white dark:ring-slate-900" /></div>
+                  <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Passenger Name *</label><input value={passenger.name} onChange={(e) => setPassenger((p) => ({ ...p, name: e.target.value }))} placeholder="Enter passenger name" className={INPUT_SHELL_CLASS} /></div>
+                  <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Age *</label><input type="number" min="1" value={passenger.age} onChange={(e) => setPassenger((p) => ({ ...p, age: e.target.value }))} placeholder="Enter age" className={INPUT_SHELL_CLASS} /></div>
+                  <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Gender *</label><select value={passenger.gender} onChange={(e) => setPassenger((p) => ({ ...p, gender: e.target.value }))} className={INPUT_SHELL_CLASS}><option value="">Select gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option><option value="OTHER">Other</option></select></div>
+                  <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Phone *</label><input value={passenger.phone} onChange={(e) => setPassenger((p) => ({ ...p, phone: e.target.value.replace(/[^\d]/g, '').slice(0, 10) }))} placeholder="Enter phone number" className={INPUT_SHELL_CLASS} /></div>
+                  <div className="md:col-span-2"><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Email *</label><input type="email" value={passenger.email} onChange={(e) => setPassenger((p) => ({ ...p, email: e.target.value }))} placeholder="Enter email" className={INPUT_SHELL_CLASS} /></div>
                 </div>
               </DetailCard>
 
@@ -633,12 +637,12 @@ const Booking = () => {
                 ) : (
                   <>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Boarding Point *</label><select value={selection.boardingPointId} onChange={(e) => setSelection((p) => ({ ...p, boardingPointId: e.target.value }))} className="w-full rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-slate-950 dark:text-white dark:ring-slate-900"><option value="">Select boarding point</option>{boardingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
-                      <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Dropping Point *</label><select value={selection.droppingPointId} onChange={(e) => setSelection((p) => ({ ...p, droppingPointId: e.target.value }))} className="w-full rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-slate-950 dark:text-white dark:ring-slate-900"><option value="">Select dropping point</option>{droppingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
+                      <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Boarding Point *</label><select value={selection.boardingPointId} onChange={(e) => setSelection((p) => ({ ...p, boardingPointId: e.target.value }))} className={INPUT_SHELL_CLASS}><option value="">Select boarding point</option>{boardingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
+                      <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Dropping Point *</label><select value={selection.droppingPointId} onChange={(e) => setSelection((p) => ({ ...p, droppingPointId: e.target.value }))} className={INPUT_SHELL_CLASS}><option value="">Select dropping point</option>{droppingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
                     </div>
                     <div className="mt-4 grid gap-4 md:grid-cols-2">
-                      <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-slate-950 dark:ring-slate-900"><p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Boarding points</p>{boardingPoints.length === 0 ? <p className="text-xs text-slate-500 dark:text-slate-400">No boarding points available</p> : boardingPoints.map((point) => <p key={point.id} className="mb-2 text-xs text-slate-600 dark:text-slate-300">{pointLabel(point)}</p>)}</div>
-                      <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-slate-950 dark:ring-slate-900"><p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Dropping points</p>{droppingPoints.length === 0 ? <p className="text-xs text-slate-500 dark:text-slate-400">No dropping points available</p> : droppingPoints.map((point) => <p key={point.id} className="mb-2 text-xs text-slate-600 dark:text-slate-300">{pointLabel(point)}</p>)}</div>
+                      <div className={`${SUBTLE_PANEL_CLASS} p-4`}><p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Boarding points</p>{boardingPoints.length === 0 ? <p className="text-xs text-slate-500 dark:text-slate-400">No boarding points available</p> : boardingPoints.map((point) => <p key={point.id} className="mb-2 text-xs text-slate-600 dark:text-slate-300">{pointLabel(point)}</p>)}</div>
+                      <div className={`${SUBTLE_PANEL_CLASS} p-4`}><p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Dropping points</p>{droppingPoints.length === 0 ? <p className="text-xs text-slate-500 dark:text-slate-400">No dropping points available</p> : droppingPoints.map((point) => <p key={point.id} className="mb-2 text-xs text-slate-600 dark:text-slate-300">{pointLabel(point)}</p>)}</div>
                     </div>
                   </>
                 )}
@@ -648,16 +652,16 @@ const Booking = () => {
             <div className="space-y-6">
               <DetailCard icon="confirmation_number" title="Review before payment" subtitle="A quick final check before moving to the payment screen.">
                 <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
-                  <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200/70 dark:bg-slate-950 dark:ring-slate-900"><span>Selected seats</span><span className="font-bold text-slate-900 dark:text-white">{selectedSeats.join(', ') || '--'}</span></div>
-                  <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200/70 dark:bg-slate-950 dark:ring-slate-900"><span>Seat fare</span><span className="font-bold text-slate-900 dark:text-white">₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}</span></div>
-                  <div className="rounded-2xl bg-primary/10 px-4 py-4">
+                  <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Selected seats</span><span className="font-bold text-slate-900 dark:text-white">{selectedSeats.join(', ') || '--'}</span></div>
+                  <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Seat fare</span><span className="font-bold text-slate-900 dark:text-white">₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}</span></div>
+                  <div className="rounded-2xl bg-primary/10 px-4 py-4 dark:bg-primary/12 dark:ring-1 dark:ring-primary/20">
                     <p className="text-xs uppercase tracking-[0.2em] text-primary/90">Payment timer</p>
                     <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{lockSecondsLeft > 0 ? formatCountdown(lockSecondsLeft) : 'Expired'}</p>
                     <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Make payment within the timer window or the seat lock will expire.</p>
                   </div>
                 </div>
                 <div className="mt-5 flex gap-3">
-                  <button onClick={() => setStep('seats')} className="flex-1 rounded-xl bg-slate-100 px-4 py-2 text-slate-700 hover:bg-slate-200 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-900">Back to Seats</button>
+                  <button onClick={() => setStep('seats')} className={`flex-1 ${SOFT_BUTTON_CLASS}`}>Back to Seats</button>
                   <button
                     onClick={() => {
                       const phoneValid = /^[6-9]\d{9}$/.test(contact.phone.trim());
@@ -687,7 +691,7 @@ const Booking = () => {
                 <div key={`${stop}-${idx}`} className="flex items-start gap-3">
                   <div className="mt-0.5 flex flex-col items-center">
                     <div className="h-3 w-3 rounded-full bg-primary" />
-                    {idx < routeStops.length - 1 ? <div className="mt-1 h-10 w-px bg-slate-300 dark:bg-slate-800" /> : null}
+                    {idx < routeStops.length - 1 ? <div className="mt-1 h-10 w-px bg-slate-300 dark:bg-white/15" /> : null}
                   </div>
                   <div>
                     <p className="font-semibold text-slate-900 dark:text-white">{stop}</p>
@@ -715,7 +719,7 @@ const Booking = () => {
             <DetailCard icon="star" title="Bus features" subtitle={restStopText}>
               <div className="grid grid-cols-1 gap-2">
                 {busFeatures.map((feature, idx) => (
-                  <div key={`${feature}-${idx}`} className="flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-600 ring-1 ring-slate-200/70 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-900">
+                  <div key={`${feature}-${idx}`} className="flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-600 ring-1 ring-slate-200/70 dark:bg-white/[0.03] dark:text-slate-300 dark:ring-white/10">
                     <span className="material-symbols-outlined text-base text-primary">check_circle</span>
                     <span>{feature}</span>
                   </div>
