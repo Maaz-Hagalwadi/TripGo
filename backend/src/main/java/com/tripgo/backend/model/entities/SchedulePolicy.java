@@ -1,11 +1,14 @@
 package com.tripgo.backend.model.entities;
 
+import com.tripgo.backend.util.JsonListConverter;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
@@ -21,8 +24,9 @@ public class SchedulePolicy {
     @JoinColumn(name = "schedule_id", nullable = false, unique = true)
     private RouteSchedule schedule;
 
+    @Convert(converter = JsonListConverter.class)
     @Column(name = "cancellation_slabs", columnDefinition = "jsonb")
-    private String cancellationSlabs;
+    private List<Map<String, Object>> cancellationSlabs;
 
     @Column(name = "date_change_allowed")
     private Boolean dateChangeAllowed = true;
@@ -51,8 +55,9 @@ public class SchedulePolicy {
     @Column(name = "pickup_notes")
     private String pickupNotes;
 
+    @Convert(converter = JsonListConverter.class)
     @Column(name = "rest_stops", columnDefinition = "jsonb")
-    private String restStops;
+    private List<Map<String, Object>> restStops;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

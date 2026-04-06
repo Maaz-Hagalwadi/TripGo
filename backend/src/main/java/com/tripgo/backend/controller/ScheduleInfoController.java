@@ -1,7 +1,5 @@
 package com.tripgo.backend.controller;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tripgo.backend.model.entities.*;
 import com.tripgo.backend.repository.*;
 import com.tripgo.backend.security.service.CustomUserDetails;
@@ -20,7 +18,6 @@ public class ScheduleInfoController {
     private final RouteScheduleRepository scheduleRepository;
     private final RouteSegmentRepository segmentRepository;
     private final SchedulePolicyRepository policyRepository;
-    private final ObjectMapper objectMapper;
 
     // ─── Public: GET route stops ─────────────────────────────────────────────
     @GetMapping("/route-stops")
@@ -73,42 +70,13 @@ public class ScheduleInfoController {
         scheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new RuntimeException("Schedule not found"));
 
-        SchedulePolicy policy = policyRepository.findByScheduleId(scheduleId)
-                .orElse(null);
+        SchedulePolicy policy = policyRepository.findByScheduleId(scheduleId).orElse(null);
 
         if (policy == null) {
-            return ResponseEntity.ok(defaultPolicies());
+            return ResponseEntity.ok(buildPolicyResponse(null));
         }
 
-        try {
-            List<?> cancellationSlabs = policy.getCancellationSlabs() != null
-                    ? objectMapper.readValue(policy.getCancellationSlabs(), new TypeReference<List<?>>() {})
-                    : defaultCancellationSlabs();
-
-            List<?> restStops = policy.getRestStops() != null
-                    ? objectMapper.readValue(policy.getRestStops(), new TypeReference<List<?>>() {})
-                    : List.of();
-
-            return ResponseEntity.ok(Map.of(
-                    "cancellation", cancellationSlabs,
-                    "dateChange", Map.of(
-                            "allowed", Boolean.TRUE.equals(policy.getDateChangeAllowed()),
-                            "feePercent", policy.getDateChangeFeePercent() != null ? policy.getDateChangeFeePercent() : 10,
-                            "minHoursBeforeDeparture", policy.getDateChangeMinHours() != null ? policy.getDateChangeMinHours() : 12
-                    ),
-                    "rules", Map.of(
-                            "luggage", policy.getLuggagePolicy() != null ? policy.getLuggagePolicy() : "1 bag up to 15kg allowed",
-                            "children", policy.getChildrenPolicy() != null ? policy.getChildrenPolicy() : "Children below 5 travel free",
-                            "pets", Boolean.TRUE.equals(policy.getPetsAllowed()) ? "Allowed" : "Not allowed",
-                            "liquor", Boolean.TRUE.equals(policy.getLiquorAllowed()) ? "Allowed" : "Not allowed",
-                            "smoking", Boolean.TRUE.equals(policy.getSmokingAllowed()) ? "Allowed" : "Not allowed",
-                            "pickup", policy.getPickupNotes() != null ? policy.getPickupNotes() : ""
-                    ),
-                    "restStops", restStops
-            ));
-        } catch (Exception e) {
-            return ResponseEntity.ok(defaultPolicies());
-        }
+        return ResponseEntity.ok(buildPolicyResponse(policy));
     }
 
     // ─── Operator: PUT policies ──────────────────────────────────────────────
@@ -131,39 +99,34 @@ public class ScheduleInfoController {
         SchedulePolicy policy = policyRepository.findByScheduleId(scheduleId)
                 .orElse(SchedulePolicy.builder().schedule(schedule).build());
 
-        try {
-            if (body.containsKey("cancellation")) {
-                policy.setCancellationSlabs(objectMapper.writeValueAsString(body.get("cancellation")));
-            }
-            if (body.containsKey("restStops")) {
-                policy.setRestStops(objectMapper.writeValueAsString(body.get("restStops")));
-            }
-
-            @SuppressWarnings("unchecked")
-            Map<String, Object> dateChange = (Map<String, Object>) body.get("dateChange");
-            if (dateChange != null) {
-                policy.setDateChangeAllowed((Boolean) dateChange.getOrDefault("allowed", true));
-                policy.setDateChangeFeePercent((Integer) dateChange.getOrDefault("feePercent", 10));
-                policy.setDateChangeMinHours((Integer) dateChange.getOrDefault("minHoursBeforeDeparture", 12));
-            }
-
-            @SuppressWarnings("unchecked")
-            Map<String, Object> rules = (Map<String, Object>) body.get("rules");
-            if (rules != null) {
-                if (rules.containsKey("luggage")) policy.setLuggagePolicy((String) rules.get("luggage"));
-                if (rules.containsKey("children")) policy.setChildrenPolicy((String) rules.get("children"));
-                if (rules.containsKey("pets")) policy.setPetsAllowed("Allowed".equals(rules.get("pets")));
-                if (rules.containsKey("liquor")) policy.setLiquorAllowed("Allowed".equals(rules.get("liquor")));
-                if (rules.containsKey("smoking")) policy.setSmokingAllowed("Allowed".equals(rules.get("smoking")));
-                if (rules.containsKey("pickup")) policy.setPickupNotes((String) rules.get("pickup"));
-            }
-
-            policyRepository.save(policy);
-            return ResponseEntity.ok(Map.of("message", "Policies updated successfully"));
-
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("error", "Failed to update policies: " + e.getMessage()));
+        if (body.containsKey("cancellation")) {
+            policy.setCancellationSlabs(castToListOfMaps(body.get("cancellation")));
         }
+        if (body.containsKey("restStops")) {
+            policy.setRestStops(castToListOfMaps(body.get("restStops")));
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> dateChange = (Map<String, Object>) body.get("dateChange");
+        if (dateChange != null) {
+            policy.setDateChangeAllowed((Boolean) dateChange.getOrDefault("allowed", true));
+            policy.setDateChangeFeePercent((Integer) dateChange.getOrDefault("feePercent", 10));
+            policy.setDateChangeMinHours((Integer) dateChange.getOrDefault("minHoursBeforeDeparture", 12));
+        }
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rules = (Map<String, Object>) body.get("rules");
+        if (rules != null) {
+            if (rules.containsKey("luggage")) policy.setLuggagePolicy((String) rules.get("luggage"));
+            if (rules.containsKey("children")) policy.setChildrenPolicy((String) rules.get("children"));
+            if (rules.containsKey("pets")) policy.setPetsAllowed("Allowed".equals(rules.get("pets")));
+            if (rules.containsKey("liquor")) policy.setLiquorAllowed("Allowed".equals(rules.get("liquor")));
+            if (rules.containsKey("smoking")) policy.setSmokingAllowed("Allowed".equals(rules.get("smoking")));
+            if (rules.containsKey("pickup")) policy.setPickupNotes((String) rules.get("pickup"));
+        }
+
+        policyRepository.save(policy);
+        return ResponseEntity.ok(Map.of("message", "Policies updated successfully"));
     }
 
     // ─── Public: GET features ────────────────────────────────────────────────
@@ -181,12 +144,8 @@ public class ScheduleInfoController {
                 .toList();
 
         SchedulePolicy policy = policyRepository.findByScheduleId(scheduleId).orElse(null);
-        List<?> restStops = List.of();
-        if (policy != null && policy.getRestStops() != null) {
-            try {
-                restStops = objectMapper.readValue(policy.getRestStops(), new TypeReference<List<?>>() {});
-            } catch (Exception ignored) {}
-        }
+        List<Map<String, Object>> restStops = policy != null && policy.getRestStops() != null
+                ? policy.getRestStops() : List.of();
 
         return ResponseEntity.ok(Map.of(
                 "busType", schedule.getBus().getBusType() != null
@@ -202,20 +161,38 @@ public class ScheduleInfoController {
         ));
     }
 
-    private Map<String, Object> defaultPolicies() {
+    private Map<String, Object> buildPolicyResponse(SchedulePolicy policy) {
+        List<Map<String, Object>> cancellationSlabs = (policy != null && policy.getCancellationSlabs() != null)
+                ? policy.getCancellationSlabs() : defaultCancellationSlabs();
+
+        List<Map<String, Object>> restStops = (policy != null && policy.getRestStops() != null)
+                ? policy.getRestStops() : List.of();
+
         return Map.of(
-                "cancellation", defaultCancellationSlabs(),
-                "dateChange", Map.of("allowed", true, "feePercent", 10, "minHoursBeforeDeparture", 12),
-                "rules", Map.of(
-                        "luggage", "1 bag up to 15kg allowed",
-                        "children", "Children below 5 travel free",
-                        "pets", "Not allowed",
-                        "liquor", "Not allowed",
-                        "smoking", "Not allowed",
-                        "pickup", ""
+                "cancellation", cancellationSlabs,
+                "dateChange", Map.of(
+                        "allowed", policy != null && Boolean.TRUE.equals(policy.getDateChangeAllowed()),
+                        "feePercent", policy != null && policy.getDateChangeFeePercent() != null ? policy.getDateChangeFeePercent() : 10,
+                        "minHoursBeforeDeparture", policy != null && policy.getDateChangeMinHours() != null ? policy.getDateChangeMinHours() : 12
                 ),
-                "restStops", List.of()
+                "rules", Map.of(
+                        "luggage", policy != null && policy.getLuggagePolicy() != null ? policy.getLuggagePolicy() : "1 bag up to 15kg allowed",
+                        "children", policy != null && policy.getChildrenPolicy() != null ? policy.getChildrenPolicy() : "Children below 5 travel free",
+                        "pets", policy != null && Boolean.TRUE.equals(policy.getPetsAllowed()) ? "Allowed" : "Not allowed",
+                        "liquor", policy != null && Boolean.TRUE.equals(policy.getLiquorAllowed()) ? "Allowed" : "Not allowed",
+                        "smoking", policy != null && Boolean.TRUE.equals(policy.getSmokingAllowed()) ? "Allowed" : "Not allowed",
+                        "pickup", policy != null && policy.getPickupNotes() != null ? policy.getPickupNotes() : ""
+                ),
+                "restStops", restStops
         );
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> castToListOfMaps(Object obj) {
+        if (obj instanceof List<?> list) {
+            return (List<Map<String, Object>>) list;
+        }
+        return List.of();
     }
 
     private List<Map<String, Object>> defaultCancellationSlabs() {

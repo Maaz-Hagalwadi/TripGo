@@ -1,4 +1,4 @@
-import { apiGet, apiPost, API_BASE_URL } from './apiClient';
+import { apiGet, apiPost, apiPut, API_BASE_URL } from './apiClient';
 
 export const getScheduleSeats = async (scheduleId) => {
   return apiGet(`/booking/schedules/${encodeURIComponent(scheduleId)}/seats`);
@@ -60,6 +60,10 @@ export const getScheduleRouteStops = async (scheduleId) => {
 export const getSchedulePolicies = async (scheduleId) => {
   const response = await fetch(`${API_BASE_URL}/booking/schedules/${encodeURIComponent(scheduleId)}/policies`);
   return parsePublicJson(response, 'Failed to load schedule policies');
+};
+
+export const updateSchedulePolicies = async (scheduleId, payload) => {
+  return apiPut(`/booking/schedules/${encodeURIComponent(scheduleId)}/policies`, payload);
 };
 
 export const getScheduleFeatures = async (scheduleId) => {
