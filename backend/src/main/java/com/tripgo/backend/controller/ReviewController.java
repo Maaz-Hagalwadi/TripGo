@@ -11,7 +11,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
 import java.util.*;
 
 @RestController
@@ -24,7 +23,6 @@ public class ReviewController {
     private final RouteScheduleRepository scheduleRepository;
 
     // ─── OPERATOR: GET /operator/reviews ─────────────────────────────────────
-    // All reviews for this operator's buses/routes
     @GetMapping("/operator/reviews")
     public ResponseEntity<?> getOperatorReviews(
             @RequestParam(defaultValue = "0") int page,
@@ -102,11 +100,13 @@ public class ReviewController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        Instant fromInstant = from != null ? Instant.parse(from) : null;
-        Instant toInstant = to != null ? Instant.parse(to) : null;
-
         Page<Review> reviews = reviewRepository.findAllWithFilters(
-                operatorId, busId, rating, fromInstant, toInstant, hidden,
+                operatorId != null ? operatorId.toString() : null,
+                busId != null ? busId.toString() : null,
+                rating,
+                from,
+                to,
+                hidden,
                 PageRequest.of(page, size, Sort.by("createdAt").descending())
         );
 
@@ -146,20 +146,17 @@ public class ReviewController {
         return ResponseEntity.ok(Map.of("message", "Review unhidden", "id", id));
     }
 
-    // ─── Helper: build review map ─────────────────────────────────────────────
+    // ─── Helper ───────────────────────────────────────────────────────────────
     private Map<String, Object> toReviewMap(Review r, boolean operatorView) {
-        // Get bookingCode if available
         String bookingCode = null;
-        String seatNumber = null;
         if (r.getUser() != null && r.getRouteSchedule() != null) {
-            Optional<Booking> booking = bookingRepository.findConfirmedByUserAndSchedule(
+            List<Booking> bookings = bookingRepository.findConfirmedByUserAndSchedule(
                     r.getUser(), r.getRouteSchedule().getId());
-            if (booking.isPresent()) {
-                bookingCode = booking.get().getBookingCode();
+            if (!bookings.isEmpty()) {
+                bookingCode = bookings.get(0).getBookingCode();
             }
         }
 
-        // Masked user name: "John D."
         String userName = "Anonymous";
         if (r.getUser() != null) {
             String first = r.getUser().getFirstName() != null ? r.getUser().getFirstName() : "";
@@ -183,7 +180,6 @@ public class ReviewController {
         map.put("to", r.getRoute() != null ? r.getRoute().getDestination() : null);
 
         if (!operatorView) {
-            // Admin gets extra moderation fields
             map.put("operatorId", r.getOperator() != null ? r.getOperator().getId() : null);
             map.put("operatorName", r.getOperator() != null ? r.getOperator().getName() : null);
             map.put("userId", r.getUser() != null ? r.getUser().getId() : null);

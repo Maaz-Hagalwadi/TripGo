@@ -11,6 +11,7 @@ const OperatorSidebar = ({ activeItem = 'overview', onNavigate, collapsed = fals
     { id: 'schedules', icon: 'calendar_month', label: 'Schedules', route: ROUTES.OPERATOR_SCHEDULES },
     { id: 'policies', icon: 'gavel', label: 'Policies', route: ROUTES.OPERATOR_POLICIES },
     { id: 'bookings', icon: 'confirmation_number', label: 'Bookings', route: ROUTES.OPERATOR_BOOKINGS },
+    { id: 'reviews', icon: 'star_rate', label: 'Reviews', route: ROUTES.OPERATOR_REVIEWS },
     { id: 'drivers', icon: 'badge', label: 'Drivers', route: ROUTES.OPERATOR_DRIVERS },
     { id: 'earnings', icon: 'account_balance_wallet', label: 'Earnings', route: ROUTES.OPERATOR_EARNINGS },
   ];
