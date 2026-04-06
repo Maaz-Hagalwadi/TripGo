@@ -12,6 +12,7 @@ export const ROUTES = {
   ADMIN_OPERATOR_ACTION: '/admin/operator-action',
   ADMIN_DASHBOARD: '/admin/dashboard',
   ADMIN_OPERATORS: '/admin/operators',
+  ADMIN_REVIEWS: '/admin/reviews',
 
   DASHBOARD: '/dashboard',
   USER_BOOKINGS: '/bookings',
@@ -30,6 +31,7 @@ export const ROUTES = {
   OPERATOR_SCHEDULES: '/operator/schedules',
   OPERATOR_POLICIES: '/operator/policies',
   OPERATOR_BOOKINGS: '/operator/bookings',
+  OPERATOR_REVIEWS: '/operator/reviews',
   OPERATOR_DRIVERS: '/operator/drivers',
   OPERATOR_EARNINGS: '/operator/earnings',
   OPERATOR_SETTINGS: '/operator/settings',

@@ -20,26 +20,37 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
     Page<Review> findByBusId(UUID busId, Pageable pageable);
     Page<Review> findByRouteScheduleId(UUID scheduleId, Pageable pageable);
 
-    // Admin queries with filters
-    @Query("""
-        SELECT r FROM Review r
-        WHERE (:operatorId IS NULL OR r.operator.id = :operatorId)
-        AND (:busId IS NULL OR r.bus.id = :busId)
-        AND (:rating IS NULL OR r.rating = :rating)
-        AND (:from IS NULL OR r.createdAt >= :from)
-        AND (:to IS NULL OR r.createdAt <= :to)
-        AND (:hidden IS NULL OR r.hidden = :hidden)
-    """)
+    List<Review> findByBusId(UUID busId);
+    List<Review> findByUserId(UUID userId);
+
+    // Admin query - native SQL to avoid null parameter type issues
+    @Query(value = """
+        SELECT * FROM reviews r
+        WHERE (:operatorId IS NULL OR r.operator_id = CAST(:operatorId AS uuid))
+        AND (:busId IS NULL OR r.bus_id = CAST(:busId AS uuid))
+        AND (:rating IS NULL OR r.rating = CAST(:rating AS integer))
+        AND (:fromDate IS NULL OR r.created_at >= CAST(:fromDate AS timestamptz))
+        AND (:toDate IS NULL OR r.created_at <= CAST(:toDate AS timestamptz))
+        AND (:hidden IS NULL OR r.hidden = CAST(:hidden AS boolean))
+        ORDER BY r.created_at DESC
+        """,
+        countQuery = """
+        SELECT COUNT(*) FROM reviews r
+        WHERE (:operatorId IS NULL OR r.operator_id = CAST(:operatorId AS uuid))
+        AND (:busId IS NULL OR r.bus_id = CAST(:busId AS uuid))
+        AND (:rating IS NULL OR r.rating = CAST(:rating AS integer))
+        AND (:fromDate IS NULL OR r.created_at >= CAST(:fromDate AS timestamptz))
+        AND (:toDate IS NULL OR r.created_at <= CAST(:toDate AS timestamptz))
+        AND (:hidden IS NULL OR r.hidden = CAST(:hidden AS boolean))
+        """,
+        nativeQuery = true)
     Page<Review> findAllWithFilters(
-            @Param("operatorId") UUID operatorId,
-            @Param("busId") UUID busId,
+            @Param("operatorId") String operatorId,
+            @Param("busId") String busId,
             @Param("rating") Integer rating,
-            @Param("from") Instant from,
-            @Param("to") Instant to,
+            @Param("fromDate") String fromDate,
+            @Param("toDate") String toDate,
             @Param("hidden") Boolean hidden,
             Pageable pageable
     );
-
-    List<Review> findByBusId(UUID busId);
-    List<Review> findByUserId(UUID userId);
 }

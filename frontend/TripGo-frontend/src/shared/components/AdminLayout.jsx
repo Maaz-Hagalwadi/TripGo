@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import AdminSidebar from '../../features/admin/components/AdminSidebar';
 import OperatorHeader from '../../shared/components/layout/OperatorHeader';
 import { ROUTES } from '../constants/routes';
@@ -10,12 +10,14 @@ const MOBILE_NAV = [
   { icon: 'business',       label: 'Operators', route: `${ROUTES.ADMIN_DASHBOARD}?tab=operators` },
   { icon: 'directions_bus', label: 'Buses',     route: `${ROUTES.ADMIN_DASHBOARD}?tab=buses` },
   { icon: 'group',          label: 'Users',     route: `${ROUTES.ADMIN_DASHBOARD}?tab=users` },
+  { icon: 'reviews',        label: 'Reviews',   route: ROUTES.ADMIN_REVIEWS },
 ];
 
-const AdminLayout = ({ title, children }) => {
+const AdminLayout = ({ title, activeItemOverride, children }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
-  const activeItem = searchParams.get('tab') || 'overview';
+  const activeItem = activeItemOverride || (location.pathname === ROUTES.ADMIN_REVIEWS ? 'reviews' : (searchParams.get('tab') || 'overview'));
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
@@ -36,7 +38,7 @@ const AdminLayout = ({ title, children }) => {
       </main>
 
       <nav className="mobile-bottom-nav fixed bottom-0 left-0 right-0 bg-white dark:bg-op-card border-t border-slate-200 dark:border-slate-800 z-50">
-        <div className="grid grid-cols-4 h-16">
+        <div className="grid grid-cols-5 h-16">
           {MOBILE_NAV.map((item) => (
             <button
               key={item.id}
