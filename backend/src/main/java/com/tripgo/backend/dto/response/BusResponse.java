@@ -2,6 +2,7 @@ package com.tripgo.backend.dto.response;
 
 import com.tripgo.backend.model.enums.BusType;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -14,5 +15,7 @@ public record BusResponse(
         BusType busType,
         Integer totalSeats,
         boolean active,
-        List<AmenityDTO> amenities
+        List<AmenityDTO> amenities,
+        Instant createdAt,
+        Instant updatedAt
 ) {}

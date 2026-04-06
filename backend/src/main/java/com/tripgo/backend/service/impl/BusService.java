@@ -76,7 +76,9 @@ public class BusService {
                                 a.getCode(),
                                 a.getDescription()
                         ))
-                        .toList()
+                        .toList(),
+                bus.getCreatedAt(),
+                bus.getUpdatedAt()
         );
     }
 
