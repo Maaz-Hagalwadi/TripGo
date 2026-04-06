@@ -8,6 +8,14 @@ export const lockScheduleSeats = async (scheduleId, selectedSeats) => {
   return apiPost(`/booking/lock?scheduleId=${encodeURIComponent(scheduleId)}`, selectedSeats);
 };
 
+export const confirmBooking = async (payload) => {
+  return apiPost('/booking/confirm', payload);
+};
+
+export const getMyBookings = async () => {
+  return apiGet('/booking/my-bookings');
+};
+
 export const getSchedulePointsForBooking = async (scheduleId) => {
   try {
     const data = await apiGet(`/booking/schedules/${encodeURIComponent(scheduleId)}/points`);

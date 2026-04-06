@@ -10,6 +10,7 @@ import ErrorBoundary from './shared/components/ErrorBoundary';
 
 const Home = lazy(() => import('./features/home/pages/Home'));
 const Dashboard = lazy(() => import('./features/home/pages/Dashboard'));
+const UserBookings = lazy(() => import('./features/home/pages/UserBookings'));
 const UserProfile = lazy(() => import('./features/home/pages/UserProfile'));
 const UserSettings = lazy(() => import('./features/home/pages/UserSettings'));
 const UserSupport = lazy(() => import('./features/home/pages/UserSupport'));
@@ -84,6 +85,9 @@ function App() {
           {/* User routes */}
           <Route path={ROUTES.DASHBOARD} element={
             <ProtectedRoute allowedRoles={['USER']}><Dashboard /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.USER_BOOKINGS} element={
+            <ProtectedRoute allowedRoles={['USER']}><UserBookings /></ProtectedRoute>
           } />
           <Route path={ROUTES.SEARCH_RESULTS} element={
             <ProtectedRoute allowedRoles={['USER']}><SearchResults /></ProtectedRoute>

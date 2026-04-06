@@ -7,6 +7,7 @@ import OperatorHeader from './layout/OperatorHeader';
 const MOBILE_NAV = [
   { id: 'dashboard', icon: 'dashboard', label: 'Home', route: ROUTES.DASHBOARD },
   { id: 'search', icon: 'search', label: 'Search', route: ROUTES.SEARCH_RESULTS },
+  { id: 'bookings', icon: 'confirmation_number', label: 'Bookings', route: ROUTES.USER_BOOKINGS },
   { id: 'profile', icon: 'person', label: 'Profile', route: ROUTES.USER_PROFILE },
 ];
 
@@ -37,7 +38,7 @@ const UserLayout = ({ activeItem = 'dashboard', title = 'Dashboard', children })
       </main>
 
       <nav className="mobile-bottom-nav fixed bottom-0 left-0 right-0 bg-white dark:bg-op-card border-t border-slate-200 dark:border-slate-800 z-50 lg:hidden">
-        <div className="grid grid-cols-3 h-16">
+        <div className="grid grid-cols-4 h-16">
           {MOBILE_NAV.map((item) => (
             <button
               key={item.id}

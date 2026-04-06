@@ -672,7 +672,7 @@ const Booking = () => {
                       if (!passenger.name.trim() || !passenger.age || !passenger.gender || !passenger.phone.trim() || !passenger.email.trim()) return toast.error('Please fill passenger details');
                       if (lockSecondsLeft <= 0) return toast.error('Seat lock expired. Please select and lock seats again.');
                       if (boardingPoints.length + droppingPoints.length > 0 && (!selection.boardingPointId || !selection.droppingPointId)) return toast.error('Please select boarding and dropping points');
-                      navigate(ROUTES.PAYMENT, { state: { bus, selectedSeats, selectedFare, selectedType, searchParams, contact, passenger, selection, lockSecondsLeft } });
+                      navigate(ROUTES.PAYMENT, { state: { bus, scheduleId, selectedSeats, selectedFare, selectedType, searchParams, contact, passenger, selection, lockSecondsLeft, lockToken: lockInfo?.lockToken || '', lockInfo } });
                     }}
                     className="flex-1 rounded-xl bg-primary px-4 py-2 font-semibold text-black hover:bg-primary/90"
                   >
