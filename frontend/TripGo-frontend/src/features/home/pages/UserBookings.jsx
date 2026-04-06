@@ -65,6 +65,11 @@ const extractPassengers = (booking) => {
   return [];
 };
 
+const toTitleCase = (value) => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/\b\w/g, (char) => char.toUpperCase());
+
 const downloadTicket = (booking) => {
   const bookingId = toDisplayBookingId(booking);
   const routeFrom = booking?.from || booking?.source || booking?.origin || booking?.route?.from || '--';
@@ -72,7 +77,7 @@ const downloadTicket = (booking) => {
   const seats = extractSeats(booking);
   const passengers = extractPassengers(booking);
   const passengerLines = passengers.length
-    ? passengers.map((item, index) => `${index + 1}. ${[item?.firstName, item?.lastName].filter(Boolean).join(' ') || 'Traveler'} | Seat: ${item?.seatNumber || '--'} | Age: ${item?.age ?? '--'} | Gender: ${item?.gender || '--'} | Phone: ${item?.phone || '--'}`).join('\n')
+    ? passengers.map((item, index) => `${index + 1}. ${[toTitleCase(item?.firstName), toTitleCase(item?.lastName)].filter(Boolean).join(' ') || 'Traveler'} | Seat: ${item?.seatNumber || '--'} | Age: ${item?.age ?? '--'} | Gender: ${item?.gender || '--'} | Phone: ${item?.phone || '--'}`).join('\n')
     : 'Passenger details not available';
 
   const text = [
@@ -126,9 +131,9 @@ const UserBookings = () => {
 
   const visibleBookings = useMemo(() => {
     if (!latestBooking) return bookings;
-    const latestId = latestBooking?.bookingId || latestBooking?.id || latestBooking?.reference;
+    const latestId = latestBooking?.bookingCode || latestBooking?.publicBookingId || latestBooking?.bookingId || latestBooking?.id || latestBooking?.reference;
     if (!latestId) return bookings;
-    const exists = bookings.some((item) => String(item?.bookingId || item?.id || item?.reference) === String(latestId));
+    const exists = bookings.some((item) => String(item?.bookingCode || item?.publicBookingId || item?.bookingId || item?.id || item?.reference) === String(latestId));
     return exists ? bookings : [latestBooking, ...bookings];
   }, [bookings, latestBooking]);
 
@@ -227,7 +232,7 @@ const UserBookings = () => {
                         <div key={`${bookingId}-passenger-${passengerIndex}`} className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200/70 dark:bg-black/40 dark:ring-white/10">
                           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                             <div>
-                              <p className="font-semibold text-slate-900 dark:text-white">{[item?.firstName, item?.lastName].filter(Boolean).join(' ') || `Traveler ${passengerIndex + 1}`}</p>
+                              <p className="font-semibold text-slate-900 dark:text-white">{[toTitleCase(item?.firstName), toTitleCase(item?.lastName)].filter(Boolean).join(' ') || `Traveler ${passengerIndex + 1}`}</p>
                               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                                 Age: {item?.age ?? '--'} • Gender: {item?.gender || '--'} • Phone: {item?.phone || '--'}
                               </p>

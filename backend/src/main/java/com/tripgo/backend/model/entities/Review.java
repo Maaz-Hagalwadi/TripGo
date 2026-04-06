@@ -10,11 +10,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "reviews")
-@Getter
-@Setter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class Review {
 
     @Id
@@ -42,11 +38,22 @@ public class Review {
     private Operator operator;
 
     @Column(nullable = false)
-    private Integer rating; // 1 to 5
+    private Integer rating;
 
     private String title;
 
     private String comment;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean hidden = false;
+
+    @Column(name = "flagged_reason")
+    private String flaggedReason;
+
+    @Column(name = "moderation_status")
+    @Builder.Default
+    private String moderationStatus = "APPROVED";
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

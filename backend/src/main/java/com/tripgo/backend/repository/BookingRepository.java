@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface BookingRepository extends JpaRepository<Booking, UUID> {
@@ -21,6 +22,9 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     List<Booking> findByRouteScheduleAndStatus(RouteSchedule routeSchedule, BookingStatus status);
     List<Booking> findByUserAndStatus(User user, BookingStatus status);
     List<Booking> findByUser(User user);
+
+    @Query("SELECT b FROM Booking b WHERE b.user = :user AND b.routeSchedule.id = :scheduleId AND b.status = 'CONFIRMED'")
+    Optional<Booking> findConfirmedByUserAndSchedule(@Param("user") User user, @Param("scheduleId") UUID scheduleId);
 
     @Query("SELECT COALESCE(SUM(b.payableAmount), 0) FROM Booking b WHERE b.operator = :operator AND b.status = 'CONFIRMED'")
     BigDecimal getTotalRevenueByOperator(@Param("operator") Operator operator);
