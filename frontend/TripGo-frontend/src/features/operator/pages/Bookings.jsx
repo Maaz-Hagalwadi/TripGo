@@ -53,6 +53,11 @@ const extractPassengers = (booking) => {
   return [];
 };
 
+const toTitleCase = (value) => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/\b\w/g, (char) => char.toUpperCase());
+
 const Bookings = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
@@ -156,7 +161,7 @@ const Bookings = () => {
             const bookingStatus = String(pick(booking, ['status'], 'UNKNOWN')).toUpperCase();
             const passengers = extractPassengers(booking);
             const passenger = passengers.length
-              ? [passengers[0]?.firstName, passengers[0]?.lastName].filter(Boolean).join(' ')
+              ? [toTitleCase(passengers[0]?.firstName), toTitleCase(passengers[0]?.lastName)].filter(Boolean).join(' ')
               : pick(booking, ['passengerName', 'customerName', 'userName', 'name'], 'Passenger');
             const routeName = pick(booking, ['routeName', 'tripName'], '') || [pick(booking, ['from', 'source', 'origin'], ''), pick(booking, ['to', 'destination'], '')].filter(Boolean).join(' to ') || '-';
             const seatNumbers = extractSeats(booking);
@@ -172,7 +177,7 @@ const Bookings = () => {
                     <p className="text-xs text-slate-500">Booking ID: {displayBookingId}</p>
                     <p className="text-xs text-slate-500">Route: {routeName}</p>
                     <p className="text-xs text-slate-500">Seat: {seatNo}</p>
-                    {passengers.length > 1 ? <p className="text-xs text-slate-500">Passengers: {passengers.map((item) => [item?.firstName, item?.lastName].filter(Boolean).join(' ') || item?.seatNumber).join(', ')}</p> : null}
+                    {passengers.length > 1 ? <p className="text-xs text-slate-500">Passengers: {passengers.map((item) => [toTitleCase(item?.firstName), toTitleCase(item?.lastName)].filter(Boolean).join(' ') || item?.seatNumber).join(', ')}</p> : null}
                     {createdAt && <p className="text-xs text-slate-500">Booked: {new Date(createdAt).toLocaleString()}</p>}
                   </div>
                   <div className="text-right space-y-2">
