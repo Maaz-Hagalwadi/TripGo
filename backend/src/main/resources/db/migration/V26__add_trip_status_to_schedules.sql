@@ -1,0 +1,6 @@
+ALTER TABLE route_schedules
+ADD COLUMN trip_status VARCHAR(20) DEFAULT 'SCHEDULED',
+ADD COLUMN delay_minutes INTEGER,
+ADD COLUMN delay_reason VARCHAR(255),
+ADD COLUMN actual_departure_time TIMESTAMP WITH TIME ZONE,
+ADD COLUMN actual_arrival_time TIMESTAMP WITH TIME ZONE;

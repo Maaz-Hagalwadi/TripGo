@@ -275,6 +275,36 @@ public class RouteService {
         scheduleRepository.save(schedule);
     }
 
+    public RouteScheduleResponse updateSchedule(UUID scheduleId, CreateScheduleRequest req, User user) {
+        RouteSchedule schedule = scheduleRepository.findById(scheduleId)
+                .orElseThrow(() -> new RuntimeException("Schedule not found"));
+
+        if (user.getOperator() == null ||
+            !schedule.getRoute().getOperator().getId().equals(user.getOperator().getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        Bus bus = busRepository.findById(req.busId())
+                .orElseThrow(() -> new RuntimeException("Bus not found"));
+
+        schedule.setBus(bus);
+        schedule.setDepartureTime(req.departureTime());
+        schedule.setArrivalTime(req.arrivalTime());
+        schedule.setFrequency(req.frequency());
+        scheduleRepository.save(schedule);
+
+        Route route = schedule.getRoute();
+        return new RouteScheduleResponse(
+                schedule.getId(),
+                new RouteResponse(route.getId(), route.getName(), route.getOrigin(), route.getDestination(), route.getDistanceKm()),
+                toBusResponse(bus),
+                schedule.getDepartureTime(),
+                schedule.getArrivalTime(),
+                schedule.getFrequency(),
+                schedule.getActive()
+        );
+    }
+
     private BusResponse toBusResponse(Bus bus) {
         return new BusResponse(
                 bus.getId(),

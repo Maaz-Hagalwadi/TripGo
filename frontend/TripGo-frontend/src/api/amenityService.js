@@ -17,3 +17,6 @@ export const getAmenities = async () => {
 export const createAmenity = async (code, description) => {
   return apiPost('/amenities', { code, description });
 };
+
+
+

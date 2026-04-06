@@ -94,8 +94,6 @@ public class EmailService {
                         Map.of(
                                 "operatorName", op.getName(),
                                 "operatorEmail", opUser.getEmail(),
-                                "approveUrl", backendUrl + "/admin/operators/" + op.getId() + "/approve",
-                                "rejectUrl", backendUrl + "/admin/operators/" + op.getId() + "/reject",
                                 "adminUrl", frontendUrl + "/admin/operators"
                         )
                 );

@@ -37,10 +37,26 @@ public class RouteSchedule {
     private Instant arrivalTime;
 
     @Column
-    private String frequency;  // DAILY, WEEKLY, ONE_TIME
+    private String frequency;
 
     @Column
     private Boolean active = true;
+
+    @Column(name = "trip_status")
+    @Builder.Default
+    private String tripStatus = "SCHEDULED"; // SCHEDULED, STARTED, COMPLETED, DELAYED
+
+    @Column(name = "delay_minutes")
+    private Integer delayMinutes;
+
+    @Column(name = "delay_reason")
+    private String delayReason;
+
+    @Column(name = "actual_departure_time")
+    private Instant actualDepartureTime;
+
+    @Column(name = "actual_arrival_time")
+    private Instant actualArrivalTime;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

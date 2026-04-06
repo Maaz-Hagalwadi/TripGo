@@ -14,6 +14,7 @@ import com.tripgo.backend.repository.UserRepository;
 import com.tripgo.backend.security.service.EmailVerificationService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
@@ -30,6 +31,8 @@ public class OperatorService {
     private final EmailVerificationService emailVerificationService;
     private final EmailService emailService;
 
+    @Value("${app.backend.url}")
+    private String backendUrl;
 
     public OperatorRegistrationResponse register(OperatorRegistrationRequest req) {
 
@@ -67,8 +70,7 @@ public class OperatorService {
         EmailVerificationToken token =
                 emailVerificationService.createToken(user);
 
-        String verificationLink =
-                "http://localhost:8080/auth/verify-email?token=" + token.getToken();
+        String verificationLink = backendUrl + "/auth/verify-email?token=" + token.getToken();
 
         emailService.sendOperatorVerificationEmail(user, verificationLink);
 

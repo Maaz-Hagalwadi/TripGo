@@ -25,7 +25,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -91,10 +90,15 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<Map<String, String>> refresh(HttpServletRequest request,
-                                        HttpServletResponse response) {
+    public ResponseEntity<Map<String, String>> refresh(@RequestBody(required = false) Map<String, String> body,
+                                                       HttpServletRequest request) {
+        // Support both body-based (localStorage flow) and cookie-based refresh
+        String refreshToken = (body != null && body.get("refreshToken") != null)
+                ? body.get("refreshToken")
+                : getCookieValue(request, "REFRESH_TOKEN");
 
-        String refreshToken = extractCookie(request, "REFRESH_TOKEN");
+        if (refreshToken == null) throw new RuntimeException("Refresh token missing");
+
         RefreshToken storedToken = refreshTokenService.validateRefreshToken(refreshToken);
         User user = storedToken.getUser();
 
@@ -108,32 +112,24 @@ public class AuthController {
 
         refreshTokenService.createRefreshToken(user, newRefreshToken);
 
-        response.addHeader("Set-Cookie",
-                ResponseCookie.from("ACCESS_TOKEN", newAccessToken)
-                        .httpOnly(true).path("/").maxAge(15 * 60).sameSite("Strict").build().toString());
-
-        response.addHeader("Set-Cookie",
-                ResponseCookie.from("REFRESH_TOKEN", newRefreshToken)
-                        .httpOnly(true).path("/auth/refresh").maxAge(7 * 24 * 60 * 60).sameSite("Strict").build().toString());
-
-        return ResponseEntity.ok(Map.of("message", "Token refreshed"));
+        return ResponseEntity.ok(Map.of(
+                "accessToken", newAccessToken,
+                "refreshToken", newRefreshToken
+        ));
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout(HttpServletRequest request, HttpServletResponse response) {
-
-        String refreshToken = getCookieValue(request, "REFRESH_TOKEN");
+    public ResponseEntity<Void> logout(@RequestBody(required = false) Map<String, String> body,
+                                       HttpServletRequest request) {
+        // Support both body-based and cookie-based refresh token revocation
+        String refreshToken = (body != null && body.get("refreshToken") != null)
+                ? body.get("refreshToken")
+                : getCookieValue(request, "REFRESH_TOKEN");
 
         if (refreshToken != null) {
             refreshTokenRepository.findByTokenAndRevokedFalse(refreshToken)
                     .ifPresent(refreshTokenService::revokeToken);
         }
-
-        response.addHeader("Set-Cookie",
-                ResponseCookie.from("ACCESS_TOKEN", "").httpOnly(true).path("/").maxAge(0).sameSite("Strict").build().toString());
-
-        response.addHeader("Set-Cookie",
-                ResponseCookie.from("REFRESH_TOKEN", "").httpOnly(true).path("/auth/refresh").maxAge(0).sameSite("Strict").build().toString());
 
         return ResponseEntity.ok().build();
     }

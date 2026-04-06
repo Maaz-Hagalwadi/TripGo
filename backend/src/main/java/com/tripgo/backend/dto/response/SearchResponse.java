@@ -2,6 +2,7 @@ package com.tripgo.backend.dto.response;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public record SearchResponse(
@@ -13,6 +14,10 @@ public record SearchResponse(
         Instant departureTime,
         Instant arrivalTime,
         List<String> amenities,
-        FareResult fareResult,
-        List<SeatAvailability> seatAvailability
+        Map<String, FareResult> faresByType,
+        List<SeatAvailability> seatAvailability,
+        String tripStatus,
+        Integer delayMinutes,
+        Instant actualDepartureTime,
+        Instant actualArrivalTime
 ) {}

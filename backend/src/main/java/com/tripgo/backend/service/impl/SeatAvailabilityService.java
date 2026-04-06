@@ -10,7 +10,11 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -24,53 +28,58 @@ public class SeatAvailabilityService {
     public SearchResult searchAvailability(RouteSchedule schedule, String from, String to, String seatType) {
 
         List<RouteSegment> segments = segmentRepo.findByRouteOrderBySeq(schedule.getRoute());
-        
-        System.out.println("🔍 Searching availability for: " + from + " -> " + to);
-        System.out.println("📋 Route segments:");
-        for (int i = 0; i < segments.size(); i++) {
-            RouteSegment seg = segments.get(i);
-            System.out.println("  [" + i + "] " + seg.getFromStop() + " -> " + seg.getToStop());
-        }
 
         int startIdx = indexOf(segments, from);
         int endIdx = indexOf(segments, to);
-        
-        System.out.println("📍 Start index: " + startIdx + ", End index: " + endIdx);
 
         if (startIdx == -1 || endIdx == -1 || endIdx <= startIdx) {
-            System.out.println("❌ Invalid stop selection: startIdx=" + startIdx + ", endIdx=" + endIdx);
             throw new RuntimeException("Invalid stop selection: Could not find '" + from + "' or '" + to + "' in route segments");
         }
 
-        // 1. Fare Calculation
-        BigDecimal base = BigDecimal.ZERO;
-        BigDecimal gst = BigDecimal.ZERO;
-        final String searchSeatType = (seatType != null) ? seatType : "AC_SLEEPER"; // Default seat type
+        List<RouteSegment> travelSegments = segments.subList(startIdx, endIdx);
 
-        for (int i = startIdx; i < endIdx; i++) {
-            RouteSegment segment = segments.get(i);
-            System.out.println("💰 Looking for fare: segment=" + segment.getId() + ", seatType=" + searchSeatType);
-            Fare fare = fareRepo.findByRouteSegmentIdAndSeatType(segment.getId(), searchSeatType)
-                    .orElseThrow(() -> new RuntimeException("Fare not defined for segment: " + segment.getFromStop() + " -> " + segment.getToStop() + ", seatType: " + searchSeatType));
-
-            base = base.add(fare.getBaseFare());
-            gst = gst.add(fare.getBaseFare()
-                    .multiply(fare.getGstPercent())
-                    .divide(BigDecimal.valueOf(100)));
+        System.out.println("🔍 Travel segments (" + travelSegments.size() + "):");
+        for (RouteSegment seg : travelSegments) {
+            List<Fare> fares = fareRepo.findByRouteSegmentId(seg.getId());
+            System.out.println("  Segment: " + seg.getFromStop() + " -> " + seg.getToStop() + " | id=" + seg.getId() + " | fares=" + fares.size());
+            for (Fare f : fares) System.out.println("    Fare: seatType=" + f.getSeatType() + " base=" + f.getBaseFare());
         }
 
-        BigDecimal total = base.add(gst);
+        // Collect seat types from segment IDs directly (avoids Hibernate identity issues)
+        Set<String> seatTypes = travelSegments.stream()
+                .flatMap(seg -> fareRepo.findByRouteSegmentId(seg.getId()).stream())
+                .map(Fare::getSeatType)
+                .filter(t -> t != null && !t.isBlank())
+                .collect(Collectors.toSet());
 
-        FareResult fareResult = new FareResult(base, gst, total);
+        // Build fare map: seatType -> FareResult (only include types with fares on ALL segments)
+        Map<String, FareResult> faresByType = new java.util.LinkedHashMap<>();
+        for (String type : seatTypes) {
+            BigDecimal base = BigDecimal.ZERO;
+            BigDecimal gst = BigDecimal.ZERO;
+            boolean complete = true;
+            for (RouteSegment seg : travelSegments) {
+                Optional<Fare> fare = fareRepo.findByRouteSegmentIdAndSeatType(seg.getId(), type);
+                if (fare.isEmpty()) { complete = false; break; }
+                base = base.add(fare.get().getBaseFare());
+                gst = gst.add(fare.get().getBaseFare()
+                        .multiply(fare.get().getGstPercent())
+                        .divide(BigDecimal.valueOf(100)));
+            }
+            if (complete) faresByType.put(type, new FareResult(base, gst, base.add(gst)));
+        }
 
-        // 2. Seat Availability (simplified - assume all seats available for now)
+        if (faresByType.isEmpty()) {
+            throw new RuntimeException("No fares defined for route: " + from + " -> " + to);
+        }
+
+        // Seat availability
         List<Seat> seats = seatRepo.findByBus(schedule.getBus());
-        
         List<SeatAvailability> seatAvailability = seats.stream()
-                .map(seat -> new SeatAvailability(seat.getSeatNumber(), true)) // All seats available
+                .map(seat -> new SeatAvailability(seat.getSeatNumber(), true))
                 .toList();
 
-        return new SearchResult(fareResult, seatAvailability);
+        return new SearchResult(faresByType, seatAvailability);
     }
 
     private int indexOf(List<RouteSegment> segs, String stop) {

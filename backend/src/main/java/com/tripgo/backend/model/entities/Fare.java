@@ -7,7 +7,15 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
-@Table(name = "fares")
+@Table(
+    name = "fares",
+    uniqueConstraints = {
+        @UniqueConstraint(
+            name = "uq_fare_segment_seattype",
+            columnNames = {"route_segment_id", "seat_type"}
+        )
+    }
+)
 @Getter
 @Setter
 @NoArgsConstructor

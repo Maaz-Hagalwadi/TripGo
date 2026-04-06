@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider } from './shared/contexts/AuthContext';
 import { ThemeProvider } from './shared/contexts/ThemeContext';
@@ -10,6 +10,9 @@ import ErrorBoundary from './shared/components/ErrorBoundary';
 
 const Home = lazy(() => import('./features/home/pages/Home'));
 const Dashboard = lazy(() => import('./features/home/pages/Dashboard'));
+const UserProfile = lazy(() => import('./features/home/pages/UserProfile'));
+const UserSettings = lazy(() => import('./features/home/pages/UserSettings'));
+const UserSupport = lazy(() => import('./features/home/pages/UserSupport'));
 
 const Login = lazy(() => import('./features/auth/pages/Login'));
 const Register = lazy(() => import('./features/auth/pages/Register'));
@@ -26,8 +29,14 @@ const BusReview = lazy(() => import('./features/operator/pages/BusReview'));
 const MyBuses = lazy(() => import('./features/operator/pages/MyBuses'));
 const CreateRoute = lazy(() => import('./features/operator/pages/CreateRoute'));
 const Schedules = lazy(() => import('./features/operator/pages/Schedules'));
+const Bookings = lazy(() => import('./features/operator/pages/Bookings'));
+const Drivers = lazy(() => import('./features/operator/pages/Drivers'));
+const Earnings = lazy(() => import('./features/operator/pages/Earnings'));
+const OperatorSettings = lazy(() => import('./features/operator/pages/OperatorSettings'));
+const OperatorSupport = lazy(() => import('./features/operator/pages/OperatorSupport'));
 
 const SearchResults = lazy(() => import('./features/search/pages/SearchResults'));
+const Booking = lazy(() => import('./features/search/pages/Booking'));
 
 const CompleteProfile = lazy(() => import('./features/auth/pages/CompleteProfile'));
 const AdminOperatorAction = lazy(() => import('./pages/AdminOperatorAction'));
@@ -64,6 +73,11 @@ function App() {
           <Route path={ROUTES.ADMIN_DASHBOARD} element={
             <ProtectedRoute allowedRoles={['ADMIN']}><AdminDashboard /></ProtectedRoute>
           } />
+          <Route path={ROUTES.ADMIN_OPERATORS} element={
+            <ProtectedRoute allowedRoles={['ADMIN']}>
+              <Navigate to={`${ROUTES.ADMIN_DASHBOARD}?tab=operators`} replace />
+            </ProtectedRoute>
+          } />
 
           {/* User routes */}
           <Route path={ROUTES.DASHBOARD} element={
@@ -71,6 +85,18 @@ function App() {
           } />
           <Route path={ROUTES.SEARCH_RESULTS} element={
             <ProtectedRoute allowedRoles={['USER']}><SearchResults /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.BOOKING} element={
+            <ProtectedRoute allowedRoles={['USER']}><Booking /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.USER_PROFILE} element={
+            <ProtectedRoute allowedRoles={['USER']}><UserProfile /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.USER_SETTINGS} element={
+            <ProtectedRoute allowedRoles={['USER']}><UserSettings /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.USER_SUPPORT} element={
+            <ProtectedRoute allowedRoles={['USER']}><UserSupport /></ProtectedRoute>
           } />
 
           {/* Operator routes */}
@@ -82,6 +108,21 @@ function App() {
           } />
           <Route path={ROUTES.OPERATOR_SCHEDULES} element={
             <ProtectedRoute allowedRoles={['OPERATOR']}><Schedules /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.OPERATOR_BOOKINGS} element={
+            <ProtectedRoute allowedRoles={['OPERATOR']}><Bookings /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.OPERATOR_DRIVERS} element={
+            <ProtectedRoute allowedRoles={['OPERATOR']}><Drivers /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.OPERATOR_EARNINGS} element={
+            <ProtectedRoute allowedRoles={['OPERATOR']}><Earnings /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.OPERATOR_SETTINGS} element={
+            <ProtectedRoute allowedRoles={['OPERATOR']}><OperatorSettings /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.OPERATOR_SUPPORT} element={
+            <ProtectedRoute allowedRoles={['OPERATOR']}><OperatorSupport /></ProtectedRoute>
           } />
           <Route path={ROUTES.OPERATOR_CREATE_ROUTE} element={
             <ProtectedRoute allowedRoles={['OPERATOR']}><CreateRoute /></ProtectedRoute>

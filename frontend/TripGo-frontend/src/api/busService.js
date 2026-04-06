@@ -20,7 +20,15 @@ export const searchBuses = async (from, to, date) => {
  * @returns {Promise<Array<{id: number, name: string, busCode: string, vehicleNumber: string, model: string, busType: string, totalSeats: number, active: boolean, amenities: Array}>>}
  */
 export const getBuses = async () => {
-  return apiGet('/operator/buses');
+  const data = await apiGet('/operator/buses');
+  if (!Array.isArray(data)) return [];
+  const toMillis = (value) => {
+    if (!value) return 0;
+    const time = new Date(value).getTime();
+    return Number.isNaN(time) ? 0 : time;
+  };
+  const sortTimestamp = (bus) => toMillis(bus?.updatedAt) || toMillis(bus?.createdAt);
+  return [...data].sort((a, b) => sortTimestamp(b) - sortTimestamp(a));
 };
 
 /**
@@ -73,4 +81,16 @@ export const markSeat = async (busId, seatId, marks) => {
 
 export const generateLayout = async (busId, template, rows) => {
   return apiPost(`/operator/buses/${busId}/layout/generate`, { template, rows });
+};
+
+export const toggleBusStatus = async (busId) => {
+  return apiPatch(`/operator/buses/${busId}/toggle-status`);
+};
+
+export const getBusOccupancy = async (busId) => {
+  return apiGet(`/operator/buses/${busId}/occupancy`);
+};
+
+export const getOperatorInsights = async () => {
+  return apiGet('/operator/insights');
 };

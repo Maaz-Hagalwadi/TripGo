@@ -9,7 +9,8 @@ const MOBILE_NAV = [
   { icon: 'directions_bus', label: 'Buses', route: ROUTES.OPERATOR_MY_BUSES },
   { icon: 'add_circle', label: 'Add Bus', route: ROUTES.OPERATOR_ADD_BUS },
   { icon: 'calendar_month', label: 'Schedules', route: ROUTES.OPERATOR_SCHEDULES },
-  { icon: 'confirmation_number', label: 'Bookings', route: null },
+  { icon: 'confirmation_number', label: 'Bookings', route: ROUTES.OPERATOR_BOOKINGS },
+  { icon: 'badge', label: 'Drivers', route: ROUTES.OPERATOR_DRIVERS },
 ];
 
 const OperatorLayout = ({ activeItem, title, searchPlaceholder, headerChildren, children }) => {
@@ -37,7 +38,7 @@ const OperatorLayout = ({ activeItem, title, searchPlaceholder, headerChildren, 
       </main>
 
       <nav className="mobile-bottom-nav fixed bottom-0 left-0 right-0 bg-white dark:bg-op-card border-t border-slate-200 dark:border-slate-800 z-50">
-        <div className="grid grid-cols-5 h-16">
+        <div className="grid grid-cols-6 h-16">
           {MOBILE_NAV.map((item) => (
             <button
               key={item.label}

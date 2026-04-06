@@ -6,7 +6,7 @@ import OperatorLayout from '../../../shared/components/OperatorLayout';
 import DeleteBusModal from '../components/DeleteBusModal';
 import BusDetailsModal from '../components/BusDetailsModal';
 import EditBusModal from '../components/EditBusModal';
-import { getBuses, deleteBus, updateBus } from '../../../api/busService';
+import { getBuses, deleteBus, updateBus, getOperatorInsights, getBusOccupancy } from '../../../api/busService';
 import { getAmenities } from '../../../api/amenityService';
 import { ROUTES } from '../../../shared/constants/routes';
 import './OperatorDashboard.css';
@@ -18,6 +18,9 @@ const MyBuses = () => {
   const [loadingBuses, setLoadingBuses] = useState(true);
   const [amenities, setAmenities] = useState([]);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [insights, setInsights] = useState({ busInsights: [], popularRoutes: {} });
+  const [loadingInsights, setLoadingInsights] = useState(true);
+  const [busOccupancyById, setBusOccupancyById] = useState({});
 
   const [busToDelete, setBusToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -36,6 +39,7 @@ const MyBuses = () => {
 
   useEffect(() => {
     fetchBuses();
+    fetchInsights();
     getAmenities().then(data => setAmenities(data || [])).catch(() => {});
   }, []);
 
@@ -44,10 +48,45 @@ const MyBuses = () => {
       setLoadingBuses(true);
       const data = await getBuses();
       setBuses(data || []);
+      fetchBusOccupancy(data || []);
     } catch {
       setBuses([]);
+      setBusOccupancyById({});
     } finally {
       setLoadingBuses(false);
+    }
+  };
+
+  const fetchBusOccupancy = async (busesList) => {
+    if (!Array.isArray(busesList) || busesList.length === 0) {
+      setBusOccupancyById({});
+      return;
+    }
+    const results = await Promise.all(
+      busesList.map(async (bus) => {
+        try {
+          const data = await getBusOccupancy(bus.id);
+          return [String(bus.id), data];
+        } catch {
+          return [String(bus.id), null];
+        }
+      })
+    );
+    setBusOccupancyById(Object.fromEntries(results));
+  };
+
+  const fetchInsights = async () => {
+    try {
+      setLoadingInsights(true);
+      const data = await getOperatorInsights();
+      setInsights({
+        busInsights: Array.isArray(data?.busInsights) ? data.busInsights : [],
+        popularRoutes: data?.popularRoutes || {}
+      });
+    } catch {
+      setInsights({ busInsights: [], popularRoutes: {} });
+    } finally {
+      setLoadingInsights(false);
     }
   };
 
@@ -120,6 +159,11 @@ const MyBuses = () => {
   });
 
   const getBusTypeLabel = (type) => type.replace(/_/g, ' ');
+  const busOccupancyMap = insights.busInsights.reduce((acc, item) => {
+    const key = String(item?.busId || item?.busName || '');
+    if (key) acc[key] = item;
+    return acc;
+  }, {});
 
   return (
     <OperatorLayout
@@ -144,6 +188,24 @@ const MyBuses = () => {
         ))}
       </div>
 
+      <div className="bg-white dark:bg-op-card border border-slate-200 dark:border-slate-800 rounded-xl p-4 mb-6">
+        <h3 className="font-semibold mb-3">Route Demand Insights</h3>
+        {loadingInsights ? (
+          <p className="text-sm text-slate-400">Loading insights...</p>
+        ) : Object.keys(insights.popularRoutes || {}).length === 0 ? (
+          <p className="text-sm text-slate-400">No route demand data yet.</p>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+            {Object.entries(insights.popularRoutes).slice(0, 6).map(([routeName, bookings]) => (
+              <div key={routeName} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2">
+                <span className="truncate">{routeName}</span>
+                <span className="font-semibold">{bookings}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Bus Grid */}
       {loadingBuses ? (
         <div className="flex items-center justify-center h-64">
@@ -165,6 +227,18 @@ const MyBuses = () => {
           {filteredBuses.map((bus) => (
             <div key={bus.id} className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-lg transition-shadow">
               <div className="p-6">
+                {(() => {
+                  const byId = busOccupancyMap[String(bus.id)];
+                  const byName = busOccupancyMap[String(bus.name || '')];
+                  const fallback = busOccupancyById[String(bus.id)];
+                  const occ = byId || byName || fallback || {};
+                  return (
+                    <div className="mb-3 p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20 text-xs text-blue-700 dark:text-blue-300 flex items-center justify-between">
+                      <span>Seat Occupancy: {Number(occ.occupancyPercent || 0).toFixed(1)}%</span>
+                      <span>Booked: {Number(occ.totalBooked || 0)}</span>
+                    </div>
+                  );
+                })()}
                 <div className="flex items-start justify-between mb-4">
                   <div>
                     <h3 className="font-bold text-lg">{bus.name}</h3>
@@ -206,6 +280,13 @@ const MyBuses = () => {
                 </div>
 
                 <div className="flex gap-2 pt-4 border-t border-slate-200 dark:border-slate-800">
+                  <div className={`px-3 py-2 rounded-lg text-xs font-semibold ${
+                    bus.active
+                      ? 'border border-green-300 text-green-700 dark:border-green-700 dark:text-green-300'
+                      : 'border border-yellow-300 text-yellow-700 dark:border-yellow-700 dark:text-yellow-300'
+                  }`}>
+                    {bus.active ? 'Approved by Admin' : 'Awaiting Admin Approval'}
+                  </div>
                   <button onClick={() => setBusToView(bus)} className="flex-1 bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors text-sm">
                     View Details
                   </button>

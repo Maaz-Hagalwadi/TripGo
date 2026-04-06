@@ -14,5 +14,7 @@ public interface FareRepository extends JpaRepository<Fare, UUID> {
 
     List<Fare> findByRouteSegment(RouteSegment segment);
 
+    List<Fare> findByRouteSegmentId(UUID segmentId);
+
     Optional<Fare> findByRouteSegmentIdAndSeatType(UUID segmentId, String seatType);
 }
