@@ -2,9 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCities } from '../../../api/routeService';
 
-const SearchBar = () => {
+const SearchBar = ({ showQuickDates = true }) => {
   const navigate = useNavigate();
   const today = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const [isMobile, setIsMobile] = useState(false);
   const [cities, setCities] = useState([]);
   const [formData, setFormData] = useState({
@@ -242,6 +243,30 @@ const SearchBar = () => {
               min={today}
             />
           </div>
+          {showQuickDates && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {[
+                { label: 'Today', value: today },
+                { label: 'Tomorrow', value: tomorrow },
+              ].map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => {
+                    setFormData((prev) => ({ ...prev, date: item.value }));
+                    if (errors.date) setErrors((prev) => ({ ...prev, date: '' }));
+                  }}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                    formData.date === item.value
+                      ? 'border-primary bg-primary/15 text-primary'
+                      : 'border-white/10 bg-white/5 text-slate-300 hover:border-primary/40'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
           {errors.date && <span className="text-red-400 text-xs mt-1 ml-1">{errors.date}</span>}
         </div>
         

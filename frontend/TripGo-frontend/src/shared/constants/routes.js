@@ -27,9 +27,11 @@ export const ROUTES = {
   OPERATOR_BUS_REVIEW: '/operator/bus-review',
   OPERATOR_CREATE_ROUTE: '/operator/create-route',
   OPERATOR_SCHEDULES: '/operator/schedules',
+  OPERATOR_POLICIES: '/operator/policies',
   OPERATOR_BOOKINGS: '/operator/bookings',
   OPERATOR_DRIVERS: '/operator/drivers',
   OPERATOR_EARNINGS: '/operator/earnings',
   OPERATOR_SETTINGS: '/operator/settings',
   OPERATOR_SUPPORT: '/operator/support',
+  PAYMENT: '/payment',
 };

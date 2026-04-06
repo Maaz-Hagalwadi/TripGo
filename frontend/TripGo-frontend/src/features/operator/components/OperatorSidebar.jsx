@@ -9,6 +9,7 @@ const OperatorSidebar = ({ activeItem = 'overview', onNavigate, collapsed = fals
     { id: 'my-buses', icon: 'directions_bus', label: 'My Buses', route: ROUTES.OPERATOR_MY_BUSES },
     { id: 'add-bus', icon: 'add_circle', label: 'Add Bus', route: ROUTES.OPERATOR_ADD_BUS },
     { id: 'schedules', icon: 'calendar_month', label: 'Schedules', route: ROUTES.OPERATOR_SCHEDULES },
+    { id: 'policies', icon: 'gavel', label: 'Policies', route: ROUTES.OPERATOR_POLICIES },
     { id: 'bookings', icon: 'confirmation_number', label: 'Bookings', route: ROUTES.OPERATOR_BOOKINGS },
     { id: 'drivers', icon: 'badge', label: 'Drivers', route: ROUTES.OPERATOR_DRIVERS },
     { id: 'earnings', icon: 'account_balance_wallet', label: 'Earnings', route: ROUTES.OPERATOR_EARNINGS },

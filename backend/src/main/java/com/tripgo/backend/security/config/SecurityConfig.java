@@ -61,6 +61,7 @@ public class SecurityConfig {
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .requestMatchers("/operator/**").hasRole("OPERATOR")
                         .requestMatchers("/operators/**").hasRole("OPERATOR")
+                        .requestMatchers(org.springframework.http.HttpMethod.PUT, "/booking/schedules/*/policies").hasRole("OPERATOR")
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

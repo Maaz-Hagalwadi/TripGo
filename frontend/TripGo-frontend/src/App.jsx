@@ -29,6 +29,7 @@ const BusReview = lazy(() => import('./features/operator/pages/BusReview'));
 const MyBuses = lazy(() => import('./features/operator/pages/MyBuses'));
 const CreateRoute = lazy(() => import('./features/operator/pages/CreateRoute'));
 const Schedules = lazy(() => import('./features/operator/pages/Schedules'));
+const OperatorPolicies = lazy(() => import('./features/operator/pages/OperatorPolicies'));
 const Bookings = lazy(() => import('./features/operator/pages/Bookings'));
 const Drivers = lazy(() => import('./features/operator/pages/Drivers'));
 const Earnings = lazy(() => import('./features/operator/pages/Earnings'));
@@ -37,6 +38,7 @@ const OperatorSupport = lazy(() => import('./features/operator/pages/OperatorSup
 
 const SearchResults = lazy(() => import('./features/search/pages/SearchResults'));
 const Booking = lazy(() => import('./features/search/pages/Booking'));
+const DummyPayment = lazy(() => import('./features/search/pages/DummyPayment'));
 
 const CompleteProfile = lazy(() => import('./features/auth/pages/CompleteProfile'));
 const AdminOperatorAction = lazy(() => import('./pages/AdminOperatorAction'));
@@ -89,6 +91,9 @@ function App() {
           <Route path={ROUTES.BOOKING} element={
             <ProtectedRoute allowedRoles={['USER']}><Booking /></ProtectedRoute>
           } />
+          <Route path={ROUTES.PAYMENT} element={
+            <ProtectedRoute allowedRoles={['USER']}><DummyPayment /></ProtectedRoute>
+          } />
           <Route path={ROUTES.USER_PROFILE} element={
             <ProtectedRoute allowedRoles={['USER']}><UserProfile /></ProtectedRoute>
           } />
@@ -111,6 +116,9 @@ function App() {
           } />
           <Route path={ROUTES.OPERATOR_BOOKINGS} element={
             <ProtectedRoute allowedRoles={['OPERATOR']}><Bookings /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.OPERATOR_POLICIES} element={
+            <ProtectedRoute allowedRoles={['OPERATOR']}><OperatorPolicies /></ProtectedRoute>
           } />
           <Route path={ROUTES.OPERATOR_DRIVERS} element={
             <ProtectedRoute allowedRoles={['OPERATOR']}><Drivers /></ProtectedRoute>
