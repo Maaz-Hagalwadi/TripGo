@@ -8,7 +8,7 @@ const UserSidebar = ({ activeItem = 'dashboard', collapsed = false, onToggleColl
     { id: 'dashboard', icon: 'dashboard', label: 'Overview', route: ROUTES.DASHBOARD },
     { id: 'search', icon: 'search', label: 'Search Buses', route: ROUTES.SEARCH_RESULTS },
     { id: 'bookings', icon: 'confirmation_number', label: 'My Bookings', route: ROUTES.USER_BOOKINGS },
-    { id: 'profile', icon: 'person', label: 'Profile', route: ROUTES.USER_PROFILE },
+    { id: 'ratings', icon: 'star', label: 'Ratings', route: ROUTES.USER_PROFILE },
   ];
   const bottomItems = [
     { id: 'settings', icon: 'settings', label: 'Settings', route: ROUTES.USER_SETTINGS },

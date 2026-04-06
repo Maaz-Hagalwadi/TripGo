@@ -51,6 +51,9 @@ public class Booking {
     @Column(nullable = false)
     private BookingStatus status;
 
+    @Column(name = "booking_code", unique = true)
+    private String bookingCode;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

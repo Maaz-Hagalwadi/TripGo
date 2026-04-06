@@ -15,17 +15,32 @@ const splitPassengerName = (name) => {
   };
 };
 
-const getSeatBaseFare = (selectedFare) => {
+const deriveFareBreakdown = (selectedFare) => {
+  const totalFare = Math.round(Number(selectedFare?.totalFare || 0));
   const explicitBase = Number(selectedFare?.baseFare);
-  if (Number.isFinite(explicitBase) && explicitBase > 0) return explicitBase;
+  const explicitGstAmount = Number(selectedFare?.gstAmount ?? selectedFare?.gst ?? NaN);
+  const gstPercent = Number(selectedFare?.gstPercent ?? selectedFare?.gstRate ?? NaN);
 
-  const totalFare = Number(selectedFare?.totalFare || 0);
-  const explicitGst = Number(selectedFare?.gstAmount ?? selectedFare?.gst ?? 0);
-  if (Number.isFinite(totalFare) && Number.isFinite(explicitGst) && explicitGst >= 0 && totalFare >= explicitGst) {
-    return totalFare - explicitGst;
+  let baseFare = Number.isFinite(explicitBase) ? Math.round(explicitBase) : 0;
+  let gstAmount = Number.isFinite(explicitGstAmount) ? Math.round(explicitGstAmount) : 0;
+
+  if (!baseFare && totalFare && Number.isFinite(gstPercent) && gstPercent > 0) {
+    baseFare = Math.round((totalFare * 100) / (100 + gstPercent));
   }
 
-  return totalFare;
+  if (!gstAmount && totalFare && baseFare && totalFare >= baseFare) {
+    gstAmount = totalFare - baseFare;
+  }
+
+  if (!baseFare && totalFare) {
+    baseFare = Math.max(totalFare - gstAmount, 0);
+  }
+
+  return {
+    perSeatBase: baseFare,
+    perSeatGst: gstAmount,
+    perSeatTotal: totalFare || baseFare + gstAmount,
+  };
 };
 
 const DummyPayment = () => {
@@ -35,9 +50,10 @@ const DummyPayment = () => {
   const [confirming, setConfirming] = useState(false);
 
   const seatCount = Math.max(booking?.selectedSeats?.length || 1, 1);
-  const perSeatTotal = Math.round(Number(booking?.selectedFare?.totalFare || 0));
-  const perSeatGst = Math.round(Number(booking?.selectedFare?.gstAmount ?? booking?.selectedFare?.gst ?? 0));
-  const perSeatBase = Math.max(0, Math.round(getSeatBaseFare(booking?.selectedFare)));
+  const { perSeatBase, perSeatGst, perSeatTotal } = useMemo(
+    () => deriveFareBreakdown(booking?.selectedFare),
+    [booking?.selectedFare]
+  );
 
   const totalFare = useMemo(
     () => perSeatTotal * seatCount,
@@ -109,7 +125,7 @@ const DummyPayment = () => {
 
             {booking?.lockToken ? (
               <div className="mt-6 rounded-2xl bg-emerald-50/80 px-4 py-3 text-sm text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20">
-                Your seats are locked with token <span className="font-semibold">{booking.lockToken}</span>. Confirm payment before the timer expires.
+                Your selected seats are locked for this booking session. Complete payment before the timer expires.
               </div>
             ) : (
               <div className="mt-6 rounded-2xl bg-amber-50/80 px-4 py-3 text-sm text-amber-700 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/20">
@@ -122,7 +138,7 @@ const DummyPayment = () => {
             <h2 className="text-xl font-black text-slate-900 dark:text-white">Fare Summary</h2>
             <div className="mt-5 space-y-3 text-sm text-slate-600 dark:text-slate-300">
               <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200/70 dark:bg-black/70 dark:ring-slate-950"><span>Seat count</span><span className="font-bold text-slate-900 dark:text-white">{booking?.selectedSeats?.length || 0}</span></div>
-              <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200/70 dark:bg-black/70 dark:ring-slate-950"><span>Per seat fare</span><span className="font-bold text-slate-900 dark:text-white">₹{perSeatTotal}</span></div>
+              <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200/70 dark:bg-black/70 dark:ring-slate-950"><span>Per seat fare</span><span className="font-bold text-slate-900 dark:text-white">₹{perSeatBase}</span></div>
               <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 ring-1 ring-slate-200/70 dark:bg-black/70 dark:ring-slate-950"><span>GST</span><span className="font-bold text-slate-900 dark:text-white">₹{gstAmount}</span></div>
               <div className="flex items-center justify-between rounded-2xl bg-primary/10 px-4 py-4"><span className="text-primary">Total payable</span><span className="text-2xl font-black text-slate-900 dark:text-white">₹{payableAmount}</span></div>
             </div>
@@ -157,8 +173,24 @@ const DummyPayment = () => {
 
                   const response = await confirmBooking(payload);
                   const bookingId = response?.bookingId || response?.id || response?.reference || '';
-                  toast.success(bookingId ? `Booking confirmed: ${bookingId}` : 'Booking confirmed successfully.');
-                  navigate(ROUTES.USER_BOOKINGS, { replace: true, state: { latestBooking: response || payload } });
+                  toast.success('Booking confirmed successfully. Your ticket is now available in My Bookings.');
+                  navigate(ROUTES.USER_BOOKINGS, {
+                    replace: true,
+                    state: {
+                      latestBooking: {
+                        ...payload,
+                        ...response,
+                        bookingId,
+                        payableAmount,
+                        totalAmount,
+                        gstAmount,
+                        seatNumbers: seatNumbers,
+                        passengers: payload.passengers,
+                        busName: booking?.bus?.busName,
+                        bookedAt: response?.bookedAt || response?.createdAt || new Date().toISOString(),
+                      },
+                    },
+                  });
                 } catch (error) {
                   toast.error(error?.message || 'Payment succeeded, but booking confirmation failed.');
                 } finally {

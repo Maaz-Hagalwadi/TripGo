@@ -34,12 +34,68 @@ const getStatusClass = (status) => {
   return 'bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300';
 };
 
+const toDisplayBookingId = (booking) => {
+  const raw = String(booking?.publicBookingId || booking?.bookingCode || booking?.bookingNumber || booking?.pnr || booking?.bookingId || booking?.id || booking?.reference || '').trim();
+  if (!raw) return '--';
+  if (raw.startsWith('TG-') || raw.startsWith('TRIPGO-')) return raw;
+  const compact = raw.replace(/-/g, '').slice(0, 8).toUpperCase();
+  return compact ? `TG-${compact}` : raw;
+};
+
 const extractSeats = (booking) => {
   if (Array.isArray(booking?.seatNumbers)) return booking.seatNumbers;
   if (Array.isArray(booking?.seats)) return booking.seats.map((seat) => seat?.seatNumber || seat).filter(Boolean);
   if (Array.isArray(booking?.bookingSeats)) return booking.bookingSeats.map((seat) => seat?.seatNumber).filter(Boolean);
   if (Array.isArray(booking?.passengers)) return booking.passengers.map((item) => item?.seatNumber).filter(Boolean);
   return [];
+};
+
+const extractPassengers = (booking) => {
+  if (Array.isArray(booking?.passengers) && booking.passengers.length) return booking.passengers;
+  if (Array.isArray(booking?.bookingSeats) && booking.bookingSeats.length) {
+    return booking.bookingSeats.map((seat) => ({
+      seatNumber: seat?.seatNumber,
+      firstName: seat?.passenger?.firstName,
+      lastName: seat?.passenger?.lastName,
+      age: seat?.passenger?.age,
+      gender: seat?.passenger?.gender,
+      phone: seat?.passenger?.phone,
+    }));
+  }
+  return [];
+};
+
+const downloadTicket = (booking) => {
+  const bookingId = toDisplayBookingId(booking);
+  const routeFrom = booking?.from || booking?.source || booking?.origin || booking?.route?.from || '--';
+  const routeTo = booking?.to || booking?.destination || booking?.route?.to || '--';
+  const seats = extractSeats(booking);
+  const passengers = extractPassengers(booking);
+  const passengerLines = passengers.length
+    ? passengers.map((item, index) => `${index + 1}. ${[item?.firstName, item?.lastName].filter(Boolean).join(' ') || 'Traveler'} | Seat: ${item?.seatNumber || '--'} | Age: ${item?.age ?? '--'} | Gender: ${item?.gender || '--'} | Phone: ${item?.phone || '--'}`).join('\n')
+    : 'Passenger details not available';
+
+  const text = [
+    'TripGo Ticket',
+    '',
+    `Booking ID: ${bookingId}`,
+    `Route: ${routeFrom} to ${routeTo}`,
+    `Status: ${booking?.status || 'CONFIRMED'}`,
+    `Booked On: ${formatDateTime(booking?.bookedAt || booking?.createdAt || booking?.bookingTime)}`,
+    `Amount Paid: Rs. ${Number(booking?.payableAmount ?? booking?.totalAmount ?? booking?.amount ?? 0)}`,
+    `Seats: ${seats.length ? seats.join(', ') : '--'}`,
+    '',
+    'Passengers',
+    passengerLines,
+  ].join('\n');
+
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${bookingId}.txt`;
+  link.click();
+  URL.revokeObjectURL(url);
 };
 
 const UserBookings = () => {
@@ -111,12 +167,11 @@ const UserBookings = () => {
         ) : (
           <div className="space-y-4">
             {visibleBookings.map((booking, index) => {
-              const bookingId = booking?.bookingId || booking?.id || booking?.reference || `BOOKING-${index + 1}`;
+              const bookingId = toDisplayBookingId(booking) || `TG-${index + 1}`;
               const routeFrom = booking?.from || booking?.source || booking?.origin || booking?.route?.from || '--';
               const routeTo = booking?.to || booking?.destination || booking?.route?.to || '--';
               const seats = extractSeats(booking);
-              const passengers = Array.isArray(booking?.passengers) ? booking.passengers : [];
-              const passengerNames = passengers.map((item) => [item?.firstName, item?.lastName].filter(Boolean).join(' ')).filter(Boolean);
+              const passengers = extractPassengers(booking);
               const bookedAt = booking?.bookedAt || booking?.createdAt || booking?.bookingTime;
               const amount = Number(booking?.payableAmount ?? booking?.totalAmount ?? booking?.amount ?? 0);
               const status = booking?.status || 'CONFIRMED';
@@ -145,11 +200,46 @@ const UserBookings = () => {
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-white/[0.03] dark:ring-white/10">
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Passengers</p>
-                      <p className="mt-2 text-base font-bold text-slate-900 dark:text-white">{passengerNames.length ? passengerNames.join(', ') : `${passengers.length || seats.length || 1} traveler(s)`}</p>
+                      <p className="mt-2 text-base font-bold text-slate-900 dark:text-white">{passengers.length ? `${passengers.length} traveler(s)` : `${seats.length || 1} traveler(s)`}</p>
                     </div>
                     <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-white/[0.03] dark:ring-white/10">
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Schedule</p>
                       <p className="mt-2 text-base font-bold text-slate-900 dark:text-white">{booking?.scheduleId || booking?.schedule?.id || '--'}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-white/[0.03] dark:ring-white/10">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Passenger Details</p>
+                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Seat number, traveler name, age, gender, and phone.</p>
+                      </div>
+                      <button
+                        onClick={() => downloadTicket(booking)}
+                        className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-black hover:bg-primary/90"
+                      >
+                        Download Ticket
+                      </button>
+                    </div>
+
+                    <div className="mt-4 space-y-3">
+                      {passengers.length ? passengers.map((item, passengerIndex) => (
+                        <div key={`${bookingId}-passenger-${passengerIndex}`} className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200/70 dark:bg-black/40 dark:ring-white/10">
+                          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                            <div>
+                              <p className="font-semibold text-slate-900 dark:text-white">{[item?.firstName, item?.lastName].filter(Boolean).join(' ') || `Traveler ${passengerIndex + 1}`}</p>
+                              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                                Age: {item?.age ?? '--'} • Gender: {item?.gender || '--'} • Phone: {item?.phone || '--'}
+                              </p>
+                            </div>
+                            <div className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 dark:bg-white/10 dark:text-slate-200">
+                              Seat {item?.seatNumber || '--'}
+                            </div>
+                          </div>
+                        </div>
+                      )) : (
+                        <p className="text-sm text-slate-500 dark:text-slate-400">Passenger details will appear here once the booking API returns traveler information for this booking.</p>
+                      )}
                     </div>
                   </div>
                 </div>

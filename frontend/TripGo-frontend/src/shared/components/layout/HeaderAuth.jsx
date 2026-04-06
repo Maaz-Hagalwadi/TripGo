@@ -142,8 +142,8 @@ const HeaderAuth = () => {
                   
                   <div className="py-2">
                     <button onClick={() => navigate('/user/profile')} className="w-full px-4 py-3 text-left text-slate-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-3">
-                      <span className="material-symbols-outlined text-lg">person</span>
-                      My Profile
+                      <span className="material-symbols-outlined text-lg">star</span>
+                      Ratings
                     </button>
                     <button onClick={() => navigate('/bookings')} className="w-full px-4 py-3 text-left text-slate-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-3">
                       <span className="material-symbols-outlined text-lg">confirmation_number</span>

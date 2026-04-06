@@ -8,7 +8,7 @@ const MOBILE_NAV = [
   { id: 'dashboard', icon: 'dashboard', label: 'Home', route: ROUTES.DASHBOARD },
   { id: 'search', icon: 'search', label: 'Search', route: ROUTES.SEARCH_RESULTS },
   { id: 'bookings', icon: 'confirmation_number', label: 'Bookings', route: ROUTES.USER_BOOKINGS },
-  { id: 'profile', icon: 'person', label: 'Profile', route: ROUTES.USER_PROFILE },
+  { id: 'ratings', icon: 'star', label: 'Ratings', route: ROUTES.USER_PROFILE },
 ];
 
 const UserLayout = ({ activeItem = 'dashboard', title = 'Dashboard', children }) => {
