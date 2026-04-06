@@ -51,13 +51,16 @@ public class SecurityConfig {
                                 "/auth/verify",
                                 "/auth/forgot-password",
                                 "/auth/reset-password",
-                                "/admin/operators/*/approve",
-                                "/admin/operators/*/reject",
-                                "/search/**")
+                                "/search/**",
+                                "/amenities/**",
+                                "/buses/*/rating-summary",
+                                "/booking/schedules/*/route-stops",
+                                "/booking/schedules/*/policies",
+                                "/booking/schedules/*/features")
                         .permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .requestMatchers("/operator/**").hasRole("OPERATOR")
-                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/operators/**").hasRole("OPERATOR")
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)

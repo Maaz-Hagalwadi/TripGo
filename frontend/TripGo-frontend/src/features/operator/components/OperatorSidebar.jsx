@@ -1,20 +1,22 @@
 import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '../../../shared/constants/routes';
 
 const OperatorSidebar = ({ activeItem = 'overview', onNavigate, collapsed = false, onToggleCollapse }) => {
   const navigate = useNavigate();
   
   const menuItems = [
-    { id: 'overview', icon: 'dashboard', label: 'Overview', route: '/operator/dashboard' },
-    { id: 'my-buses', icon: 'directions_bus', label: 'My Buses', route: '/operator/my-buses' },
-    { id: 'add-bus', icon: 'add_circle', label: 'Add Bus', route: '/operator/add-bus' },
-    { id: 'schedules', icon: 'calendar_month', label: 'Schedules', route: '/operator/schedules' },
-    { id: 'bookings', icon: 'confirmation_number', label: 'Bookings' },
-    { id: 'earnings', icon: 'account_balance_wallet', label: 'Earnings' },
+    { id: 'overview', icon: 'dashboard', label: 'Overview', route: ROUTES.OPERATOR_DASHBOARD },
+    { id: 'my-buses', icon: 'directions_bus', label: 'My Buses', route: ROUTES.OPERATOR_MY_BUSES },
+    { id: 'add-bus', icon: 'add_circle', label: 'Add Bus', route: ROUTES.OPERATOR_ADD_BUS },
+    { id: 'schedules', icon: 'calendar_month', label: 'Schedules', route: ROUTES.OPERATOR_SCHEDULES },
+    { id: 'bookings', icon: 'confirmation_number', label: 'Bookings', route: ROUTES.OPERATOR_BOOKINGS },
+    { id: 'drivers', icon: 'badge', label: 'Drivers', route: ROUTES.OPERATOR_DRIVERS },
+    { id: 'earnings', icon: 'account_balance_wallet', label: 'Earnings', route: ROUTES.OPERATOR_EARNINGS },
   ];
 
   const bottomItems = [
-    { id: 'settings', icon: 'settings', label: 'Settings' },
-    { id: 'support', icon: 'support_agent', label: 'Support' },
+    { id: 'settings', icon: 'settings', label: 'Settings', route: ROUTES.OPERATOR_SETTINGS },
+    { id: 'support', icon: 'support_agent', label: 'Support', route: ROUTES.OPERATOR_SUPPORT },
   ];
 
   return (
@@ -83,7 +85,7 @@ const OperatorSidebar = ({ activeItem = 'overview', onNavigate, collapsed = fals
         {bottomItems.map((item) => (
           <button
             key={item.id}
-            onClick={() => onNavigate(item.id)}
+            onClick={() => item.route ? navigate(item.route) : onNavigate?.(item.id)}
             className={`w-full flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors ${collapsed ? 'justify-center' : ''}`}
             title={collapsed ? item.label : ''}
           >

@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ROUTES } from '../../../shared/constants/routes';
-import Header from '../../../shared/components/layout/HeaderAuth';
+import UserLayout from '../../../shared/components/UserLayout';
 import HeroSection from './HeroSection';
 import WhyChooseUs from './WhyChooseUs';
 import ExploreSection from './ExploreSection';
@@ -22,13 +22,14 @@ const Dashboard = () => {
   }, [user, loading, navigate]);
 
   return (
-    <div className="min-h-screen bg-deep-black">
-      <Header />
+    <UserLayout activeItem="dashboard" title="Dashboard">
+      <div className="min-h-screen bg-deep-black rounded-2xl overflow-hidden">
       <HeroSection />
       <WhyChooseUs />
       <ExploreSection />
       <Footer />
-    </div>
+      </div>
+    </UserLayout>
   );
 };
 

@@ -19,7 +19,7 @@ public class AvailabilityService {
         var result = seatAvailabilityService.searchAvailability(schedule, from, to, seatType);
         var bus = schedule.getBus();
         var operator = bus.getOperator();
-        
+
         return new SearchResponse(
                 schedule.getId(),
                 bus.getName(),
@@ -28,13 +28,17 @@ public class AvailabilityService {
                 operator != null ? operator.getName() : "Unknown",
                 schedule.getDepartureTime(),
                 schedule.getArrivalTime(),
-                bus.getAmenities() != null ? 
+                bus.getAmenities() != null ?
                     bus.getAmenities().stream()
                         .map(a -> a.getCode())
-                        .collect(Collectors.toList()) : 
+                        .collect(Collectors.toList()) :
                     Collections.emptyList(),
-                result.fareResult(),
-                result.seatAvailability()
+                result.faresByType(),
+                result.seatAvailability(),
+                schedule.getTripStatus() != null ? schedule.getTripStatus() : "SCHEDULED",
+                schedule.getDelayMinutes() != null ? schedule.getDelayMinutes() : 0,
+                schedule.getActualDepartureTime(),
+                schedule.getActualArrivalTime()
         );
     }
 }

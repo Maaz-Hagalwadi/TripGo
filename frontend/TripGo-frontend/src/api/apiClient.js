@@ -21,6 +21,7 @@ const refreshAccessToken = async () => {
       const data = await response.json();
       if (data.accessToken) {
         localStorage.setItem('accessToken', data.accessToken);
+        if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
         return true;
       }
     }
@@ -41,6 +42,21 @@ const parseErrorMessage = async (response) => {
     return data.message || data.error || `Request failed with status ${response.status}`;
   } catch {
     return `Request failed with status ${response.status}`;
+  }
+};
+
+const parseJsonIfPresent = async (response) => {
+  const contentType = response.headers.get('content-type') || '';
+  const contentLength = response.headers.get('content-length');
+  const hasJson = contentType.includes('application/json');
+  const hasBody = contentLength !== '0';
+
+  if (!hasJson || !hasBody) return null;
+
+  try {
+    return await response.json();
+  } catch {
+    return null;
   }
 };
 
@@ -85,10 +101,7 @@ export const fetchWithAuth = async (url, options = {}) => {
 
   if (response.status >= 500) {
     const msg = await parseErrorMessage(response);
-    if (msg.includes('duplicate key') || msg.includes('already exists') || msg.includes('unique constraint')) {
-      throw new Error(msg);
-    }
-    throw new Error('Server error. Please try again later.');
+    throw new Error(msg || 'Server error. Please try again later.');
   }
 
   return response;
@@ -117,7 +130,7 @@ export const apiPost = async (endpoint, body) => {
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(await parseErrorMessage(response));
-  return response.json();
+  return parseJsonIfPresent(response);
 };
 
 /**
@@ -132,7 +145,7 @@ export const apiPut = async (endpoint, body) => {
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(await parseErrorMessage(response));
-  return response.json();
+  return parseJsonIfPresent(response);
 };
 
 /**
@@ -147,7 +160,7 @@ export const apiPatch = async (endpoint, body) => {
     ...(body !== undefined && { body: JSON.stringify(body) }),
   });
   if (!response.ok) throw new Error(await parseErrorMessage(response));
-  return response.json();
+  return parseJsonIfPresent(response);
 };
 
 /**

@@ -63,7 +63,7 @@ const BusReview = () => {
       }
 
       resetWizard();
-      toast.success('Bus added successfully!');
+      toast.success('Bus added and sent for admin approval.');
       navigate(ROUTES.OPERATOR_MY_BUSES);
     } catch (error) {
       const message = error.message || 'Failed to add bus. Please try again.';

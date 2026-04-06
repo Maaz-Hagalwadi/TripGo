@@ -8,13 +8,10 @@ import com.tripgo.backend.repository.OperatorRepository;
 import com.tripgo.backend.repository.UserRepository;
 import com.tripgo.backend.security.service.RefreshTokenService;
 import com.tripgo.backend.service.impl.EmailService;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,9 +24,6 @@ public class AdminOperatorController {
     private final UserRepository userRepository;
     private final RefreshTokenService refreshTokenService;
     private final EmailService emailService;
-
-    @Value("${app.frontend.url}")
-    private String frontendUrl;
 
     @GetMapping
     public List<OperatorResponse> listOperators(@RequestParam(required = false) OperatorStatus status) {
@@ -78,46 +72,12 @@ public class AdminOperatorController {
         op.setStatus(OperatorStatus.SUSPENDED);
         operatorRepository.save(op);
 
-        // revoke all active sessions immediately
         userRepository.findByOperator(op)
                 .ifPresent(refreshTokenService::revokeAllForUser);
 
-        // send suspension email
         emailService.sendOperatorSuspended(op);
 
         return ResponseEntity.ok("Operator suspended");
-    }
-
-    @GetMapping("/{id}/approve")
-    public void approveFromEmail(@PathVariable UUID id, HttpServletResponse response) throws IOException {
-        try {
-            Operator op = operatorRepository.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Operator not found"));
-
-            op.setStatus(OperatorStatus.APPROVED);
-            operatorRepository.save(op);
-            emailService.sendOperatorApproved(op);
-
-            response.sendRedirect(frontendUrl + "/admin/operator-action?status=approved&operator=" + op.getName());
-        } catch (Exception e) {
-            response.sendRedirect(frontendUrl + "/admin/operator-action?status=error&message=" + e.getMessage());
-        }
-    }
-
-    @GetMapping("/{id}/reject")
-    public void rejectFromEmail(@PathVariable UUID id, HttpServletResponse response) throws IOException {
-        try {
-            Operator op = operatorRepository.findById(id)
-                    .orElseThrow(() -> new RuntimeException("Operator not found"));
-
-            op.setStatus(OperatorStatus.REJECTED);
-            operatorRepository.save(op);
-            emailService.sendOperatorRejected(op);
-
-            response.sendRedirect(frontendUrl + "/admin/operator-action?status=rejected&operator=" + op.getName());
-        } catch (Exception e) {
-            response.sendRedirect(frontendUrl + "/admin/operator-action?status=error&message=" + e.getMessage());
-        }
     }
 
     private OperatorResponse toResponse(Operator op) {

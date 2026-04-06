@@ -11,9 +11,14 @@ export const ROUTES = {
   COMPLETE_PROFILE: '/complete-profile',
   ADMIN_OPERATOR_ACTION: '/admin/operator-action',
   ADMIN_DASHBOARD: '/admin/dashboard',
+  ADMIN_OPERATORS: '/admin/operators',
 
   DASHBOARD: '/dashboard',
   SEARCH_RESULTS: '/search-results',
+  BOOKING: '/booking',
+  USER_PROFILE: '/user/profile',
+  USER_SETTINGS: '/user/settings',
+  USER_SUPPORT: '/user/support',
 
   OPERATOR_DASHBOARD: '/operator/dashboard',
   OPERATOR_MY_BUSES: '/operator/my-buses',
@@ -22,4 +27,9 @@ export const ROUTES = {
   OPERATOR_BUS_REVIEW: '/operator/bus-review',
   OPERATOR_CREATE_ROUTE: '/operator/create-route',
   OPERATOR_SCHEDULES: '/operator/schedules',
+  OPERATOR_BOOKINGS: '/operator/bookings',
+  OPERATOR_DRIVERS: '/operator/drivers',
+  OPERATOR_EARNINGS: '/operator/earnings',
+  OPERATOR_SETTINGS: '/operator/settings',
+  OPERATOR_SUPPORT: '/operator/support',
 };

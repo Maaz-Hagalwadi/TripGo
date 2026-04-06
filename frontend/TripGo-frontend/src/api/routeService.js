@@ -19,12 +19,12 @@ const FALLBACK_CITIES = [
  */
 export const getCities = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/cities`);
-    if (!response.ok) return FALLBACK_CITIES;
+    const response = await fetch(`${API_BASE_URL}/search/cities`);
+    if (!response.ok) return FALLBACK_CITIES.map(c => c.name);
     const data = await response.json();
-    return data.length > 0 ? data : FALLBACK_CITIES;
+    return data.length > 0 ? data : FALLBACK_CITIES.map(c => c.name);
   } catch {
-    return FALLBACK_CITIES;
+    return FALLBACK_CITIES.map(c => c.name);
   }
 };
 
@@ -43,6 +43,10 @@ export const createRoute = async (routeData) => {
  */
 export const getRoutes = async () => {
   return apiGet('/operator/routes');
+};
+
+export const getOperatorDashboard = async () => {
+  return apiGet('/operator/dashboard');
 };
 
 /**
@@ -154,12 +158,32 @@ export const deleteSchedule = async (scheduleId) => {
   return apiDelete(`/operator/schedules/${scheduleId}`);
 };
 
+export const updateSchedule = async (scheduleId, data) => {
+  return apiPut(`/operator/schedules/${scheduleId}`, data);
+};
+
+export const startTrip = async (scheduleId) => {
+  return apiPost(`/operator/schedules/${scheduleId}/start`, {});
+};
+
+export const completeTrip = async (scheduleId) => {
+  return apiPost(`/operator/schedules/${scheduleId}/complete`, {});
+};
+
+export const markDelay = async (scheduleId, delayMinutes, delayReason) => {
+  return apiPatch(`/operator/schedules/${scheduleId}/delay`, { delayMinutes, delayReason });
+};
+
 export const getPoints = async (scheduleId) => {
   return apiGet(`/operator/schedules/${scheduleId}/points`);
 };
 
 export const addPoint = async (scheduleId, data) => {
   return apiPost(`/operator/schedules/${scheduleId}/points`, data);
+};
+
+export const updatePoint = async (scheduleId, pointId, data) => {
+  return apiPut(`/operator/schedules/${scheduleId}/points/${pointId}`, data);
 };
 
 export const deletePoint = async (scheduleId, pointId) => {

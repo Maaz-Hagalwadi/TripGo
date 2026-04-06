@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
 import { getBuses } from '../../../api/busService';
+import { getOperatorDashboard } from '../../../api/routeService';
+import { getOperatorBookings } from '../../../api/operatorBookingService';
 import { ROUTES } from '../../../shared/constants/routes';
 import './OperatorDashboard.css';
 
@@ -29,6 +31,15 @@ const OperatorDashboard = () => {
   const { user, loading, suspendedWhileLoggedIn, setSuspendedWhileLoggedIn } = useAuth();
   const [buses, setBuses] = useState([]);
   const [loadingBuses, setLoadingBuses] = useState(true);
+  const [stats, setStats] = useState({
+    totalBookings: 0,
+    confirmedBookings: 0,
+    cancelledBookings: 0,
+    totalRevenue: 0,
+    totalBuses: 0,
+    totalRoutes: 0
+  });
+  const [loadingStats, setLoadingStats] = useState(true);
 
   useEffect(() => {
     if (loading) return;
@@ -52,7 +63,10 @@ const OperatorDashboard = () => {
     );
   }
 
-  useEffect(() => { fetchBuses(); }, []);
+  useEffect(() => {
+    fetchBuses();
+    fetchOperatorStats();
+  }, []);
 
   const fetchBuses = async () => {
     try {
@@ -66,7 +80,53 @@ const OperatorDashboard = () => {
     }
   };
 
+  const fetchOperatorStats = async () => {
+    try {
+      setLoadingStats(true);
+      const [dashboard, bookingsResp, cancelledResp] = await Promise.all([
+        getOperatorDashboard(),
+        getOperatorBookings(),
+        getOperatorBookings('CANCELLED')
+      ]);
+
+      const normalizeList = (resp) => {
+        if (Array.isArray(resp)) return resp;
+        if (Array.isArray(resp?.content)) return resp.content;
+        if (Array.isArray(resp?.data)) return resp.data;
+        return [];
+      };
+
+      const allBookings = normalizeList(bookingsResp);
+      const cancelledBookingsList = normalizeList(cancelledResp);
+
+      const totalBookings = allBookings.length || Number(dashboard?.totalBookings || 0);
+      const cancelledBookings = cancelledBookingsList.length || Number(dashboard?.cancelledBookings || 0);
+      const confirmedBookings = Number(dashboard?.confirmedBookings ?? Math.max(totalBookings - cancelledBookings, 0));
+
+      setStats({
+        totalBookings,
+        confirmedBookings,
+        cancelledBookings,
+        totalRevenue: Number(dashboard?.totalRevenue || 0),
+        totalBuses: Number(dashboard?.totalBuses || 0),
+        totalRoutes: Number(dashboard?.totalRoutes || 0)
+      });
+    } catch {
+      setStats({
+        totalBookings: 0,
+        confirmedBookings: 0,
+        cancelledBookings: 0,
+        totalRevenue: 0,
+        totalBuses: 0,
+        totalRoutes: 0
+      });
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
   const activeBuses = buses.filter(b => b.active).length;
+  const resolvedTotalBuses = buses.length > 0 ? buses.length : stats.totalBuses;
 
   return (
     <OperatorLayout activeItem="overview" title="Overview">
@@ -85,9 +145,10 @@ const OperatorDashboard = () => {
           <div className="bg-white dark:bg-op-card p-6 rounded-xl border border-slate-200 dark:border-slate-800 flex items-start justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Buses</p>
-              <h3 className="text-3xl font-bold mt-2">{loadingBuses ? '...' : buses.length}</h3>
+              <h3 className="text-3xl font-bold mt-2">{loadingBuses ? '...' : resolvedTotalBuses}</h3>
               <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
-                <span className="material-symbols-outlined text-xs">info</span> {loadingBuses ? '...' : activeBuses} active
+                <span className="material-symbols-outlined text-xs">info</span>
+                {loadingStats ? '...' : `${stats.totalRoutes} routes`} · {loadingBuses ? '...' : `${activeBuses} active`}
               </p>
             </div>
             <div className="bg-primary/10 p-3 rounded-lg text-primary">
@@ -95,36 +156,36 @@ const OperatorDashboard = () => {
             </div>
           </div>
 
-          {/* Active Trips — no fake data */}
+          {/* Confirmed Bookings */}
           <div className="bg-white dark:bg-op-card p-6 rounded-xl border border-slate-200 dark:border-slate-800 flex items-start justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Active Trips</p>
-              <h3 className="text-3xl font-bold mt-2 text-slate-300 dark:text-slate-600">—</h3>
-              <p className="text-xs text-slate-400 mt-2">Coming soon</p>
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Confirmed Bookings</p>
+              <h3 className="text-3xl font-bold mt-2">{loadingStats ? '...' : stats.confirmedBookings}</h3>
+              <p className="text-xs text-slate-400 mt-2">Cancelled: {loadingStats ? '...' : stats.cancelledBookings}</p>
             </div>
             <div className="bg-green-500/10 p-3 rounded-lg text-green-500">
               <span className="material-symbols-outlined">route</span>
             </div>
           </div>
 
-          {/* Total Bookings — no fake data */}
+          {/* Total Bookings */}
           <div className="bg-white dark:bg-op-card p-6 rounded-xl border border-slate-200 dark:border-slate-800 flex items-start justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Bookings</p>
-              <h3 className="text-3xl font-bold mt-2 text-slate-300 dark:text-slate-600">—</h3>
-              <p className="text-xs text-slate-400 mt-2">Coming soon</p>
+              <h3 className="text-3xl font-bold mt-2">{loadingStats ? '...' : stats.totalBookings}</h3>
+              <p className="text-xs text-slate-400 mt-2">All booking statuses</p>
             </div>
             <div className="bg-orange-500/10 p-3 rounded-lg text-orange-500">
               <span className="material-symbols-outlined">confirmation_number</span>
             </div>
           </div>
 
-          {/* Monthly Revenue — no fake data */}
+          {/* Total Revenue */}
           <div className="bg-primary p-6 rounded-xl flex items-start justify-between relative overflow-hidden group">
             <div className="relative z-10">
-              <p className="text-sm font-medium text-white/80">Monthly Revenue</p>
-              <h3 className="text-3xl font-bold mt-2 text-white/40">—</h3>
-              <p className="text-xs text-white/60 mt-2">Coming soon</p>
+              <p className="text-sm font-medium text-white/80">Total Revenue</p>
+              <h3 className="text-3xl font-bold mt-2 text-white">{loadingStats ? '...' : `₹${Math.round(stats.totalRevenue).toLocaleString()}`}</h3>
+              <p className="text-xs text-white/80 mt-2">From dashboard API</p>
             </div>
             <div className="bg-white/20 p-3 rounded-lg text-white relative z-10">
               <span className="material-symbols-outlined">payments</span>
@@ -144,8 +205,12 @@ const OperatorDashboard = () => {
             <div className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800">
               <div className="flex flex-col items-center justify-center py-16 text-center px-6">
                 <span className="material-symbols-outlined text-5xl text-slate-300 dark:text-slate-700 mb-3">route</span>
-                <p className="text-slate-500 font-medium">No active trips</p>
-                <p className="text-slate-400 text-sm mt-1">Live trip data will appear here once schedules are running.</p>
+                <p className="text-slate-500 font-medium">
+                  {loadingStats ? 'Loading dashboard stats...' : `${stats.totalRoutes} route${stats.totalRoutes > 1 ? 's' : ''} configured`}
+                </p>
+                <p className="text-slate-400 text-sm mt-1">
+                  {loadingStats ? 'Fetching latest operator dashboard data.' : `${stats.totalBuses} buses and ${stats.totalBookings} bookings in summary.`}
+                </p>
                 <button
                   onClick={() => navigate(ROUTES.OPERATOR_SCHEDULES)}
                   className="mt-4 px-4 py-2 bg-primary text-black text-sm font-bold rounded-lg hover:bg-primary/90 transition-colors"

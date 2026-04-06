@@ -33,12 +33,6 @@ public class RouteService {
             throw new RuntimeException("User not an operator");
         }
 
-        // Prevent duplicate routes
-        if (routeRepository.findByOperatorAndOriginAndDestination(
-                user.getOperator(), req.origin(), req.destination()).isPresent()) {
-            throw new RuntimeException("Route from " + req.origin() + " to " + req.destination() + " already exists");
-        }
-
         Route route = Route.builder()
                 .operator(user.getOperator())
                 .name(req.name())
@@ -118,11 +112,6 @@ public class RouteService {
         RouteSegment segment = segmentRepository.findById(req.segmentId())
                 .orElseThrow(() -> new RuntimeException("Segment not found"));
 
-        // Duplicate protection
-        if (fareRepository.findByRouteSegmentIdAndSeatType(req.segmentId(), req.seatType()).isPresent()) {
-            throw new RuntimeException("Fare already exists for this segment and seat type");
-        }
-
         Fare fare = Fare.builder()
                 .route(route)
                 .routeSegment(segment)
@@ -154,16 +143,6 @@ public class RouteService {
 
         Bus bus = busRepository.findById(req.busId())
                 .orElseThrow(() -> new RuntimeException("Bus not found"));
-
-        // Prevent booking on inactive bus
-        if (!bus.isActive()) {
-            throw new RuntimeException("Bus is inactive and cannot be scheduled");
-        }
-
-        // Prevent overlapping schedules
-        if (scheduleRepository.existsOverlappingSchedule(bus, req.departureTime(), req.arrivalTime())) {
-            throw new RuntimeException("Bus already has a schedule overlapping this time");
-        }
 
         RouteSchedule schedule = RouteSchedule.builder()
                 .route(route)
@@ -301,28 +280,18 @@ public class RouteService {
                 .orElseThrow(() -> new RuntimeException("Schedule not found"));
 
         if (user.getOperator() == null ||
-                !schedule.getRoute().getOperator().getId().equals(user.getOperator().getId())) {
+            !schedule.getRoute().getOperator().getId().equals(user.getOperator().getId())) {
             throw new RuntimeException("Access denied");
         }
 
         Bus bus = busRepository.findById(req.busId())
                 .orElseThrow(() -> new RuntimeException("Bus not found"));
 
-        if (!bus.isActive()) {
-            throw new RuntimeException("Bus is inactive and cannot be scheduled");
-        }
-
-        boolean overlaps = scheduleRepository.existsOverlappingSchedule(bus, req.departureTime(), req.arrivalTime());
-        boolean sameSchedule = schedule.getBus().getId().equals(bus.getId());
-        if (overlaps && !sameSchedule) {
-            throw new RuntimeException("Bus already has a schedule overlapping this time");
-        }
-
         schedule.setBus(bus);
         schedule.setDepartureTime(req.departureTime());
         schedule.setArrivalTime(req.arrivalTime());
         schedule.setFrequency(req.frequency());
-        schedule = scheduleRepository.save(schedule);
+        scheduleRepository.save(schedule);
 
         Route route = schedule.getRoute();
         return new RouteScheduleResponse(
@@ -352,9 +321,7 @@ public class RouteService {
                                 a.getCode(),
                                 a.getDescription()
                         ))
-                        .toList(),
-                bus.getCreatedAt(),
-                bus.getUpdatedAt()
+                        .toList()
         );
     }
 

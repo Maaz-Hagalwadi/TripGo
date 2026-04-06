@@ -3,6 +3,7 @@ package com.tripgo.backend.controller;
 import com.tripgo.backend.dto.response.SearchResponse;
 import com.tripgo.backend.dto.response.SeatAvailability;
 import com.tripgo.backend.model.entities.RouteSchedule;
+import com.tripgo.backend.repository.RouteRepository;
 import com.tripgo.backend.repository.RouteScheduleRepository;
 import com.tripgo.backend.repository.RouteSegmentRepository;
 import com.tripgo.backend.service.impl.AvailabilityService;
@@ -24,7 +25,12 @@ public class SearchController {
     private final RouteScheduleRepository scheduleRepo;
     private final AvailabilityService availabilityService;
     private final RouteSegmentRepository segmentRepo;
+    private final RouteRepository routeRepository;
 
+    @GetMapping("/cities")
+    public List<String> getCities() {
+        return routeRepository.findAllDistinctCities();
+    }
     @GetMapping
     public List<SearchResponse> search(
             @RequestParam String from,
@@ -37,7 +43,11 @@ public class SearchController {
         
         System.out.println("🔍 Search request: " + from + " -> " + to + " (normalized: " + normalizedFrom + " -> " + normalizedTo + ")");
         
-        List<RouteSchedule> schedules = scheduleRepo.findByFromAndToAndDate(normalizedFrom, normalizedTo, date);
+        List<RouteSchedule> schedules = scheduleRepo.findByFromAndToAndDate(
+                normalizedFrom, normalizedTo,
+                date.atStartOfDay(java.time.ZoneOffset.UTC).toInstant(),
+                date.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant()
+        );
         
         return schedules.stream()
                 .map(schedule -> {
@@ -55,16 +65,17 @@ public class SearchController {
                     adjustedSchedule.setFrequency(schedule.getFrequency());
                     adjustedSchedule.setActive(schedule.getActive());
                     
-                    return availabilityService.search(adjustedSchedule, normalizedFrom, normalizedTo, "SLEEPER");
+                    return availabilityService.search(adjustedSchedule, normalizedFrom, normalizedTo, null);
                 })
                 .toList();
     }
     
     private String normalizeStopName(String stop) {
         if (stop == null || stop.isEmpty()) return stop;
-        stop = stop.trim();
-        // Capitalize first letter, lowercase rest
-        return stop.substring(0, 1).toUpperCase() + stop.substring(1).toLowerCase();
+        // Title-case each word: "new delhi" -> "New Delhi"
+        return java.util.Arrays.stream(stop.trim().split("\\s+"))
+                .map(w -> w.substring(0, 1).toUpperCase() + w.substring(1).toLowerCase())
+                .collect(java.util.stream.Collectors.joining(" "));
     }
     
     private Instant adjustToDate(Instant originalTime, LocalDate targetDate) {

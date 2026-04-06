@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import HeaderAuth from '../../../shared/components/layout/HeaderAuth';
 import { searchBuses } from '../../../api/busService';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import { ROUTES } from '../../../shared/constants/routes';
+import UserLayout from '../../../shared/components/UserLayout';
 
 const DEPARTURE_SLOTS = [
   { label: 'Early Morning (6am – 12pm)', start: 6, end: 12 },
@@ -10,8 +11,135 @@ const DEPARTURE_SLOTS = [
   { label: 'Night (6pm – 12am)', start: 18, end: 24 },
 ];
 
-const BUS_TYPE_OPTIONS = ['AC Sleeper', 'Luxury Volvo', 'Seater', 'Semi Sleeper', 'Electric'];
 const AMENITY_OPTIONS = ['WiFi', 'USB Port', 'Meal', 'Blanket', 'AC'];
+const CITY_OPTIONS = [
+  'Mumbai',
+  'Pune',
+  'Goa',
+  'Madgao',
+  'Bengaluru',
+  'Hyderabad',
+  'Chennai',
+  'Delhi',
+  'Kochi',
+];
+
+const formatTime = (instant) => {
+  if (!instant) return '--';
+  return new Date(instant).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+};
+
+const formatDuration = (dep, arr) => {
+  if (!dep || !arr) return '--';
+  const mins = Math.round((new Date(arr) - new Date(dep)) / 60000);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h}h ${m}m`;
+};
+
+const minFare = (faresByType) => {
+  if (!faresByType) return 0;
+  const vals = Object.values(faresByType).map(f => f.totalFare);
+  return vals.length ? Math.min(...vals) : 0;
+};
+
+const toYmd = (date) => date.toISOString().split('T')[0];
+const TODAY_YMD = toYmd(new Date());
+const TOMORROW_YMD = toYmd(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
+const BusCard = ({ bus, searchParams }) => {
+  const navigate = useNavigate();
+  const fareEntries = Object.entries(bus.faresByType || {});
+  const [selectedType, setSelectedType] = useState(fareEntries[0]?.[0] || null);
+  const selectedFare = bus.faresByType?.[selectedType];
+  const availableSeats = Array.isArray(bus.seatAvailability) ? bus.seatAvailability.filter((seat) => seat.available).length : null;
+  const tripStatus = String(bus.tripStatus || '').toUpperCase();
+  const delayMins = Number(bus.delayMinutes || 0);
+  const statusLabel = tripStatus === 'DELAYED' || delayMins > 0 ? `Delayed${delayMins > 0 ? ` by ${delayMins} min` : ''}` : 'On Time';
+  const statusClass = tripStatus === 'DELAYED' || delayMins > 0 ? 'text-amber-400' : 'text-emerald-400';
+
+  return (
+    <div className="bg-charcoal border border-white/5 rounded-2xl p-6 hover:border-primary/30 transition-all">
+      <div className="flex flex-col md:flex-row md:items-center gap-6">
+
+        {/* Bus info */}
+        <div className="flex items-center gap-4 md:w-48 flex-shrink-0">
+          <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center">
+            <span className="material-symbols-outlined text-2xl text-primary">directions_bus</span>
+          </div>
+          <div>
+            <h4 className="font-bold text-white">{bus.busName}</h4>
+            <p className="text-xs text-slate-400">{bus.busType}</p>
+            <p className="text-xs text-slate-500">{bus.operatorName}</p>
+            <p className={`text-[11px] font-semibold mt-1 ${statusClass}`}>{statusLabel}</p>
+          </div>
+        </div>
+
+        {/* Times */}
+        <div className="flex-1 grid grid-cols-3 items-center text-center">
+          <div>
+            <p className="text-xl font-extrabold text-white">{formatTime(bus.departureTime)}</p>
+            <p className="text-xs text-slate-400 uppercase tracking-wider mt-1">{searchParams.from}</p>
+          </div>
+          <div className="flex flex-col items-center">
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">
+              {formatDuration(bus.departureTime, bus.arrivalTime)}
+            </p>
+            <div className="w-full h-px bg-white/10 relative">
+              <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-primary/40 border border-primary"></div>
+            </div>
+          </div>
+          <div>
+            <p className="text-xl font-extrabold text-white">{formatTime(bus.arrivalTime)}</p>
+            <p className="text-xs text-slate-400 uppercase tracking-wider mt-1">{searchParams.to}</p>
+          </div>
+        </div>
+
+        {/* Seat type selector + price */}
+        <div className="flex flex-col items-end gap-3 md:border-l border-white/5 md:pl-6 min-w-[160px]">
+          {fareEntries.length > 1 && (
+            <div className="flex gap-2 flex-wrap justify-end">
+              {fareEntries.map(([type, fare]) => (
+                <button
+                  key={type}
+                  onClick={() => setSelectedType(type)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold border transition-all ${
+                    selectedType === type
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-white/10 text-slate-400 hover:border-primary/40'
+                  }`}
+                >
+                  {type} · ₹{Math.round(fare.totalFare)}
+                </button>
+              ))}
+            </div>
+          )}
+          {fareEntries.length === 1 && (
+            <p className="text-xs text-slate-400 font-medium">{fareEntries[0][0]}</p>
+          )}
+          <p className="text-2xl font-black text-primary">
+            ₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}
+          </p>
+          {bus.amenities?.length > 0 && (
+            <div className="flex gap-1 flex-wrap justify-end">
+              {bus.amenities.slice(0, 4).map(a => (
+                <span key={a} className="text-[10px] bg-white/5 text-slate-400 px-2 py-0.5 rounded">{a}</span>
+              ))}
+            </div>
+          )}
+          {availableSeats !== null && (
+            <p className="text-[11px] text-emerald-400 font-semibold">{availableSeats} seats available</p>
+          )}
+          <button
+            onClick={() => navigate(ROUTES.BOOKING, { state: { bus, selectedType, selectedFare, searchParams } })}
+            className="w-full bg-white/10 hover:bg-primary hover:text-black text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all">
+            Select Seat
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const SearchResults = () => {
   const location = useLocation();
@@ -19,33 +147,38 @@ const SearchResults = () => {
   const { user, loading } = useAuth();
 
   const [buses, setBuses] = useState([]);
-  const [loadingBuses, setLoadingBuses] = useState(true);
+  const [loadingBuses, setLoadingBuses] = useState(Boolean(location.state?.from && location.state?.to && location.state?.date));
   const [error, setError] = useState(null);
-  const [searchParams, setSearchParams] = useState({
+  const initialSearch = {
     from: location.state?.from || '',
     to: location.state?.to || '',
     date: location.state?.date || new Date().toISOString().split('T')[0],
-  });
+  };
+  const [searchParams, setSearchParams] = useState(initialSearch);
+  const [appliedSearch, setAppliedSearch] = useState(initialSearch);
 
-  // Filter state
   const [selectedSlots, setSelectedSlots] = useState([]);
   const [selectedBusTypes, setSelectedBusTypes] = useState([]);
-  const [maxPrice, setMaxPrice] = useState(150);
+  const [maxPrice, setMaxPrice] = useState(5000);
   const [selectedAmenities, setSelectedAmenities] = useState([]);
   const [sortBy, setSortBy] = useState('cheapest');
 
   useEffect(() => {
     if (loading) return;
-    if (!user) { navigate('/'); return; }
-    if (user.role && user.role !== 'USER') { navigate('/'); return; }
-    if (searchParams.from && searchParams.to && searchParams.date) fetchBuses();
-  }, [user, loading]);
+    if (!user) { navigate(ROUTES.HOME); return; }
+    if (user.role && user.role !== 'USER') { navigate(ROUTES.HOME); return; }
+  }, [user, loading, navigate]);
 
-  const fetchBuses = async () => {
+  useEffect(() => {
+    if (!user || user.role !== 'USER') return;
+    if (appliedSearch.from && appliedSearch.to && appliedSearch.date) fetchBuses(appliedSearch);
+  }, [appliedSearch, user]);
+
+  const fetchBuses = async (params = appliedSearch) => {
     setLoadingBuses(true);
     setError(null);
     try {
-      const data = await searchBuses(searchParams.from, searchParams.to, searchParams.date);
+      const data = await searchBuses(params.from, params.to, params.date);
       setBuses(data || []);
     } catch {
       setError('Failed to fetch buses. Please try again.');
@@ -62,7 +195,7 @@ const SearchResults = () => {
 
     if (selectedSlots.length > 0) {
       result = result.filter(bus => {
-        const hour = parseInt(bus.departureTime?.split(':')[0] ?? '0');
+        const hour = new Date(bus.departureTime).getHours();
         return selectedSlots.some(label => {
           const slot = DEPARTURE_SLOTS.find(s => s.label === label);
           return slot && hour >= slot.start && hour < slot.end;
@@ -76,7 +209,7 @@ const SearchResults = () => {
       );
     }
 
-    result = result.filter(bus => (bus.price ?? 0) <= maxPrice);
+    result = result.filter(bus => minFare(bus.faresByType) <= maxPrice);
 
     if (selectedAmenities.length > 0) {
       result = result.filter(bus =>
@@ -86,35 +219,64 @@ const SearchResults = () => {
       );
     }
 
-    if (sortBy === 'cheapest') result.sort((a, b) => (a.price ?? 0) - (b.price ?? 0));
-    else if (sortBy === 'earliest') result.sort((a, b) => (a.departureTime ?? '').localeCompare(b.departureTime ?? ''));
+    if (sortBy === 'cheapest') result.sort((a, b) => minFare(a.faresByType) - minFare(b.faresByType));
+    else if (sortBy === 'earliest') result.sort((a, b) => new Date(a.departureTime) - new Date(b.departureTime));
 
     return result;
   }, [buses, selectedSlots, selectedBusTypes, maxPrice, selectedAmenities, sortBy]);
 
-  const handleUpdateSearch = () => {
-    if (searchParams.from.trim() && searchParams.to.trim() && searchParams.date) fetchBuses();
+  const handleModifySearch = () => {
+    const trimmedSearch = {
+      from: searchParams.from.trim(),
+      to: searchParams.to.trim(),
+      date: searchParams.date,
+    };
+    if (trimmedSearch.from && trimmedSearch.to && trimmedSearch.date) {
+      setAppliedSearch(trimmedSearch);
+    }
   };
 
+  const cityOptions = useMemo(
+    () => [...new Set([...CITY_OPTIONS, searchParams.from, searchParams.to, appliedSearch.from, appliedSearch.to].filter(Boolean))],
+    [searchParams.from, searchParams.to, appliedSearch.from, appliedSearch.to]
+  );
+
+  const allMaxPrice = useMemo(() => {
+    if (!buses.length) return 5000;
+    return Math.ceil(Math.max(...buses.map(b => minFare(b.faresByType))) / 100) * 100;
+  }, [buses]);
+
   return (
-    <div className="bg-deep-black text-slate-100 min-h-screen">
-      <HeaderAuth />
+    <UserLayout activeItem="search" title="Search Buses">
+      <div className="bg-deep-black text-slate-100 rounded-2xl overflow-hidden">
 
       {/* Search Bar */}
-      <div className="bg-charcoal border-b border-white/5 py-4 sticky top-20 z-40">
+      <div className="bg-charcoal border-b border-white/5 py-4 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-center">
             <div className="relative">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-silver-text z-10 text-xl">location_on</span>
               <input value={searchParams.from} onChange={e => setSearchParams(p => ({ ...p, from: e.target.value }))}
+                list="from-city-options"
                 className="w-full pl-10 pr-4 py-2.5 bg-input-gray border border-white/10 rounded-lg text-white text-sm placeholder-silver-text focus:ring-1 focus:ring-primary outline-none"
                 placeholder="Departure City" type="text" />
+              <datalist id="from-city-options">
+                {cityOptions.map((city) => (
+                  <option key={`from-${city}`} value={city} />
+                ))}
+              </datalist>
             </div>
             <div className="relative">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-silver-text z-10 text-xl">directions_bus</span>
               <input value={searchParams.to} onChange={e => setSearchParams(p => ({ ...p, to: e.target.value }))}
+                list="to-city-options"
                 className="w-full pl-10 pr-4 py-2.5 bg-input-gray border border-white/10 rounded-lg text-white text-sm placeholder-silver-text focus:ring-1 focus:ring-primary outline-none"
                 placeholder="Destination City" type="text" />
+              <datalist id="to-city-options">
+                {cityOptions.map((city) => (
+                  <option key={`to-${city}`} value={city} />
+                ))}
+              </datalist>
             </div>
             <div className="relative">
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-silver-text z-10 text-xl">calendar_today</span>
@@ -122,9 +284,29 @@ const SearchResults = () => {
                 className="w-full pl-10 pr-4 py-2.5 bg-input-gray border border-white/10 rounded-lg text-white text-sm outline-none"
                 type="date" />
             </div>
-            <button onClick={handleUpdateSearch}
+            <button onClick={handleModifySearch}
               className="w-full bg-primary hover:bg-primary/90 text-black h-[42px] rounded-lg font-bold flex items-center justify-center gap-2 transition-all">
-              <span className="material-symbols-outlined text-lg">sync</span> Update
+              <span className="material-symbols-outlined text-lg">edit</span> Modify
+            </button>
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => {
+                setSearchParams((p) => ({ ...p, date: TODAY_YMD }));
+                setAppliedSearch((p) => ({ ...p, date: TODAY_YMD }));
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${searchParams.date === TODAY_YMD ? 'border-primary text-primary bg-primary/10' : 'border-white/10 text-slate-300 hover:border-primary/40'}`}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => {
+                setSearchParams((p) => ({ ...p, date: TOMORROW_YMD }));
+                setAppliedSearch((p) => ({ ...p, date: TOMORROW_YMD }));
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border ${searchParams.date === TOMORROW_YMD ? 'border-primary text-primary bg-primary/10' : 'border-white/10 text-slate-300 hover:border-primary/40'}`}
+            >
+              Tomorrow
             </button>
           </div>
         </div>
@@ -135,8 +317,6 @@ const SearchResults = () => {
 
           {/* Filters Sidebar */}
           <aside className="w-full lg:w-64 flex-shrink-0 space-y-8">
-
-            {/* Departure Time */}
             <div>
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Departure Time</h3>
               <div className="space-y-3">
@@ -144,42 +324,40 @@ const SearchResults = () => {
                   <label key={label} className="flex items-center gap-3 cursor-pointer group">
                     <input type="checkbox" checked={selectedSlots.includes(label)}
                       onChange={() => toggleItem(setSelectedSlots, label)}
-                      className="w-5 h-5 rounded border-white/10 bg-input-gray text-primary focus:ring-primary focus:ring-offset-deep-black" />
+                      className="w-5 h-5 rounded border-white/10 bg-input-gray text-primary focus:ring-primary" />
                     <span className="text-sm text-slate-300 group-hover:text-white transition-colors">{label}</span>
                   </label>
                 ))}
               </div>
             </div>
 
-            {/* Bus Type */}
             <div>
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Bus Type</h3>
               <div className="space-y-3">
-                {BUS_TYPE_OPTIONS.map(type => (
+                {[...new Set(buses.map(b => b.busType).filter(Boolean))].map(type => (
                   <label key={type} className="flex items-center gap-3 cursor-pointer group">
                     <input type="checkbox" checked={selectedBusTypes.includes(type)}
                       onChange={() => toggleItem(setSelectedBusTypes, type)}
-                      className="w-5 h-5 rounded border-white/10 bg-input-gray text-primary focus:ring-primary focus:ring-offset-deep-black" />
+                      className="w-5 h-5 rounded border-white/10 bg-input-gray text-primary focus:ring-primary" />
                     <span className="text-sm text-slate-300 group-hover:text-white transition-colors">{type}</span>
                   </label>
                 ))}
               </div>
             </div>
 
-            {/* Price Range */}
             <div>
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Max Price</h3>
-              <input type="range" min={20} max={150} value={maxPrice}
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">
+                Max Price · <span className="text-primary">₹{maxPrice}</span>
+              </h3>
+              <input type="range" min={0} max={allMaxPrice} value={maxPrice}
                 onChange={e => setMaxPrice(Number(e.target.value))}
                 className="w-full h-2 bg-input-gray rounded-lg appearance-none cursor-pointer accent-primary" />
               <div className="flex justify-between mt-2 text-xs text-slate-400 font-bold">
-                <span>₹20</span>
-                <span className="text-primary">₹{maxPrice}</span>
-                <span>₹150</span>
+                <span>₹0</span>
+                <span>₹{allMaxPrice}</span>
               </div>
             </div>
 
-            {/* Amenities */}
             <div>
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Amenities</h3>
               <div className="flex flex-wrap gap-2">
@@ -196,9 +374,8 @@ const SearchResults = () => {
               </div>
             </div>
 
-            {/* Reset */}
-            {(selectedSlots.length > 0 || selectedBusTypes.length > 0 || selectedAmenities.length > 0 || maxPrice < 150) && (
-              <button onClick={() => { setSelectedSlots([]); setSelectedBusTypes([]); setSelectedAmenities([]); setMaxPrice(150); }}
+            {(selectedSlots.length > 0 || selectedBusTypes.length > 0 || selectedAmenities.length > 0) && (
+              <button onClick={() => { setSelectedSlots([]); setSelectedBusTypes([]); setSelectedAmenities([]); setMaxPrice(allMaxPrice); }}
                 className="w-full py-2 text-xs font-bold text-slate-400 hover:text-white border border-white/10 rounded-lg transition-colors">
                 Reset Filters
               </button>
@@ -211,6 +388,9 @@ const SearchResults = () => {
               <h2 className="text-xl font-bold text-white">
                 {loadingBuses ? 'Searching...' : `${filteredBuses.length} Bus${filteredBuses.length !== 1 ? 'es' : ''} found`}
               </h2>
+              <p className="text-xs text-slate-400">
+                {appliedSearch.from} → {appliedSearch.to} on {appliedSearch.date}
+              </p>
               {filteredBuses.length > 0 && (
                 <div className="flex items-center gap-4 text-sm font-medium">
                   <span className="text-slate-400">Sort by:</span>
@@ -243,65 +423,19 @@ const SearchResults = () => {
               <div className="bg-charcoal border border-white/5 rounded-2xl p-12 text-center">
                 <span className="material-symbols-outlined text-slate-600 text-6xl mb-4">search_off</span>
                 <h3 className="text-xl font-bold text-white mb-2">No Buses Found</h3>
-                <p className="text-slate-400">Try adjusting your filters or search criteria</p>
+                <p className="text-slate-400">Try adjusting your filters or search for a different date</p>
               </div>
             )}
 
             {!loadingBuses && !error && filteredBuses.map((bus) => (
-              <div key={bus.id ?? bus.busName} className="bg-charcoal border border-white/5 rounded-2xl p-6 hover:border-primary/30 transition-all">
-                <div className="grid grid-cols-1 md:grid-cols-4 items-center gap-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-white/5 rounded-xl flex items-center justify-center">
-                      <span className="material-symbols-outlined text-3xl text-primary">directions_bus</span>
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-white text-lg">{bus.busName}</h4>
-                      <p className="text-xs text-slate-400 font-medium">{bus.busType}</p>
-                    </div>
-                  </div>
-                  <div className="md:col-span-2 grid grid-cols-3 items-center text-center">
-                    <div>
-                      <p className="text-xl font-extrabold text-white">{bus.departureTime}</p>
-                      <p className="text-xs text-slate-400 font-bold uppercase mt-1 tracking-wider">{searchParams.from}</p>
-                    </div>
-                    <div className="flex flex-col items-center">
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">{bus.duration}</p>
-                      <div className="w-full h-px bg-white/10 relative">
-                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-primary/40 border border-primary"></div>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="text-xl font-extrabold text-white">{bus.arrivalTime}</p>
-                      <p className="text-xs text-slate-400 font-bold uppercase mt-1 tracking-wider">{searchParams.to}</p>
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-3 border-l border-white/5 pl-6">
-                    <p className="text-2xl font-black text-primary">₹{bus.price}</p>
-                    <button className="w-full bg-white/10 hover:bg-primary hover:text-black text-white px-6 py-2.5 rounded-xl text-sm font-bold transition-all">
-                      Select Seat
-                    </button>
-                  </div>
-                </div>
-              </div>
+              <BusCard key={bus.scheduleId} bus={bus} searchParams={appliedSearch} />
             ))}
           </div>
         </div>
       </main>
 
-      <footer className="bg-deep-black border-t border-white/5 pt-12 pb-8 mt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-            <span className="text-lg font-bold tracking-tight text-white">TripGo</span>
-            <div className="text-slate-500 text-sm">© {new Date().getFullYear()} TripGo Inc. All rights reserved.</div>
-            <div className="flex gap-6">
-              <a className="text-slate-400 hover:text-white transition-colors text-sm" href="#">Privacy</a>
-              <a className="text-slate-400 hover:text-white transition-colors text-sm" href="#">Terms</a>
-              <a className="text-slate-400 hover:text-white transition-colors text-sm" href="#">Help</a>
-            </div>
-          </div>
-        </div>
-      </footer>
-    </div>
+      </div>
+    </UserLayout>
   );
 };
 

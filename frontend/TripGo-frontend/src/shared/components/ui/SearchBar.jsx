@@ -58,11 +58,11 @@ const SearchBar = () => {
   };
 
   const filteredFromCities = cities.filter(city => 
-    city.name.toLowerCase().includes(fromSearch.toLowerCase())
+    city.toLowerCase().includes(fromSearch.toLowerCase())
   );
   
   const filteredToCities = cities.filter(city => 
-    city.name.toLowerCase().includes(toSearch.toLowerCase())
+    city.toLowerCase().includes(toSearch.toLowerCase())
   );
   
   const handleFromSelect = (cityName) => {
@@ -153,16 +153,17 @@ const SearchBar = () => {
                 {filteredFromCities.length > 0 ? (
                   filteredFromCities.map((city) => (
                     <div
-                      key={city.id}
-                      onClick={() => handleFromSelect(city.name)}
+                      key={city}
+                      onClick={() => handleFromSelect(city)}
                       className="px-4 py-3 hover:bg-primary/10 cursor-pointer text-white border-b border-white/5 last:border-0"
                     >
-                      {city.name}
+                      <span className="material-symbols-outlined text-sm text-slate-400 mr-2 align-middle">location_on</span>
+                      {city}
                     </div>
                   ))
-                ) : (
-                  <div className="px-4 py-3 text-slate-400 text-sm">No cities found</div>
-                )}
+                ) : fromSearch.length > 0 ? (
+                  <div className="px-4 py-3 text-slate-400 text-sm">No matching cities — you can still search</div>
+                ) : null}
               </div>
             )}
           </div>
@@ -201,16 +202,17 @@ const SearchBar = () => {
                 {filteredToCities.length > 0 ? (
                   filteredToCities.map((city) => (
                     <div
-                      key={city.id}
-                      onClick={() => handleToSelect(city.name)}
+                      key={city}
+                      onClick={() => handleToSelect(city)}
                       className="px-4 py-3 hover:bg-primary/10 cursor-pointer text-white border-b border-white/5 last:border-0"
                     >
-                      {city.name}
+                      <span className="material-symbols-outlined text-sm text-slate-400 mr-2 align-middle">location_on</span>
+                      {city}
                     </div>
                   ))
-                ) : (
-                  <div className="px-4 py-3 text-slate-400 text-sm">No cities found</div>
-                )}
+                ) : toSearch.length > 0 ? (
+                  <div className="px-4 py-3 text-slate-400 text-sm">No matching cities — you can still search</div>
+                ) : null}
               </div>
             )}
           </div>

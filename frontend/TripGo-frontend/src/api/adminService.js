@@ -1,78 +1,35 @@
-import { API_BASE_URL } from '../config/env';
-
-const authHeaders = () => {
-  const token = localStorage.getItem('accessToken');
-  return {
-    'Content-Type': 'application/json',
-    'Authorization': token ? `Bearer ${token}` : '',
-  };
-};
+import { apiGet, apiPost } from './apiClient';
 
 export const getOperators = async (status = null) => {
-  const url = status
-    ? `${API_BASE_URL}/admin/operators?status=${status}`
-    : `${API_BASE_URL}/admin/operators`;
-  const res = await fetch(url, { headers: authHeaders() });
-  if (!res.ok) throw new Error('Failed to fetch operators');
-  return res.json();
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  return apiGet(`/admin/operators${query}`);
 };
 
 export const approveOperator = async (operatorId) => {
-  const res = await fetch(`${API_BASE_URL}/admin/operators/${operatorId}/approve`, {
-    method: 'POST',
-    headers: authHeaders(),
-  });
-  if (!res.ok) throw new Error('Failed to approve operator');
-  return res.json().catch(() => ({}));
+  return apiPost(`/admin/operators/${operatorId}/approve`, {});
 };
 
 export const rejectOperator = async (operatorId) => {
-  const res = await fetch(`${API_BASE_URL}/admin/operators/${operatorId}/reject`, {
-    method: 'POST',
-    headers: authHeaders(),
-  });
-  if (!res.ok) throw new Error('Failed to reject operator');
-  return res.json().catch(() => ({}));
+  return apiPost(`/admin/operators/${operatorId}/reject`, {});
 };
 
 export const suspendOperator = async (operatorId) => {
-  const res = await fetch(`${API_BASE_URL}/admin/operators/${operatorId}/suspend`, {
-    method: 'POST',
-    headers: authHeaders(),
-  });
-  if (!res.ok) throw new Error('Failed to suspend operator');
-  return res.json().catch(() => ({}));
+  return apiPost(`/admin/operators/${operatorId}/suspend`, {});
 };
 
 export const getBuses = async (active = null) => {
-  const url = active !== null
-    ? `${API_BASE_URL}/admin/buses?active=${active}`
-    : `${API_BASE_URL}/admin/buses`;
-  const res = await fetch(url, { headers: authHeaders() });
-  if (!res.ok) throw new Error('Failed to fetch buses');
-  return res.json();
+  const query = active !== null ? `?active=${active}` : '';
+  return apiGet(`/admin/buses${query}`);
 };
 
 export const approveBus = async (busId) => {
-  const res = await fetch(`${API_BASE_URL}/admin/buses/${busId}/approve`, {
-    method: 'POST',
-    headers: authHeaders(),
-  });
-  if (!res.ok) throw new Error('Failed to approve bus');
-  return res.json().catch(() => ({}));
+  return apiPost(`/admin/buses/${busId}/approve`, {});
 };
 
 export const rejectBus = async (busId) => {
-  const res = await fetch(`${API_BASE_URL}/admin/buses/${busId}/reject`, {
-    method: 'POST',
-    headers: authHeaders(),
-  });
-  if (!res.ok) throw new Error('Failed to reject bus');
-  return res.json().catch(() => ({}));
+  return apiPost(`/admin/buses/${busId}/reject`, {});
 };
 
 export const getUsers = async () => {
-  const res = await fetch(`${API_BASE_URL}/admin/users`, { headers: authHeaders() });
-  if (!res.ok) throw new Error('Failed to fetch users');
-  return res.json();
+  return apiGet('/admin/users');
 };

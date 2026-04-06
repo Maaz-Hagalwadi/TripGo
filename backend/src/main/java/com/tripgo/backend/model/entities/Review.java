@@ -23,7 +23,15 @@ public class Review {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id")
-    private User user;  // who posted the review
+    private User user;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "route_schedule_id")
+    private RouteSchedule routeSchedule;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "bus_id")
+    private Bus bus;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "route_id")

@@ -1,6 +1,7 @@
 package com.tripgo.backend.controller;
 
 import com.tripgo.backend.dto.request.BoardingDroppingPointRequest;
+import com.tripgo.backend.dto.request.CreateScheduleRequest;
 import com.tripgo.backend.dto.response.BoardingDroppingPointResponse;
 import com.tripgo.backend.dto.response.RouteScheduleResponse;
 import com.tripgo.backend.model.entities.BoardingDroppingPoint;
@@ -41,6 +42,14 @@ public class ScheduleController {
     public RouteScheduleResponse getSchedule(@PathVariable UUID scheduleId, Authentication auth) {
         User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
         return routeService.getSchedule(scheduleId, user);
+    }
+
+    @PutMapping("/{scheduleId}")
+    public RouteScheduleResponse updateSchedule(@PathVariable UUID scheduleId,
+                                                @RequestBody CreateScheduleRequest req,
+                                                Authentication auth) {
+        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+        return routeService.updateSchedule(scheduleId, req, user);
     }
 
     @DeleteMapping("/{scheduleId}")
@@ -88,6 +97,27 @@ public class ScheduleController {
                 .orElseThrow(() -> new RuntimeException("Point not found"));
         pointRepository.delete(point);
         return ResponseEntity.ok(Map.of("message", "Deleted"));
+    }
+
+    @PutMapping("/{scheduleId}/points/{pointId}")
+    public ResponseEntity<?> updatePoint(@PathVariable UUID scheduleId,
+                                         @PathVariable UUID pointId,
+                                         @Valid @RequestBody BoardingDroppingPointRequest req,
+                                         Authentication auth) {
+        getScheduleOwnedBy(scheduleId, auth);
+        BoardingDroppingPoint point = pointRepository.findById(pointId)
+                .filter(p -> p.getSchedule().getId().equals(scheduleId))
+                .orElseThrow(() -> new RuntimeException("Point not found"));
+
+        point.setName(req.name());
+        point.setType(req.type());
+        point.setAddress(req.address());
+        point.setLandmark(req.landmark());
+        point.setArrivalTime(req.arrivalTime() != null
+                ? LocalTime.parse(req.arrivalTime(), DateTimeFormatter.ofPattern("HH:mm"))
+                : null);
+
+        return ResponseEntity.ok(BoardingDroppingPointResponse.from(pointRepository.save(point)));
     }
 
     private RouteSchedule getScheduleOwnedBy(UUID scheduleId, Authentication auth) {

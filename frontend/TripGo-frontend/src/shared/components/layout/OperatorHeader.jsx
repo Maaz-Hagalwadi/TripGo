@@ -112,7 +112,13 @@ const NOTIFICATIONS = [
   { id: 3, message: 'Monthly revenue report available', time: '2 hours ago', unread: false },
 ];
 
-const OperatorHeader = ({ title, searchPlaceholder = 'Search buses, routes, or bookings...', children }) => {
+const OperatorHeader = ({
+  title,
+  searchPlaceholder = 'Search buses, routes, or bookings...',
+  roleLabel = 'Fleet Manager',
+  profileRoute = null,
+  children
+}) => {
   const navigate = useNavigate();
   const { user, logout, checkAuth } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
@@ -180,7 +186,7 @@ const OperatorHeader = ({ title, searchPlaceholder = 'Search buses, routes, or b
         <div className="flex items-center gap-3 pl-6 border-l border-slate-200 dark:border-slate-800 relative" ref={profileRef}>
           <div className="text-right hidden sm:block">
             <p className="text-sm font-semibold">{user?.firstName} {user?.lastName}</p>
-            <p className="text-xs text-slate-500">Fleet Manager</p>
+            <p className="text-xs text-slate-500">{roleLabel}</p>
           </div>
           <button
             onClick={() => setShowProfileDropdown(p => !p)}
@@ -202,7 +208,17 @@ const OperatorHeader = ({ title, searchPlaceholder = 'Search buses, routes, or b
                 </div>
               </div>
               <div className="py-2">
-                <button onClick={() => { setShowProfileDropdown(false); setShowProfile(true); }} className="w-full px-4 py-3 text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setShowProfileDropdown(false);
+                    if (profileRoute) {
+                      navigate(profileRoute);
+                      return;
+                    }
+                    setShowProfile(true);
+                  }}
+                  className="w-full px-4 py-3 text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-3"
+                >
                   <span className="material-symbols-outlined text-lg">person</span>
                   My Profile
                 </button>
@@ -222,7 +238,7 @@ const OperatorHeader = ({ title, searchPlaceholder = 'Search buses, routes, or b
         </div>
       </div>
     </header>
-    {showProfile && <ProfileModal user={user} onClose={() => setShowProfile(false)} onNameUpdate={checkAuth} />}
+    {showProfile && !profileRoute && <ProfileModal user={user} onClose={() => setShowProfile(false)} onNameUpdate={checkAuth} />}
     </>
   );
 };
