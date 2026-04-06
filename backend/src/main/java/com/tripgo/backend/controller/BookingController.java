@@ -158,6 +158,7 @@ public class BookingController {
         }
 
         // Create booking
+        String bookingCode = "TG" + System.currentTimeMillis() % 100000000;
         Booking booking = Booking.builder()
                 .user(user)
                 .routeSchedule(schedule)
@@ -167,6 +168,7 @@ public class BookingController {
                 .discountAmount(BigDecimal.ZERO)
                 .payableAmount(payableAmount)
                 .status(BookingStatus.CONFIRMED)
+                .bookingCode(bookingCode)
                 .build();
 
         bookingRepository.save(booking);
@@ -226,6 +228,7 @@ public class BookingController {
 
         return ResponseEntity.ok(Map.of(
                 "bookingId", booking.getId(),
+                "bookingCode", booking.getBookingCode(),
                 "status", "CONFIRMED",
                 "totalAmount", totalAmount,
                 "payableAmount", payableAmount,
@@ -245,6 +248,7 @@ public class BookingController {
 
                     Map<String, Object> result = new LinkedHashMap<>();
                     result.put("bookingId", b.getId());
+                    result.put("bookingCode", b.getBookingCode());
                     result.put("status", b.getStatus());
                     result.put("from", b.getRouteSchedule().getRoute().getOrigin());
                     result.put("to", b.getRouteSchedule().getRoute().getDestination());
@@ -254,12 +258,18 @@ public class BookingController {
                     result.put("totalAmount", b.getTotalAmount());
                     result.put("payableAmount", b.getPayableAmount());
                     result.put("bookedAt", b.getCreatedAt());
-                    result.put("seats", seats.stream().map(s -> Map.of(
-                            "seatNumber", s.getSeatNumber(),
-                            "passenger", s.getPassenger() != null
-                                    ? s.getPassenger().getFirstName() + " " + (s.getPassenger().getLastName() != null ? s.getPassenger().getLastName() : "")
-                                    : "Unknown"
-                    )).toList());
+                    result.put("passengers", seats.stream().map(s -> {
+                        Map<String, Object> p = new LinkedHashMap<>();
+                        p.put("seatNumber", s.getSeatNumber());
+                        if (s.getPassenger() != null) {
+                            p.put("firstName", s.getPassenger().getFirstName());
+                            p.put("lastName", s.getPassenger().getLastName() != null ? s.getPassenger().getLastName() : "");
+                            p.put("age", s.getPassenger().getAge());
+                            p.put("gender", s.getPassenger().getGender());
+                            p.put("phone", s.getPassenger().getPhone());
+                        }
+                        return p;
+                    }).toList());
                     return result;
                 })
                 .toList();

@@ -24,6 +24,35 @@ const pick = (obj, keys, fallback = '') => {
   return fallback;
 };
 
+const toDisplayBookingId = (booking) => {
+  const raw = String(booking?.publicBookingId || booking?.bookingCode || booking?.bookingNumber || booking?.pnr || booking?.bookingId || booking?.id || booking?.reference || '').trim();
+  if (!raw) return '--';
+  if (raw.startsWith('TG-') || raw.startsWith('TRIPGO-')) return raw;
+  const compact = raw.replace(/-/g, '').slice(0, 8).toUpperCase();
+  return compact ? `TG-${compact}` : raw;
+};
+
+const extractSeats = (booking) => {
+  if (Array.isArray(booking?.seatNumbers)) return booking.seatNumbers;
+  if (Array.isArray(booking?.seats)) return booking.seats.map((seat) => seat?.seatNumber || seat).filter(Boolean);
+  if (Array.isArray(booking?.bookingSeats)) return booking.bookingSeats.map((seat) => seat?.seatNumber).filter(Boolean);
+  if (Array.isArray(booking?.passengers)) return booking.passengers.map((item) => item?.seatNumber).filter(Boolean);
+  return [];
+};
+
+const extractPassengers = (booking) => {
+  if (Array.isArray(booking?.passengers) && booking.passengers.length) return booking.passengers;
+  if (Array.isArray(booking?.bookingSeats) && booking.bookingSeats.length) {
+    return booking.bookingSeats.map((seat) => ({
+      seatNumber: seat?.seatNumber,
+      firstName: seat?.passenger?.firstName,
+      lastName: seat?.passenger?.lastName,
+      phone: seat?.passenger?.phone,
+    }));
+  }
+  return [];
+};
+
 const Bookings = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
@@ -123,11 +152,16 @@ const Bookings = () => {
         <div className="space-y-3">
           {bookings.map((booking) => {
             const bookingId = pick(booking, ['id', 'bookingId'], '');
+            const displayBookingId = toDisplayBookingId(booking);
             const bookingStatus = String(pick(booking, ['status'], 'UNKNOWN')).toUpperCase();
-            const passenger = pick(booking, ['passengerName', 'customerName', 'userName', 'name'], 'Passenger');
-            const routeName = pick(booking, ['routeName', 'tripName'], '-');
-            const seatNo = pick(booking, ['seatNumber', 'seatNo', 'seat'], '-');
-            const amount = pick(booking, ['amount', 'fare', 'totalAmount'], null);
+            const passengers = extractPassengers(booking);
+            const passenger = passengers.length
+              ? [passengers[0]?.firstName, passengers[0]?.lastName].filter(Boolean).join(' ')
+              : pick(booking, ['passengerName', 'customerName', 'userName', 'name'], 'Passenger');
+            const routeName = pick(booking, ['routeName', 'tripName'], '') || [pick(booking, ['from', 'source', 'origin'], ''), pick(booking, ['to', 'destination'], '')].filter(Boolean).join(' to ') || '-';
+            const seatNumbers = extractSeats(booking);
+            const seatNo = seatNumbers.length ? seatNumbers.join(', ') : pick(booking, ['seatNumber', 'seatNo', 'seat'], '-');
+            const amount = pick(booking, ['payableAmount', 'amount', 'fare', 'totalAmount'], null);
             const createdAt = pick(booking, ['createdAt', 'bookingTime', 'bookedAt'], null);
 
             return (
@@ -135,9 +169,10 @@ const Bookings = () => {
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <p className="text-sm font-semibold">{passenger}</p>
-                    <p className="text-xs text-slate-500">Booking ID: {bookingId || '-'}</p>
+                    <p className="text-xs text-slate-500">Booking ID: {displayBookingId}</p>
                     <p className="text-xs text-slate-500">Route: {routeName}</p>
                     <p className="text-xs text-slate-500">Seat: {seatNo}</p>
+                    {passengers.length > 1 ? <p className="text-xs text-slate-500">Passengers: {passengers.map((item) => [item?.firstName, item?.lastName].filter(Boolean).join(' ') || item?.seatNumber).join(', ')}</p> : null}
                     {createdAt && <p className="text-xs text-slate-500">Booked: {new Date(createdAt).toLocaleString()}</p>}
                   </div>
                   <div className="text-right space-y-2">

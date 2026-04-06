@@ -12,7 +12,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @RestController
@@ -98,16 +100,15 @@ public class OperatorBookingController {
         List<Map<String, Object>> seatDetails = seats.stream()
                 .filter(s -> s.getBooking().getId().equals(booking.getId()))
                 .map(seat -> {
-                    Map<String, Object> seatMap = new java.util.HashMap<>();
+                    Map<String, Object> seatMap = new LinkedHashMap<>();
                     seatMap.put("seatNumber", seat.getSeatNumber());
                     seatMap.put("fare", seat.getFare());
                     seatMap.put("fromStop", seat.getFromStop());
                     seatMap.put("toStop", seat.getToStop());
-
                     if (seat.getPassenger() != null) {
                         seatMap.put("passenger", Map.of(
-                                "name", seat.getPassenger().getFirstName() + " " +
-                                        (seat.getPassenger().getLastName() != null ? seat.getPassenger().getLastName() : ""),
+                                "firstName", seat.getPassenger().getFirstName(),
+                                "lastName", seat.getPassenger().getLastName() != null ? seat.getPassenger().getLastName() : "",
                                 "age", seat.getPassenger().getAge() != null ? seat.getPassenger().getAge() : "",
                                 "gender", seat.getPassenger().getGender() != null ? seat.getPassenger().getGender() : "",
                                 "phone", seat.getPassenger().getPhone() != null ? seat.getPassenger().getPhone() : ""
@@ -116,21 +117,26 @@ public class OperatorBookingController {
                     return seatMap;
                 }).toList();
 
-        return Map.of(
-                "bookingId", booking.getId(),
-                "status", booking.getStatus(),
-                "totalAmount", booking.getTotalAmount(),
-                "gstAmount", booking.getGstAmount() != null ? booking.getGstAmount() : 0,
-                "payableAmount", booking.getPayableAmount(),
-                "bookedAt", booking.getCreatedAt(),
-                "schedule", Map.of(
-                        "id", booking.getRouteSchedule().getId(),
-                        "from", booking.getRouteSchedule().getRoute().getOrigin(),
-                        "to", booking.getRouteSchedule().getRoute().getDestination(),
-                        "departureTime", booking.getRouteSchedule().getDepartureTime()
-                ),
-                "seats", seatDetails
-        );
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("bookingId", booking.getId());
+        result.put("bookingCode", booking.getBookingCode());
+        result.put("status", booking.getStatus());
+        result.put("from", booking.getRouteSchedule().getRoute().getOrigin());
+        result.put("to", booking.getRouteSchedule().getRoute().getDestination());
+        result.put("seatNumbers", seatDetails.stream().map(s -> s.get("seatNumber")).toList());
+        result.put("passengers", seatDetails.stream().map(s -> s.get("passenger")).filter(Objects::nonNull).toList());
+        result.put("totalAmount", booking.getTotalAmount());
+        result.put("gstAmount", booking.getGstAmount() != null ? booking.getGstAmount() : 0);
+        result.put("payableAmount", booking.getPayableAmount());
+        result.put("bookedAt", booking.getCreatedAt());
+        result.put("schedule", Map.of(
+                "id", booking.getRouteSchedule().getId(),
+                "from", booking.getRouteSchedule().getRoute().getOrigin(),
+                "to", booking.getRouteSchedule().getRoute().getDestination(),
+                "departureTime", booking.getRouteSchedule().getDepartureTime()
+        ));
+        result.put("seats", seatDetails);
+        return result;
     }
 
     private Operator getOperator(Authentication auth) {

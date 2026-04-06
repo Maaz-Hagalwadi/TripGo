@@ -185,7 +185,7 @@ const OperatorDashboard = () => {
             <div className="relative z-10">
               <p className="text-sm font-medium text-white/80">Total Revenue</p>
               <h3 className="text-3xl font-bold mt-2 text-white">{loadingStats ? '...' : `₹${Math.round(stats.totalRevenue).toLocaleString()}`}</h3>
-              <p className="text-xs text-white/80 mt-2">From dashboard API</p>
+              <p className="text-xs text-white/80 mt-2">Revenue from confirmed bookings</p>
             </div>
             <div className="bg-white/20 p-3 rounded-lg text-white relative z-10">
               <span className="material-symbols-outlined">payments</span>

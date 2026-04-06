@@ -68,14 +68,34 @@ const UserSettings = () => {
     <UserLayout activeItem="settings" title="Settings">
       <div className="space-y-6">
         <div className="bg-white dark:bg-op-card border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-          <h3 className="text-lg font-bold mb-1">Account Settings</h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Manage your account security and profile access.</p>
+          <h3 className="text-lg font-bold mb-1">Profile & Account</h3>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Profile details are grouped here along with account security actions.</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-900 p-4 border border-slate-200 dark:border-slate-800">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Full Name</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">
+                {[user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'Traveler'}
+              </p>
+            </div>
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-900 p-4 border border-slate-200 dark:border-slate-800">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Email</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">{user?.email || '--'}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-900 p-4 border border-slate-200 dark:border-slate-800">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Phone</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">{user?.phone || '--'}</p>
+            </div>
+            <div className="rounded-xl bg-slate-50 dark:bg-slate-900 p-4 border border-slate-200 dark:border-slate-800">
+              <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Account Role</p>
+              <p className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">{user?.role || 'USER'}</p>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-3">
             <button
               onClick={() => navigate(ROUTES.USER_PROFILE)}
               className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
             >
-              Open Profile
+              Open Ratings
             </button>
             <button
               onClick={() => setPasswordModal(prev => ({ ...prev, open: true }))}
