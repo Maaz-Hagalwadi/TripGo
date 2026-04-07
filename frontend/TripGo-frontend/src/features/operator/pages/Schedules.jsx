@@ -277,11 +277,14 @@ const Schedules = () => {
   };
   const fareExistsForRoute = (routeId, segmentId, seatType) => {
     const selectedSegment = getSelectedSegmentKey(routeId, segmentId);
+    const selectedBusId = String(fareForm[routeId]?.busId || '');
     return (fares[routeId] || []).some(f => {
       const fareSegment = getFareSegmentKeys(f);
+      const fareBusId = String(f?.busId || f?.bus?.id || '');
       return (
         isSameSegment(selectedSegment, fareSegment) &&
-        normalizeSeatType(f.seatType) === normalizeSeatType(seatType)
+        normalizeSeatType(f.seatType) === normalizeSeatType(seatType) &&
+        fareBusId === selectedBusId
       );
     });
   };
@@ -298,6 +301,7 @@ const Schedules = () => {
         seatType: normalizeSeatType(form.seatType),
         baseFare: parseFloat(form.baseFare),
         gstPercent: 5,
+        busId: form.busId || null,
       });
       setFareForm(prev => ({ ...prev, [routeId]: {} }));
       await fetchFares(routeId); // re-fetch so segment names resolve correctly
@@ -337,7 +341,8 @@ const Schedules = () => {
         segmentId: fareSegment.idKey,
         seatType: fare.seatType,
         baseFare: nextBaseFare,
-        gstPercent: fare.gstPercent ?? 5
+        gstPercent: fare.gstPercent ?? 5,
+        busId: fare?.busId || fare?.bus?.id || null
       });
       setEditingFare(prev => ({ ...prev, [routeId]: null }));
       await fetchFares(routeId);
@@ -759,11 +764,6 @@ const Schedules = () => {
                         </div>
                       </div>
                     )}
-
-                    <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
-                      Fares on this screen are route-level, based on segment and seat type. Different prices for different buses on the same route need backend fare support per bus.
-                    </div>
-
                     {schedules[route.id]?.length > 0 ? (
                       <div>
                         <h4 className="font-semibold mb-3 flex items-center gap-2">
@@ -945,6 +945,9 @@ const Schedules = () => {
                         <div key={f.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-lg text-xs mb-1 gap-2">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="px-1.5 py-0.5 rounded font-bold bg-primary/10 text-primary">{f.seatType?.replace(/_/g, ' ')}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                              {f?.bus?.name || f?.busName || (f?.busId ? `Bus ${f.busId}` : 'Default Route Fare')}
+                            </span>
                             {isEditing ? (
                               <div className="relative">
                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
@@ -983,7 +986,27 @@ const Schedules = () => {
                 ))
               )}
 
-              <div className="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-slate-100 dark:border-slate-700">
+              <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-700">
+                <div className="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  Choose `Default route fare (all buses)` to apply one fare to every bus on this route, or choose a specific bus to create a bus-specific override.
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={fareForm[routeId]?.busId || ''}
+                  onChange={e => setFareForm(prev => ({ ...prev, [routeId]: { ...prev[routeId], busId: e.target.value, seatType: '' } }))}
+                  className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-primary col-span-2"
+                >
+                  <option value="">Default route fare (all buses)</option>
+                  {Array.from(new Map(
+                    (schedules[routeId] || [])
+                      .filter((schedule) => schedule?.bus?.id)
+                      .map((schedule) => [String(schedule.bus.id), schedule.bus])
+                  ).values()).map((bus) => (
+                    <option key={bus.id} value={bus.id}>
+                      {bus.name} ({bus.busCode}) - Bus-specific fare
+                    </option>
+                  ))}
+                </select>
                 <select
                   value={fareForm[routeId]?.segmentId || ''}
                   onChange={e => setFareForm(prev => ({ ...prev, [routeId]: { ...prev[routeId], segmentId: e.target.value, seatType: '' } }))}
@@ -999,9 +1022,13 @@ const Schedules = () => {
                   const t = busType.toUpperCase();
                   const selectedSegmentId = fareForm[routeId]?.segmentId || '';
                   const selectedSegment = getSelectedSegmentKey(routeId, selectedSegmentId);
+                  const selectedBusId = String(fareForm[routeId]?.busId || '');
                   const usedSeatTypes = new Set(
                     (fares[routeId] || [])
-                      .filter(f => isSameSegment(selectedSegment, getFareSegmentKeys(f)))
+                      .filter(f => (
+                        isSameSegment(selectedSegment, getFareSegmentKeys(f)) &&
+                        String(f?.busId || f?.bus?.id || '') === selectedBusId
+                      ))
                       .map(f => normalizeSeatType(f.seatType))
                   );
                   const seatOptions = (() => {
@@ -1044,6 +1071,7 @@ const Schedules = () => {
                   <span className="material-symbols-outlined text-sm">add</span>
                   Add Fare
                 </button>
+                </div>
               </div>
             </div>
           </div>

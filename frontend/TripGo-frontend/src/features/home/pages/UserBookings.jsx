@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import UserLayout from '../../../shared/components/UserLayout';
 import { getMyBookings } from '../../../api/bookingService';
 import { ROUTES } from '../../../shared/constants/routes';
+import { formatUtcDateTime } from '../../../shared/utils/scheduleSearchUtils';
 
 const normalizeList = (data) => {
   if (Array.isArray(data)) return data;
@@ -14,17 +15,13 @@ const normalizeList = (data) => {
 };
 
 const formatDateTime = (value) => {
-  if (!value) return '--';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '--';
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return formatUtcDateTime(value);
+};
+
+const getBookingTimestamp = (booking) => {
+  const value = booking?.bookedAt || booking?.createdAt || booking?.bookingTime || booking?.departureTime;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
 };
 
 const getStatusClass = (status) => {
@@ -114,7 +111,8 @@ const UserBookings = () => {
       try {
         setLoading(true);
         const data = await getMyBookings();
-        setBookings(normalizeList(data));
+        const normalized = normalizeList(data).sort((a, b) => getBookingTimestamp(b) - getBookingTimestamp(a));
+        setBookings(normalized);
       } catch (error) {
         toast.error(error?.message || 'Failed to load your bookings.');
         setBookings([]);
@@ -134,7 +132,8 @@ const UserBookings = () => {
     const latestId = latestBooking?.bookingCode || latestBooking?.publicBookingId || latestBooking?.bookingId || latestBooking?.id || latestBooking?.reference;
     if (!latestId) return bookings;
     const exists = bookings.some((item) => String(item?.bookingCode || item?.publicBookingId || item?.bookingId || item?.id || item?.reference) === String(latestId));
-    return exists ? bookings : [latestBooking, ...bookings];
+    const merged = exists ? bookings : [latestBooking, ...bookings];
+    return [...merged].sort((a, b) => getBookingTimestamp(b) - getBookingTimestamp(a));
   }, [bookings, latestBooking]);
 
   return (

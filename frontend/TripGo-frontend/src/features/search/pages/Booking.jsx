@@ -5,6 +5,7 @@ import UserLayout from '../../../shared/components/UserLayout';
 import { ROUTES } from '../../../shared/constants/routes';
 import { INDIA_STATES } from '../../../shared/constants/indiaStates';
 import {
+  formatUtcDateTime,
   getDelayMinutes,
   getTripStatusValue,
   isSeatAvailableForBooking,
@@ -40,16 +41,7 @@ const formatCountdown = (seconds) => {
 };
 
 const formatInstant = (instant) => {
-  if (!instant) return '--';
-  const date = new Date(instant);
-  if (Number.isNaN(date.getTime())) return '--';
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return formatUtcDateTime(instant);
 };
 
 const getTripStatusMeta = (tripStatus, delayMinutes) => {
@@ -654,8 +646,8 @@ const Booking = () => {
                 ) : (
                   <>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Boarding Point *</label><select value={selection.boardingPointId} onChange={(e) => setSelection((p) => ({ ...p, boardingPointId: e.target.value }))} className={INPUT_SHELL_CLASS}><option value="">Select boarding point</option>{boardingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
-                      <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Dropping Point *</label><select value={selection.droppingPointId} onChange={(e) => setSelection((p) => ({ ...p, droppingPointId: e.target.value }))} className={INPUT_SHELL_CLASS}><option value="">Select dropping point</option>{droppingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
+                      <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">{`Boarding Point${boardingPoints.length > 0 ? ' *' : ''}`}</label><select value={selection.boardingPointId} onChange={(e) => setSelection((p) => ({ ...p, boardingPointId: e.target.value }))} className={INPUT_SHELL_CLASS} disabled={boardingPoints.length === 0}><option value="">{boardingPoints.length > 0 ? 'Select boarding point' : 'No boarding point required'}</option>{boardingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
+                      <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">{`Dropping Point${droppingPoints.length > 0 ? ' *' : ''}`}</label><select value={selection.droppingPointId} onChange={(e) => setSelection((p) => ({ ...p, droppingPointId: e.target.value }))} className={INPUT_SHELL_CLASS} disabled={droppingPoints.length === 0}><option value="">{droppingPoints.length > 0 ? 'Select dropping point' : 'No dropping point required'}</option>{droppingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
                     </div>
                     <div className="mt-4 grid gap-4 md:grid-cols-2">
                       <div className={`${SUBTLE_PANEL_CLASS} p-4`}><p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Boarding points</p>{boardingPoints.length === 0 ? <p className="text-xs text-slate-500 dark:text-slate-400">No boarding points available</p> : boardingPoints.map((point) => <p key={point.id} className="mb-2 text-xs text-slate-600 dark:text-slate-300">{pointLabel(point)}</p>)}</div>
@@ -688,7 +680,8 @@ const Booking = () => {
                       if (!contact.stateOfResidence.trim()) return toast.error('State of residence is required');
                       if (!passenger.name.trim() || !passenger.age || !passenger.gender || !passenger.phone.trim() || !passenger.email.trim()) return toast.error('Please fill passenger details');
                       if (lockSecondsLeft <= 0) return toast.error('Seat lock expired. Please select and lock seats again.');
-                      if (boardingPoints.length + droppingPoints.length > 0 && (!selection.boardingPointId || !selection.droppingPointId)) return toast.error('Please select boarding and dropping points');
+                      if (boardingPoints.length > 0 && !selection.boardingPointId) return toast.error('Please select a boarding point');
+                      if (droppingPoints.length > 0 && !selection.droppingPointId) return toast.error('Please select a dropping point');
                       navigate(ROUTES.PAYMENT, { state: { bus, scheduleId, selectedSeats, selectedFare, selectedType, searchParams, contact, passenger, selection, lockSecondsLeft, lockToken: lockInfo?.lockToken || '', lockInfo } });
                     }}
                     className="flex-1 rounded-xl bg-primary px-4 py-2 font-semibold text-black hover:bg-primary/90"
