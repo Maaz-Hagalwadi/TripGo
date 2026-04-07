@@ -247,7 +247,7 @@ const Booking = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { bus, selectedType, selectedFare, searchParams } = location.state || {};
-  const scheduleId = bus?.scheduleId;
+  const scheduleId = bus?.scheduleId || bus?.id;
 
   const [step, setStep] = useState('seats');
   const [selectedSeats, setSelectedSeats] = useState([]);
