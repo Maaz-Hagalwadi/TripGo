@@ -79,7 +79,7 @@ const normalizeSearchBus = (item) => {
   const routeInfo = item?.route || {};
   return {
     ...item,
-    id: item?.id || item?.scheduleId || '',
+    id: item?.busId || busInfo?.id || item?.id || '',
     scheduleId: item?.scheduleId || item?.id || '',
     busId: item?.busId || busInfo?.id || '',
     busName: item?.busName || busInfo?.name || 'Bus',
@@ -99,7 +99,7 @@ const getTripStatusMeta = (tripStatus, delayMinutes) => {
 
   if (status === 'DELAYED' || delay > 0) {
     return {
-      label: `Delayed${delay > 0 ? ` by ${delay} min` : ''}`,
+      label: 'Delayed',
       textClass: 'text-amber-500 dark:text-amber-300',
       chipClass: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200',
     };

@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Booking Confirmed</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f4f6f9; font-family: 'Segoe UI', Arial, sans-serif; }
+    .wrapper { max-width: 600px; margin: 30px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #1a73e8, #0d47a1); padding: 36px 32px; text-align: center; }
+    .header img { width: 48px; margin-bottom: 12px; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.5px; }
+    .header p { color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 14px; }
+    .badge { display: inline-block; background: #4caf50; color: white; padding: 6px 18px; border-radius: 20px; font-size: 13px; font-weight: 600; margin-top: 14px; }
+    .body { padding: 32px; }
+    .greeting { font-size: 16px; color: #333; margin-bottom: 24px; }
+    .route-card { background: #f0f7ff; border: 1px solid #c8e0ff; border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; }
+    .route-row { display: flex; align-items: center; justify-content: space-between; }
+    .city { font-size: 22px; font-weight: 700; color: #1a73e8; }
+    .arrow { font-size: 20px; color: #888; }
+    .route-meta { display: flex; gap: 24px; margin-top: 14px; flex-wrap: wrap; }
+    .meta-item { font-size: 13px; color: #555; }
+    .meta-item strong { display: block; color: #222; font-size: 14px; margin-bottom: 2px; }
+    .section-title { font-size: 14px; font-weight: 700; color: #1a73e8; text-transform: uppercase; letter-spacing: 0.5px; margin: 24px 0 12px; border-bottom: 2px solid #e8f0fe; padding-bottom: 6px; }
+    .passenger-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .passenger-table th { background: #f0f7ff; color: #555; font-weight: 600; padding: 10px 12px; text-align: left; border-bottom: 1px solid #dde8f8; }
+    .passenger-table td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; color: #333; }
+    .passenger-table tr:last-child td { border-bottom: none; }
+    .fare-box { background: #f9f9f9; border: 1px solid #eee; border-radius: 8px; padding: 16px 20px; }
+    .fare-row { display: flex; justify-content: space-between; font-size: 14px; color: #555; margin-bottom: 8px; }
+    .fare-row.total { font-size: 16px; font-weight: 700; color: #222; border-top: 1px solid #ddd; padding-top: 10px; margin-top: 4px; }
+    .booking-code-box { text-align: center; background: #fff8e1; border: 1px dashed #f9a825; border-radius: 8px; padding: 16px; margin: 24px 0; }
+    .booking-code-box p { margin: 0 0 6px; font-size: 13px; color: #888; }
+    .booking-code-box span { font-size: 24px; font-weight: 800; color: #f57f17; letter-spacing: 3px; }
+    .info-note { background: #e8f5e9; border-left: 4px solid #4caf50; padding: 12px 16px; border-radius: 4px; font-size: 13px; color: #2e7d32; margin-top: 24px; }
+    .footer { background: #f4f6f9; padding: 24px 32px; text-align: center; font-size: 12px; color: #999; border-top: 1px solid #eee; }
+    .footer a { color: #1a73e8; text-decoration: none; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <!-- Header -->
+  <div class="header">
+    <h1>🚌 TripGo</h1>
+    <p>Your booking is confirmed!</p>
+    <div class="badge">✓ CONFIRMED</div>
+  </div>
+
+  <!-- Body -->
+  <div class="body">
+    <p class="greeting">Hi <strong th:text="${firstName}">Traveller</strong>, your trip is booked! Here are your details:</p>
+
+    <!-- Booking Code -->
+    <div class="booking-code-box">
+      <p>Booking Reference</p>
+      <span th:text="${bookingCode}">TG12345678</span>
+    </div>
+
+    <!-- Route Card -->
+    <div class="route-card">
+      <div class="route-row">
+        <span class="city" th:text="${from}">Bangalore</span>
+        <span class="arrow">→</span>
+        <span class="city" th:text="${to}">Honnavar</span>
+      </div>
+      <div class="route-meta">
+        <div class="meta-item">
+          <strong th:text="${busName}">Volvo Multi-Axle</strong>
+          Bus Name
+        </div>
+        <div class="meta-item">
+          <strong th:text="${departureTime}">10:00 PM</strong>
+          Departure
+        </div>
+        <div class="meta-item">
+          <strong th:text="${arrivalTime}">08:00 AM</strong>
+          Arrival
+        </div>
+        <div class="meta-item">
+          <strong th:text="${operatorName}">VRL Travels</strong>
+          Operator
+        </div>
+      </div>
+    </div>
+
+    <!-- Passengers -->
+    <div class="section-title">Passenger Details</div>
+    <table class="passenger-table">
+      <thead>
+        <tr>
+          <th>Seat</th>
+          <th>Name</th>
+          <th>Age</th>
+          <th>Gender</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="p : ${passengers}">
+          <td th:text="${p.seatNumber}">L1</td>
+          <td th:text="${p.firstName + ' ' + (p.lastName != null ? p.lastName : '')}">John Doe</td>
+          <td th:text="${p.age != null ? p.age : '-'}">25</td>
+          <td th:text="${p.gender != null ? p.gender : '-'}">MALE</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Fare -->
+    <div class="section-title">Fare Summary</div>
+    <div class="fare-box">
+      <div class="fare-row">
+        <span>Base Fare</span>
+        <span th:text="'₹' + ${totalAmount}">₹500.00</span>
+      </div>
+      <div class="fare-row">
+        <span>GST</span>
+        <span th:text="'₹' + ${gstAmount}">₹90.00</span>
+      </div>
+      <div class="fare-row total">
+        <span>Total Paid</span>
+        <span th:text="'₹' + ${payableAmount}">₹590.00</span>
+      </div>
+    </div>
+
+    <!-- Note -->
+    <div class="info-note">
+      📋 Please carry a valid ID proof during travel. Show this booking reference at the boarding point.
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>© 2026 TripGo. All rights reserved.</p>
+    <p>Need help? <a th:href="${frontendUrl + '/support'}">Contact Support</a></p>
+  </div>
+</div>
+</body>
+</html>

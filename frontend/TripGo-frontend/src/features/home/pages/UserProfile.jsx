@@ -6,6 +6,14 @@ import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ROUTES } from '../../../shared/constants/routes';
 import { getMyCompletedTrips, submitTripRating } from '../../../api/bookingService';
 
+const RATING_LABELS = {
+  1: 'Poor',
+  2: 'Fair',
+  3: 'Good',
+  4: 'Very Good',
+  5: 'Excellent',
+};
+
 const formatTripDate = (value) => {
   if (!value) return '--';
   const date = new Date(value);
@@ -23,6 +31,30 @@ const toDisplayBookingId = (trip) => {
   if (raw.startsWith('TG-') || raw.startsWith('TRIPGO-')) return raw;
   const compact = raw.replace(/-/g, '').slice(0, 8).toUpperCase();
   return compact ? `TG-${compact}` : raw;
+};
+
+const StarRatingInput = ({ value, onChange, disabled = false }) => {
+  const rating = Number(value || 0);
+
+  return (
+    <div className="flex items-center gap-1">
+      {[1, 2, 3, 4, 5].map((star) => {
+        const active = star <= rating;
+        return (
+          <button
+            key={star}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(star)}
+            className={`text-3xl leading-none transition-transform ${active ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600'} ${disabled ? 'cursor-not-allowed opacity-60' : 'hover:scale-110'}`}
+            aria-label={`${star} star${star > 1 ? 's' : ''}`}
+          >
+            ★
+          </button>
+        );
+      })}
+    </div>
+  );
 };
 
 const UserProfile = () => {
@@ -150,18 +182,16 @@ const UserProfile = () => {
                           <div className="space-y-3">
                             <div>
                               <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Rating *</label>
-                              <select
-                                value={currentDraft.rating || ''}
-                                onChange={(e) => setRatingDrafts((prev) => ({ ...prev, [scheduleId]: { ...prev[scheduleId], rating: e.target.value } }))}
-                                className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-                              >
-                                <option value="">Select rating</option>
-                                <option value="1">1 - Poor</option>
-                                <option value="2">2 - Fair</option>
-                                <option value="3">3 - Good</option>
-                                <option value="4">4 - Very Good</option>
-                                <option value="5">5 - Excellent</option>
-                              </select>
+                              <div className="rounded-2xl border border-slate-200 bg-white px-3 py-3 dark:border-slate-700 dark:bg-slate-900">
+                                <StarRatingInput
+                                  value={currentDraft.rating || 0}
+                                  onChange={(rating) => setRatingDrafts((prev) => ({ ...prev, [scheduleId]: { ...prev[scheduleId], rating } }))}
+                                  disabled={submittingRatingFor === scheduleId}
+                                />
+                                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+                                  {currentDraft.rating ? `${currentDraft.rating}/5 · ${RATING_LABELS[currentDraft.rating] || 'Selected'}` : 'Tap a star to rate your trip'}
+                                </p>
+                              </div>
                             </div>
                             <div>
                               <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">Comment</label>
