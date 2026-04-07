@@ -27,6 +27,7 @@ public class RouteService {
     private final FareRepository fareRepository;
     private final RouteScheduleRepository scheduleRepository;
     private final BusRepository busRepository;
+    private final BusDriverAssignmentRepository assignmentRepository;
 
     public RouteResponse createRoute(CreateRouteRequest req, User user) {
         if (user.getOperator() == null) {
@@ -154,22 +155,7 @@ public class RouteService {
                 .build();
 
         schedule = scheduleRepository.save(schedule);
-
-        return new RouteScheduleResponse(
-                schedule.getId(),
-                new RouteResponse(
-                        route.getId(),
-                        route.getName(),
-                        route.getOrigin(),
-                        route.getDestination(),
-                        route.getDistanceKm()
-                ),
-                toBusResponse(bus),
-                req.departureTime(),
-                req.arrivalTime(),
-                req.frequency(),
-                true
-        );
+        return toScheduleResponse(schedule);
     }
 
     public List<RouteResponse> listRoutes(User user) {
@@ -215,24 +201,10 @@ public class RouteService {
         }
 
         List<Route> routes = routeRepository.findByOperator(user.getOperator());
-        
+
         return routes.stream()
                 .flatMap(route -> scheduleRepository.findByRoute(route).stream())
-                .map(schedule -> new RouteScheduleResponse(
-                        schedule.getId(),
-                        new RouteResponse(
-                                schedule.getRoute().getId(),
-                                schedule.getRoute().getName(),
-                                schedule.getRoute().getOrigin(),
-                                schedule.getRoute().getDestination(),
-                                schedule.getRoute().getDistanceKm()
-                        ),
-                        toBusResponse(schedule.getBus()),
-                        schedule.getDepartureTime(),
-                        schedule.getArrivalTime(),
-                        schedule.getFrequency(),
-                        schedule.getActive()
-                ))
+                .map(this::toScheduleResponse)
                 .toList();
     }
 
@@ -240,26 +212,12 @@ public class RouteService {
         RouteSchedule schedule = scheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new RuntimeException("Schedule not found"));
 
-        if (user.getOperator() == null || 
+        if (user.getOperator() == null ||
             !schedule.getRoute().getOperator().getId().equals(user.getOperator().getId())) {
             throw new RuntimeException("Access denied");
         }
 
-        return new RouteScheduleResponse(
-                schedule.getId(),
-                new RouteResponse(
-                        schedule.getRoute().getId(),
-                        schedule.getRoute().getName(),
-                        schedule.getRoute().getOrigin(),
-                        schedule.getRoute().getDestination(),
-                        schedule.getRoute().getDistanceKm()
-                ),
-                toBusResponse(schedule.getBus()),
-                schedule.getDepartureTime(),
-                schedule.getArrivalTime(),
-                schedule.getFrequency(),
-                schedule.getActive()
-        );
+        return toScheduleResponse(schedule);
     }
 
     public void deleteSchedule(UUID scheduleId, User user) {
@@ -293,15 +251,37 @@ public class RouteService {
         schedule.setFrequency(req.frequency());
         scheduleRepository.save(schedule);
 
+        return toScheduleResponse(schedule);
+    }
+
+    private RouteScheduleResponse toScheduleResponse(RouteSchedule schedule) {
         Route route = schedule.getRoute();
+
+        // Get assigned driver for this bus
+        UUID driverId = null;
+        String driverName = null;
+        var assignment = assignmentRepository.findByBusAndAssignedToIsNull(schedule.getBus());
+        if (assignment.isPresent()) {
+            Driver driver = assignment.get().getDriver();
+            driverId = driver.getId();
+            driverName = driver.getFirstName() + " " + (driver.getLastName() != null ? driver.getLastName() : "");
+        }
+
         return new RouteScheduleResponse(
                 schedule.getId(),
                 new RouteResponse(route.getId(), route.getName(), route.getOrigin(), route.getDestination(), route.getDistanceKm()),
-                toBusResponse(bus),
+                toBusResponse(schedule.getBus()),
                 schedule.getDepartureTime(),
                 schedule.getArrivalTime(),
                 schedule.getFrequency(),
-                schedule.getActive()
+                Boolean.TRUE.equals(schedule.getActive()),
+                driverId,
+                driverName,
+                schedule.getTripStatus() != null ? schedule.getTripStatus() : "SCHEDULED",
+                schedule.getDelayMinutes(),
+                schedule.getDelayReason(),
+                schedule.getActualDepartureTime(),
+                schedule.getActualArrivalTime()
         );
     }
 

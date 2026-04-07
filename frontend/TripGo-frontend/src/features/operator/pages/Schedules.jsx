@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
-import { getRoutes, getRouteSegments, getRouteSchedules, deleteSchedule, deleteRoute, getPoints, addPoint, updatePoint, deletePoint, getFares, addFare, deleteFare, updateFare, startTrip, completeTrip, markDelay, updateSchedule, createSchedule } from '../../../api/routeService';
+import { getRoutes, getRouteSegments, getRouteSchedules, deleteSchedule, deleteRoute, getPoints, addPoint, updatePoint, deletePoint, getFares, addFare, deleteFare, updateFare, startTrip, completeTrip, markDelay, updateSchedule } from '../../../api/routeService';
 import { getDrivers, assignDriverToSchedule } from '../../../api/operatorDriverService';
 import { getBuses } from '../../../api/busService';
 import { toast } from 'sonner';
 import { ROUTES } from '../../../shared/constants/routes';
 import './OperatorDashboard.css';
+
+const OPERATOR_SCHEDULE_STATE_KEY = 'tripgo_operator_schedule_runtime_state';
 
 const Schedules = () => {
   const navigate = useNavigate();
@@ -43,13 +45,29 @@ const Schedules = () => {
     arrivalTime: '',
     frequency: 'DAILY'
   });
-  const [addScheduleModal, setAddScheduleModal] = useState({
-    routeId: null,
-    busId: '',
-    departureTime: '',
-    arrivalTime: '',
-    frequency: 'DAILY'
-  });
+
+  const readPersistedScheduleState = () => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const raw = window.localStorage.getItem(OPERATOR_SCHEDULE_STATE_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const writePersistedScheduleState = (updater) => {
+    if (typeof window === 'undefined') return {};
+    const current = readPersistedScheduleState();
+    const next = typeof updater === 'function' ? updater(current) : updater;
+    try {
+      window.localStorage.setItem(OPERATOR_SCHEDULE_STATE_KEY, JSON.stringify(next));
+    } catch {
+      return current;
+    }
+    return next;
+  };
 
   useEffect(() => {
     if (loading) return;
@@ -96,29 +114,57 @@ const Schedules = () => {
     }
   };
 
-  const getLicenseDate = (driver) => {
-    if (!driver?.licenseExpiry) return null;
-    const expiry = new Date(driver.licenseExpiry);
-    if (Number.isNaN(expiry.getTime())) return null;
-    expiry.setHours(0, 0, 0, 0);
-    return expiry;
+  const normalizeTripStatus = (schedule) => String(
+    schedule?.tripStatus ||
+    schedule?.status ||
+    schedule?.tripState ||
+    schedule?.currentStatus ||
+    'SCHEDULED'
+  ).toUpperCase();
+
+  const getScheduleDelayMinutes = (schedule) => {
+    const values = [
+      schedule?.delayMinutes,
+      schedule?.delayedMinutes,
+      schedule?.currentDelayMinutes,
+      schedule?.delayInMinutes,
+    ];
+    const match = values.find((value) => Number.isFinite(Number(value)));
+    return match === undefined ? 0 : Number(match);
   };
 
-  const isDriverExpired = (driver) => {
-    const expiry = getLicenseDate(driver);
-    if (!expiry) return false;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return expiry < today;
+  const normalizeSchedule = (schedule) => {
+    const persisted = readPersistedScheduleState()?.[schedule?.id] || {};
+    const bus = schedule?.bus || buses.find((item) => String(item.id) === String(schedule?.busId)) || null;
+    const merged = { ...persisted, ...schedule };
+    const tripStatus = normalizeTripStatus(merged);
+    const delayMinutes = getScheduleDelayMinutes(merged);
+    return {
+      ...schedule,
+      ...persisted,
+      bus,
+      busId: merged?.busId || bus?.id || schedule?.bus?.id || '',
+      tripStatus,
+      status: tripStatus,
+      driverId: merged?.driverId || merged?.assignedDriverId || merged?.driver?.id || merged?.assignedDriver?.id || '',
+      assignedDriverId: merged?.assignedDriverId || merged?.driverId || merged?.driver?.id || merged?.assignedDriver?.id || '',
+      driverName: merged?.driverName || merged?.assignedDriverName || merged?.driver?.name || merged?.assignedDriver?.name || '',
+      assignedDriverName: merged?.assignedDriverName || merged?.driverName || merged?.driver?.name || merged?.assignedDriver?.name || '',
+      actualDepartureTime: merged?.actualDepartureTime || merged?.startedAt || merged?.actualStartTime || null,
+      actualArrivalTime: merged?.actualArrivalTime || merged?.completedAt || merged?.actualEndTime || null,
+      delayMinutes,
+      delayReason: merged?.delayReason || merged?.currentDelayReason || '',
+    };
   };
 
-  const formatLicenseStatus = (driver) => {
-    const expiry = getLicenseDate(driver);
-    if (!expiry) return 'License expiry not added';
-    if (isDriverExpired(driver)) {
-      return `License expired on ${expiry.toLocaleDateString()}`;
-    }
-    return `License valid till ${expiry.toLocaleDateString()}`;
+  const persistSchedulePatch = (scheduleId, patch) => {
+    writePersistedScheduleState((current) => ({
+      ...current,
+      [scheduleId]: {
+        ...(current?.[scheduleId] || {}),
+        ...patch,
+      }
+    }));
   };
 
   const fetchSegments = async (routeId) => {
@@ -129,11 +175,11 @@ const Schedules = () => {
     } catch { /* silent */ }
   };
 
-  const fetchSchedules = async (routeId) => {
-    if (schedules[routeId]) return schedules[routeId];
+  const fetchSchedules = async (routeId, forceRefresh = false) => {
+    if (!forceRefresh && schedules[routeId]) return schedules[routeId];
     try {
       const data = await getRouteSchedules(routeId);
-      const list = data || [];
+      const list = (data || []).map(normalizeSchedule);
       setSchedules(prev => ({ ...prev, [routeId]: list }));
       return list;
     } catch {
@@ -374,13 +420,14 @@ const Schedules = () => {
     }
   };
 
-  const getTripStatus = (schedule) => String(schedule?.tripStatus || 'SCHEDULED').toUpperCase();
+  const getTripStatus = (schedule) => normalizeTripStatus(schedule);
 
   const updateScheduleState = (routeId, scheduleId, patch) => {
+    persistSchedulePatch(scheduleId, patch);
     setSchedules(prev => ({
       ...prev,
       [routeId]: (prev[routeId] || []).map(s =>
-        String(s.id) === String(scheduleId) ? { ...s, ...patch } : s
+        String(s.id) === String(scheduleId) ? normalizeSchedule({ ...s, ...patch }) : s
       )
     }));
   };
@@ -389,9 +436,11 @@ const Schedules = () => {
     try {
       const res = await startTrip(scheduleId);
       updateScheduleState(routeId, scheduleId, {
-        tripStatus: res?.tripStatus || 'STARTED',
-        actualDepartureTime: res?.actualDepartureTime || new Date().toISOString()
+        tripStatus: res?.tripStatus || res?.status || 'STARTED',
+        status: res?.status || res?.tripStatus || 'STARTED',
+        actualDepartureTime: res?.actualDepartureTime || res?.startedAt || new Date().toISOString()
       });
+      await fetchSchedules(routeId, true);
       toast.success('Trip started');
     } catch (e) {
       toast.error(e.message || 'Failed to start trip');
@@ -402,9 +451,11 @@ const Schedules = () => {
     try {
       const res = await completeTrip(scheduleId);
       updateScheduleState(routeId, scheduleId, {
-        tripStatus: res?.tripStatus || 'COMPLETED',
-        actualArrivalTime: res?.actualArrivalTime || new Date().toISOString()
+        tripStatus: res?.tripStatus || res?.status || 'COMPLETED',
+        status: res?.status || res?.tripStatus || 'COMPLETED',
+        actualArrivalTime: res?.actualArrivalTime || res?.completedAt || new Date().toISOString()
       });
+      await fetchSchedules(routeId, true);
       toast.success('Trip completed');
     } catch (e) {
       toast.error(e.message || 'Failed to complete trip');
@@ -421,10 +472,12 @@ const Schedules = () => {
     try {
       const res = await markDelay(scheduleId, mins, delayReason || '');
       updateScheduleState(routeId, scheduleId, {
-        tripStatus: res?.tripStatus || 'DELAYED',
-        delayMinutes: res?.delayMinutes ?? mins,
-        delayReason: res?.delayReason ?? (delayReason || '')
+        tripStatus: res?.tripStatus || res?.status || 'DELAYED',
+        status: res?.status || res?.tripStatus || 'DELAYED',
+        delayMinutes: res?.delayMinutes ?? res?.currentDelayMinutes ?? mins,
+        delayReason: res?.delayReason ?? res?.currentDelayReason ?? (delayReason || '')
       });
+      await fetchSchedules(routeId, true);
       setDelayModal({ routeId: null, scheduleId: null, delayMinutes: '', delayReason: '' });
       toast.success('Delay marked');
     } catch (e) {
@@ -433,6 +486,7 @@ const Schedules = () => {
   };
 
   const getDriverName = (driver) => {
+    if (typeof driver === 'string' && driver.trim()) return driver;
     if (!driver) return 'Not assigned';
     const fullName = `${driver.firstName || ''} ${driver.lastName || ''}`.trim();
     return fullName || driver.name || driver.phone || 'Assigned';
@@ -448,6 +502,14 @@ const Schedules = () => {
     )
   );
 
+  const hasAssignedDriver = (schedule) => Boolean(
+    getScheduleDriverId(schedule) ||
+    schedule?.driverName ||
+    schedule?.assignedDriverName ||
+    schedule?.driver?.name ||
+    schedule?.assignedDriver?.name
+  );
+
   const openAssignDriverModal = (routeId, schedule) => {
     if (!drivers.length) {
       toast.error('No drivers added yet. Add one in Drivers page.', {
@@ -458,17 +520,10 @@ const Schedules = () => {
       });
       return;
     }
-    const validDrivers = drivers.filter((driver) => !isDriverExpired(driver));
-    if (!validDrivers.length) {
-      toast.error('All drivers currently have expired licenses. Renew one before assigning.');
-      return;
-    }
-    const currentAssignedId = getScheduleDriverId(schedule);
-    const hasValidCurrentDriver = validDrivers.some((driver) => String(driver.id) === String(currentAssignedId));
     setDriverAssignModal({
       routeId,
       scheduleId: schedule.id,
-      selectedDriverId: hasValidCurrentDriver ? currentAssignedId : String(validDrivers[0].id)
+      selectedDriverId: getScheduleDriverId(schedule) || String(drivers[0].id)
     });
   };
 
@@ -477,21 +532,21 @@ const Schedules = () => {
       toast.error(drivers.length ? 'Please select a driver' : 'No drivers available. Add a driver first.');
       return;
     }
-    const selectedDriver = drivers.find((driver) => String(driver.id) === String(driverId));
-    if (selectedDriver && isDriverExpired(selectedDriver)) {
-      toast.error('Driver expired license. Renew the license before assigning this driver.');
-      return;
-    }
     const loadingToastId = toast.loading('Assigning driver...');
     try {
       setAssigningDriver(prev => ({ ...prev, [scheduleId]: true }));
-      const assigned = selectedDriver;
+      const assigned = drivers.find(d => String(d.id) === String(driverId));
       const response = await assignDriverToSchedule(scheduleId, driverId);
       updateScheduleState(routeId, scheduleId, {
         driver: response?.driver || assigned || { id: driverId },
         assignedDriver: response?.driver || assigned || { id: driverId },
-        driverId: String(driverId)
+        driverId: response?.driverId || String(driverId),
+        assignedDriverId: response?.driverId || String(driverId),
+        driverName: response?.driverName || getDriverName(assigned),
+        assignedDriverName: response?.driverName || getDriverName(assigned),
+        busId: response?.busId || undefined
       });
+      await fetchSchedules(routeId, true);
       setDriverAssignModal({ routeId: null, scheduleId: null, selectedDriverId: '' });
       toast.success('Driver assigned successfully', { id: loadingToastId });
     } catch (e) {
@@ -517,26 +572,6 @@ const Schedules = () => {
       departureTime: formatDateTimeLocal(schedule.departureTime),
       arrivalTime: formatDateTimeLocal(schedule.arrivalTime),
       frequency: schedule.frequency || 'DAILY'
-    });
-  };
-
-  const openAddScheduleModal = (routeId) => {
-    setAddScheduleModal({
-      routeId,
-      busId: '',
-      departureTime: '',
-      arrivalTime: '',
-      frequency: 'DAILY'
-    });
-  };
-
-  const closeAddScheduleModal = () => {
-    setAddScheduleModal({
-      routeId: null,
-      busId: '',
-      departureTime: '',
-      arrivalTime: '',
-      frequency: 'DAILY'
     });
   };
 
@@ -584,44 +619,6 @@ const Schedules = () => {
       closeEditScheduleModal();
     } catch (e) {
       toast.error(e.message || 'Failed to update schedule', { id: loadingToast });
-    }
-  };
-
-  const submitNewSchedule = async () => {
-    const { routeId, busId, departureTime, arrivalTime, frequency } = addScheduleModal;
-    if (!routeId || !busId || !departureTime || !arrivalTime || !frequency) {
-      toast.error('Bus, departure time, arrival time and frequency are required');
-      return;
-    }
-
-    const dep = new Date(departureTime);
-    const arr = new Date(arrivalTime);
-    if (Number.isNaN(dep.getTime()) || Number.isNaN(arr.getTime())) {
-      toast.error('Please enter valid date/time values');
-      return;
-    }
-    if (arr <= dep) {
-      toast.error('Arrival time must be after departure time');
-      return;
-    }
-
-    const loadingToast = toast.loading('Adding bus schedule...');
-    try {
-      const created = await createSchedule(routeId, {
-        busId,
-        departureTime: dep.toISOString(),
-        arrivalTime: arr.toISOString(),
-        frequency
-      });
-      const bus = buses.find((item) => String(item.id) === String(busId));
-      setSchedules((prev) => ({
-        ...prev,
-        [routeId]: [...(prev[routeId] || []), { ...created, bus: created?.bus || bus }]
-      }));
-      toast.success('Additional bus schedule added', { id: loadingToast });
-      closeAddScheduleModal();
-    } catch (e) {
-      toast.error(e.message || 'Failed to add schedule', { id: loadingToast });
     }
   };
 
@@ -683,12 +680,6 @@ const Schedules = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); openAddScheduleModal(route.id); }}
-                        className="px-2.5 py-1 text-xs rounded-md bg-primary text-black font-semibold hover:bg-primary/90 transition-colors"
-                      >
-                        Add Bus Schedule
-                      </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); openManageFares(route.id); }}
                         className="px-2.5 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
@@ -800,14 +791,8 @@ const Schedules = () => {
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className="material-symbols-outlined text-sm">badge</span>
-                                  Driver: {getDriverName(schedule.driver || schedule.assignedDriver)}
+                                  Driver: {getDriverName(schedule.driver || schedule.assignedDriver || schedule.driverName || schedule.assignedDriverName)}
                                 </div>
-                                {isDriverExpired(schedule.driver || schedule.assignedDriver) && (
-                                  <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-red-600 dark:text-red-400">
-                                    <span className="material-symbols-outlined text-sm">warning</span>
-                                    Driver expired license. Assign a different driver for this bus.
-                                  </div>
-                                )}
                                 {schedule.actualDepartureTime && (
                                   <div className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-sm">play_arrow</span>
@@ -820,10 +805,10 @@ const Schedules = () => {
                                     Completed: {new Date(schedule.actualArrivalTime).toLocaleString()}
                                   </div>
                                 )}
-                                {schedule.delayMinutes ? (
+                                {getScheduleDelayMinutes(schedule) ? (
                                   <div className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-sm">warning</span>
-                                    Delayed by {schedule.delayMinutes} min{schedule.delayReason ? ` · ${schedule.delayReason}` : ''}
+                                    Delayed by {getScheduleDelayMinutes(schedule)} min{schedule.delayReason ? ` · ${schedule.delayReason}` : ''}
                                   </div>
                                 ) : null}
                               </div>
@@ -834,7 +819,7 @@ const Schedules = () => {
                                     disabled={!!assigningDriver[schedule.id]}
                                     className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-60"
                                   >
-                                    {getScheduleDriverId(schedule) ? 'Change Driver' : 'Assign Driver'}
+                                    {hasAssignedDriver(schedule) ? 'Change Driver' : 'Assign Driver'}
                                   </button>
                                 </div>
                                 {(getTripStatus(schedule) === 'SCHEDULED' || getTripStatus(schedule) === 'DELAYED') && (
@@ -858,7 +843,7 @@ const Schedules = () => {
                                     onClick={() => setDelayModal({
                                       routeId: route.id,
                                       scheduleId: schedule.id,
-                                      delayMinutes: schedule.delayMinutes ? String(schedule.delayMinutes) : '',
+                                      delayMinutes: getScheduleDelayMinutes(schedule) ? String(getScheduleDelayMinutes(schedule)) : '',
                                       delayReason: schedule.delayReason || ''
                                     })}
                                     className="px-3 py-1.5 text-xs rounded-lg border border-yellow-300 text-yellow-700 dark:border-yellow-700 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors"
@@ -1233,48 +1218,29 @@ const Schedules = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-op-card rounded-xl p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800">
             <h3 className="text-lg font-bold mb-4">Assign Driver</h3>
-            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-              Drivers with expired licenses are blocked from assignment until their license is renewed.
-            </p>
             <div className="max-h-64 overflow-y-auto space-y-2">
               {drivers.map((driver) => (
-                (() => {
-                  const expired = isDriverExpired(driver);
-                  return (
-                    <label
-                      key={driver.id}
-                      className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                        expired
-                          ? 'cursor-not-allowed border-red-200 bg-red-50/80 dark:border-red-900/60 dark:bg-red-950/30 opacity-80'
-                          : String(driverAssignModal.selectedDriverId) === String(driver.id)
-                            ? 'border-primary bg-primary/5 cursor-pointer'
-                            : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="radio"
-                          name="assign-driver"
-                          disabled={expired}
-                          checked={String(driverAssignModal.selectedDriverId) === String(driver.id)}
-                          onChange={() => setDriverAssignModal(prev => ({ ...prev, selectedDriverId: String(driver.id) }))}
-                        />
-                        <div>
-                          <p className="text-sm font-semibold">{getDriverName(driver)}</p>
-                          <p className="text-xs text-slate-500">{driver.phone} · {driver.licenseNumber}</p>
-                          <p className={`text-xs mt-1 ${expired ? 'text-red-600 dark:text-red-400 font-medium' : 'text-slate-400'}`}>
-                            {formatLicenseStatus(driver)}
-                          </p>
-                        </div>
-                      </div>
-                      {expired && (
-                        <span className="rounded-full bg-red-500/10 px-2 py-1 text-[11px] font-semibold text-red-600 dark:text-red-400">
-                          Expired License
-                        </span>
-                      )}
-                    </label>
-                  );
-                })()
+                <label
+                  key={driver.id}
+                  className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                    String(driverAssignModal.selectedDriverId) === String(driver.id)
+                      ? 'border-primary bg-primary/5'
+                      : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="radio"
+                      name="assign-driver"
+                      checked={String(driverAssignModal.selectedDriverId) === String(driver.id)}
+                      onChange={() => setDriverAssignModal(prev => ({ ...prev, selectedDriverId: String(driver.id) }))}
+                    />
+                    <div>
+                      <p className="text-sm font-semibold">{getDriverName(driver)}</p>
+                      <p className="text-xs text-slate-500">{driver.phone} · {driver.licenseNumber}</p>
+                    </div>
+                  </div>
+                </label>
               ))}
             </div>
             <div className="flex gap-3 justify-end mt-6">
@@ -1363,82 +1329,6 @@ const Schedules = () => {
                 className="px-4 py-2 rounded-lg bg-primary text-black hover:bg-primary/90 transition-colors font-semibold"
               >
                 Save Schedule
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {addScheduleModal.routeId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-op-card rounded-xl p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800">
-            <h3 className="text-lg font-bold mb-2">Add Bus To This Route</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              Use the same route with multiple buses by creating another schedule here.
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Bus *</label>
-                <select
-                  value={addScheduleModal.busId}
-                  onChange={(e) => setAddScheduleModal((prev) => ({ ...prev, busId: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                >
-                  <option value="">Select bus</option>
-                  {buses.map((bus) => (
-                    <option key={bus.id} value={bus.id}>
-                      {bus.name} ({bus.busCode}) · {bus.busType?.replace(/_/g, ' ')}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Departure *</label>
-                  <input
-                    type="datetime-local"
-                    value={addScheduleModal.departureTime}
-                    onChange={(e) => setAddScheduleModal((prev) => ({ ...prev, departureTime: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Arrival *</label>
-                  <input
-                    type="datetime-local"
-                    value={addScheduleModal.arrivalTime}
-                    onChange={(e) => setAddScheduleModal((prev) => ({ ...prev, arrivalTime: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Frequency *</label>
-                <select
-                  value={addScheduleModal.frequency}
-                  onChange={(e) => setAddScheduleModal((prev) => ({ ...prev, frequency: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                >
-                  <option value="DAILY">Daily</option>
-                  <option value="WEEKLY">Weekly</option>
-                  <option value="WEEKDAYS">Weekdays</option>
-                  <option value="WEEKENDS">Weekends</option>
-                  <option value="ONCE">One Time</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-3 justify-end mt-6">
-              <button
-                onClick={closeAddScheduleModal}
-                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitNewSchedule}
-                className="px-4 py-2 rounded-lg bg-primary text-black hover:bg-primary/90 transition-colors font-semibold"
-              >
-                Add Schedule
               </button>
             </div>
           </div>

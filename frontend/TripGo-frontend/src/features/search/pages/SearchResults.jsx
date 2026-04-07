@@ -10,8 +10,8 @@ import {
   getAvailableSeatCount,
   getDelayMinutes,
   getTripStatusValue,
-  shouldIncludeBusForDate,
-  flattenSeatInventory,
+  isSeatAvailableForBooking,
+  shouldShowBusForSearch,
 } from '../../../shared/utils/scheduleSearchUtils';
 
 const DEPARTURE_SLOTS = [
@@ -61,7 +61,7 @@ const BusCard = ({ bus, searchParams }) => {
   const fareEntries = Object.entries(bus.faresByType || {});
   const [selectedType, setSelectedType] = useState(fareEntries[0]?.[0] || null);
   const selectedFare = bus.faresByType?.[selectedType];
-  const availableSeats = bus?.__availableSeatCount ?? getAvailableSeatCount(bus);
+  const availableSeats = getAvailableSeatCount(bus);
   const tripStatus = getTripStatusValue(bus);
   const delayMins = getDelayMinutes(bus);
   const statusLabel = tripStatus === 'DELAYED' || delayMins > 0 ? `Delayed${delayMins > 0 ? ` by ${delayMins} min` : ''}` : 'On Time';
@@ -188,39 +188,46 @@ const SearchResults = () => {
     try {
       const data = await searchBuses(params.from, params.to, params.date);
       const rawBuses = Array.isArray(data) ? data : [];
-      const enriched = await Promise.all(
+      const enrichedBuses = await Promise.all(
         rawBuses.map(async (bus) => {
-          if (!bus?.scheduleId) {
-            return {
-              ...bus,
-              __availableSeatCount: getAvailableSeatCount(bus),
-            };
-          }
+          if (!bus?.scheduleId) return bus;
 
-          const [seatRes, featureRes] = await Promise.allSettled([
+          const [seatsRes, featuresRes] = await Promise.allSettled([
             getScheduleSeats(bus.scheduleId),
             getScheduleFeatures(bus.scheduleId),
           ]);
 
-          const seats = seatRes.status === 'fulfilled'
-            ? flattenSeatInventory(seatRes.value, bus.seatAvailability)
-            : flattenSeatInventory(null, bus.seatAvailability);
+          const seatsPayload = seatsRes.status === 'fulfilled' ? seatsRes.value : null;
+          const featurePayload = featuresRes.status === 'fulfilled' ? featuresRes.value : null;
 
-          const featureData = featureRes.status === 'fulfilled' ? featureRes.value : null;
-          const nextTripStatus = getTripStatusValue(featureData) || getTripStatusValue(bus);
-          const nextDelayMinutes = getDelayMinutes(featureData) || getDelayMinutes(bus);
+          const resolvedSeatAvailability = Array.isArray(seatsPayload?.seatAvailability)
+            ? seatsPayload.seatAvailability
+            : Array.isArray(seatsPayload?.seats)
+              ? seatsPayload.seats
+              : Array.isArray(seatsPayload?.upperDeck) || Array.isArray(seatsPayload?.lowerDeck)
+                ? [...(seatsPayload?.lowerDeck || []), ...(seatsPayload?.upperDeck || [])]
+              : Array.isArray(bus?.seatAvailability)
+                ? bus.seatAvailability
+                : [];
+
+          const derivedAvailableCount = resolvedSeatAvailability.length
+            ? resolvedSeatAvailability.filter(isSeatAvailableForBooking).length
+            : getAvailableSeatCount(bus);
 
           return {
             ...bus,
-            seatAvailability: seats.length ? seats : bus.seatAvailability,
-            __availableSeatCount: seats.length ? getAvailableSeatCount({ seatAvailability: seats }) : getAvailableSeatCount(bus),
-            tripStatus: nextTripStatus || bus.tripStatus,
-            delayMinutes: nextDelayMinutes,
-            delayReason: featureData?.delayReason || bus?.delayReason,
+            seatAvailability: resolvedSeatAvailability,
+            availableSeats: derivedAvailableCount,
+            availableSeatCount: derivedAvailableCount,
+            tripStatus: getTripStatusValue(featurePayload) || getTripStatusValue(bus),
+            delayMinutes: getDelayMinutes(featurePayload) || getDelayMinutes(bus),
+            delayReason: featurePayload?.delayReason || bus?.delayReason,
+            actualDepartureTime: featurePayload?.actualDepartureTime || bus?.actualDepartureTime,
+            actualArrivalTime: featurePayload?.actualArrivalTime || bus?.actualArrivalTime,
           };
         })
       );
-      setBuses(enriched);
+      setBuses(enrichedBuses);
     } catch {
       setError('Failed to fetch buses. Please try again.');
     } finally {
@@ -232,7 +239,7 @@ const SearchResults = () => {
     setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
 
   const filteredBuses = useMemo(() => {
-    let result = buses.filter((bus) => shouldIncludeBusForDate(bus, appliedSearch.date));
+    let result = buses.filter((bus) => shouldShowBusForSearch(bus, appliedSearch.date));
 
     if (selectedSlots.length > 0) {
       result = result.filter(bus => {
@@ -267,10 +274,7 @@ const SearchResults = () => {
   }, [buses, selectedSlots, selectedBusTypes, maxPrice, selectedAmenities, sortBy]);
 
   const availableBuses = useMemo(
-    () => filteredBuses.filter((bus) => {
-      const count = bus?.__availableSeatCount ?? getAvailableSeatCount(bus);
-      return count !== 0;
-    }),
+    () => filteredBuses.filter((bus) => getAvailableSeatCount(bus) !== 0),
     [filteredBuses]
   );
 

@@ -5,7 +5,6 @@ import UserLayout from '../../../shared/components/UserLayout';
 import { ROUTES } from '../../../shared/constants/routes';
 import { INDIA_STATES } from '../../../shared/constants/indiaStates';
 import {
-  flattenSeatInventory,
   getDelayMinutes,
   getTripStatusValue,
   isSeatAvailableForBooking,
@@ -341,7 +340,16 @@ const Booking = () => {
   }, [scheduleId, bus?.id]);
 
   const seats = useMemo(() => {
-    return flattenSeatInventory(seatsResponse, bus?.seatAvailability).sort(seatComparator);
+    if (Array.isArray(seatsResponse?.upperDeck) || Array.isArray(seatsResponse?.lowerDeck)) {
+      const lower = (seatsResponse?.lowerDeck || []).map((seat) => ({ ...seat, deck: 'lower' }));
+      const upper = (seatsResponse?.upperDeck || []).map((seat) => ({ ...seat, deck: 'upper' }));
+      return [...lower, ...upper].sort(seatComparator);
+    }
+    if (Array.isArray(seatsResponse?.seats)) {
+      return seatsResponse.seats.map((seat) => ({ ...seat, deck: seatsResponse.deck || 'lower' })).sort(seatComparator);
+    }
+    if (Array.isArray(bus?.seatAvailability)) return [...bus.seatAvailability].sort(seatComparator);
+    return [];
   }, [seatsResponse, bus]);
 
   const isSleeper = useMemo(() => {
