@@ -62,6 +62,10 @@ const getTripStatusMeta = (tripStatus, delayMinutes) => {
 };
 
 const stopLabel = (stop) => stop?.name || stop?.stopName || stop?.city || stop?.location || stop?.address || stop?.landmark || '';
+const amenityLabel = (item) => {
+  if (typeof item === 'string') return item;
+  return item?.code || item?.name || item?.description || '';
+};
 
 const parseSleeperSeat = (seat) => {
   const match = String(seat.seatNumber || '').trim().toUpperCase().match(/^([LU])(\d+)$/);
@@ -381,10 +385,15 @@ const Booking = () => {
   }, [routeInfo, bus, searchParams]);
 
   const busFeatures = useMemo(() => {
-    if (Array.isArray(featuresInfo?.amenities) && featuresInfo.amenities.length) return featuresInfo.amenities;
-    if (Array.isArray(featuresInfo?.features) && featuresInfo.features.length) return featuresInfo.features;
+    if (Array.isArray(featuresInfo?.amenities) && featuresInfo.amenities.length) {
+      return featuresInfo.amenities.map(amenityLabel).filter(Boolean);
+    }
+    if (Array.isArray(featuresInfo?.features) && featuresInfo.features.length) {
+      return featuresInfo.features.map(amenityLabel).filter(Boolean);
+    }
     const amenities = Array.isArray(bus?.amenities) ? bus.amenities : [];
-    return amenities.length ? amenities : ['Charging Point', 'Reading Light'];
+    const normalizedAmenities = amenities.map(amenityLabel).filter(Boolean);
+    return normalizedAmenities.length ? normalizedAmenities : ['Charging Point', 'Reading Light'];
   }, [featuresInfo, bus]);
 
   const routeDistanceKm = routeInfo?.distanceKm || routeInfo?.distance || bus?.distanceKm || 487;

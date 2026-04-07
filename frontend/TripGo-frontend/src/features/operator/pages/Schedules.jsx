@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
-import { getRoutes, getRouteSegments, getRouteSchedules, deleteSchedule, deleteRoute, getPoints, addPoint, updatePoint, deletePoint, getFares, addFare, deleteFare, updateFare, startTrip, completeTrip, markDelay, updateSchedule } from '../../../api/routeService';
+import { getRoutes, getRouteSegments, getRouteSchedules, deleteSchedule, deleteRoute, getPoints, addPoint, updatePoint, deletePoint, getFares, addFare, deleteFare, updateFare, startTrip, completeTrip, markDelay, updateSchedule, createSchedule } from '../../../api/routeService';
 import { getDrivers, assignDriverToSchedule } from '../../../api/operatorDriverService';
 import { getBuses } from '../../../api/busService';
 import { toast } from 'sonner';
@@ -40,6 +40,13 @@ const Schedules = () => {
   const [editScheduleModal, setEditScheduleModal] = useState({
     routeId: null,
     scheduleId: null,
+    busId: '',
+    departureTime: '',
+    arrivalTime: '',
+    frequency: 'DAILY'
+  });
+  const [addScheduleModal, setAddScheduleModal] = useState({
+    routeId: null,
     busId: '',
     departureTime: '',
     arrivalTime: '',
@@ -85,7 +92,7 @@ const Schedules = () => {
   const fetchBuses = async () => {
     try {
       const data = await getBuses();
-      setBuses(Array.isArray(data) ? data : []);
+      setBuses(Array.isArray(data) ? data.filter((bus) => bus?.active) : []);
     } catch {
       setBuses([]);
     }
@@ -549,6 +556,26 @@ const Schedules = () => {
     });
   };
 
+  const openAddScheduleModal = (routeId) => {
+    setAddScheduleModal({
+      routeId,
+      busId: '',
+      departureTime: '',
+      arrivalTime: '',
+      frequency: 'DAILY'
+    });
+  };
+
+  const closeAddScheduleModal = () => {
+    setAddScheduleModal({
+      routeId: null,
+      busId: '',
+      departureTime: '',
+      arrivalTime: '',
+      frequency: 'DAILY'
+    });
+  };
+
   const submitScheduleUpdate = async () => {
     const { routeId, scheduleId, busId, departureTime, arrivalTime, frequency } = editScheduleModal;
     if (!routeId || !scheduleId || !busId || !departureTime || !arrivalTime || !frequency) {
@@ -582,6 +609,39 @@ const Schedules = () => {
       closeEditScheduleModal();
     } catch (e) {
       toast.error(e.message || 'Failed to update schedule', { id: loadingToast });
+    }
+  };
+
+  const submitNewSchedule = async () => {
+    const { routeId, busId, departureTime, arrivalTime, frequency } = addScheduleModal;
+    if (!routeId || !busId || !departureTime || !arrivalTime || !frequency) {
+      toast.error('All schedule fields are required');
+      return;
+    }
+    const dep = new Date(departureTime);
+    const arr = new Date(arrivalTime);
+    if (Number.isNaN(dep.getTime()) || Number.isNaN(arr.getTime())) {
+      toast.error('Please enter valid date/time values');
+      return;
+    }
+    if (arr <= dep) {
+      toast.error('Arrival time must be after departure time');
+      return;
+    }
+
+    const loadingToast = toast.loading('Creating schedule...');
+    try {
+      await createSchedule(routeId, {
+        busId,
+        departureTime: dep.toISOString(),
+        arrivalTime: arr.toISOString(),
+        frequency
+      });
+      await fetchSchedules(routeId, true);
+      toast.success('Schedule added successfully', { id: loadingToast });
+      closeAddScheduleModal();
+    } catch (e) {
+      toast.error(e.message || 'Failed to create schedule', { id: loadingToast });
     }
   };
 
@@ -644,6 +704,12 @@ const Schedules = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <button
+                        onClick={(e) => { e.stopPropagation(); openAddScheduleModal(route.id); }}
+                        className="px-2.5 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                      >
+                        Add Schedule
+                      </button>
+                      <button
                         onClick={(e) => { e.stopPropagation(); openManageFares(route.id); }}
                         className="px-2.5 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                       >
@@ -693,6 +759,10 @@ const Schedules = () => {
                         </div>
                       </div>
                     )}
+
+                    <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+                      Fares on this screen are route-level, based on segment and seat type. Different prices for different buses on the same route need backend fare support per bus.
+                    </div>
 
                     {schedules[route.id]?.length > 0 ? (
                       <div>
@@ -1292,6 +1362,79 @@ const Schedules = () => {
                 className="px-4 py-2 rounded-lg bg-primary text-black hover:bg-primary/90 transition-colors font-semibold"
               >
                 Save Schedule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addScheduleModal.routeId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-op-card rounded-xl p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800">
+            <h3 className="text-lg font-bold mb-4">Add Schedule</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Bus *</label>
+                <select
+                  value={addScheduleModal.busId}
+                  onChange={(e) => setAddScheduleModal(prev => ({ ...prev, busId: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
+                >
+                  <option value="">Select bus</option>
+                  {buses.map((bus) => (
+                    <option key={bus.id} value={bus.id}>
+                      {bus.name} ({bus.busCode}) · {bus.busType?.replace(/_/g, ' ')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Departure *</label>
+                  <input
+                    type="datetime-local"
+                    value={addScheduleModal.departureTime}
+                    onChange={(e) => setAddScheduleModal(prev => ({ ...prev, departureTime: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Arrival *</label>
+                  <input
+                    type="datetime-local"
+                    value={addScheduleModal.arrivalTime}
+                    onChange={(e) => setAddScheduleModal(prev => ({ ...prev, arrivalTime: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Frequency *</label>
+                <select
+                  value={addScheduleModal.frequency}
+                  onChange={(e) => setAddScheduleModal(prev => ({ ...prev, frequency: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
+                >
+                  <option value="DAILY">Daily</option>
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="WEEKDAYS">Weekdays</option>
+                  <option value="WEEKENDS">Weekends</option>
+                  <option value="ONCE">One Time</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={closeAddScheduleModal}
+                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitNewSchedule}
+                className="px-4 py-2 rounded-lg bg-primary text-black hover:bg-primary/90 transition-colors font-semibold"
+              >
+                Create Schedule
               </button>
             </div>
           </div>

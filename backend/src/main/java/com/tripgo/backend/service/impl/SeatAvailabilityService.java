@@ -45,21 +45,36 @@ public class SeatAvailabilityService {
             for (Fare f : fares) System.out.println("    Fare: seatType=" + f.getSeatType() + " base=" + f.getBaseFare());
         }
 
-        // Collect seat types from segment IDs directly (avoids Hibernate identity issues)
+        // Build fare map: seatType -> FareResult
+        // Priority: bus-specific fare > route-level fare
+        UUID busId = schedule.getBus() != null ? schedule.getBus().getId() : null;
+
+        // Collect all seat types available for this bus or route
         Set<String> seatTypes = travelSegments.stream()
-                .flatMap(seg -> fareRepo.findByRouteSegmentId(seg.getId()).stream())
+                .flatMap(seg -> {
+                    List<Fare> busFares = busId != null
+                            ? fareRepo.findByRouteSegmentIdAndBusId(seg.getId(), busId)
+                            : List.of();
+                    List<Fare> routeFares = fareRepo.findByRouteSegmentIdAndBusIsNull(seg.getId());
+                    return busFares.isEmpty() ? routeFares.stream() : busFares.stream();
+                })
                 .map(Fare::getSeatType)
                 .filter(t -> t != null && !t.isBlank())
                 .collect(Collectors.toSet());
 
-        // Build fare map: seatType -> FareResult (only include types with fares on ALL segments)
         Map<String, FareResult> faresByType = new java.util.LinkedHashMap<>();
         for (String type : seatTypes) {
             BigDecimal base = BigDecimal.ZERO;
             BigDecimal gst = BigDecimal.ZERO;
             boolean complete = true;
             for (RouteSegment seg : travelSegments) {
-                Optional<Fare> fare = fareRepo.findByRouteSegmentIdAndSeatType(seg.getId(), type);
+                // Try bus-specific fare first, fallback to route-level
+                Optional<Fare> fare = busId != null
+                        ? fareRepo.findByRouteSegmentIdAndSeatTypeAndBusId(seg.getId(), type, busId)
+                        : Optional.empty();
+                if (fare.isEmpty()) {
+                    fare = fareRepo.findByRouteSegmentIdAndSeatType(seg.getId(), type);
+                }
                 if (fare.isEmpty()) { complete = false; break; }
                 base = base.add(fare.get().getBaseFare());
                 gst = gst.add(fare.get().getBaseFare()

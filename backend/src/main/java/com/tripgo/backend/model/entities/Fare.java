@@ -11,8 +11,8 @@ import java.util.UUID;
     name = "fares",
     uniqueConstraints = {
         @UniqueConstraint(
-            name = "uq_fare_segment_seattype",
-            columnNames = {"route_segment_id", "seat_type"}
+            name = "uq_fare_segment_seattype_bus",
+            columnNames = {"route_segment_id", "seat_type", "bus_id"}
         )
     }
 )
@@ -34,6 +34,11 @@ public class Fare {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "route_segment_id")
     private RouteSegment routeSegment;
+
+    // null = route-level default, non-null = per-bus override
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "bus_id")
+    private Bus bus;
 
     @Column(name = "seat_type")
     private String seatType;

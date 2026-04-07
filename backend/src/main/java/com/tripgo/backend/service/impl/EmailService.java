@@ -31,6 +31,19 @@ public class EmailService {
     private String frontendUrl;
 
     @Async
+    public void sendBookingConfirmation(User user, Map<String, Object> bookingDetails) {
+        Map<String, Object> model = new java.util.HashMap<>(bookingDetails);
+        model.put("firstName", user.getFirstName());
+        model.put("frontendUrl", frontendUrl);
+        sendTemplate(
+                user.getEmail(),
+                "Booking Confirmed - " + bookingDetails.get("bookingCode") + " | TripGo",
+                "booking-confirmation",
+                model
+        );
+    }
+
+    @Async
     public void sendUserVerificationEmail(User user, String link) {
         sendTemplate(
                 user.getEmail(),

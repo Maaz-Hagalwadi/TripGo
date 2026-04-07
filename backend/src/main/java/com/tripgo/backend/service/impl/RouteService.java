@@ -113,9 +113,17 @@ public class RouteService {
         RouteSegment segment = segmentRepository.findById(req.segmentId())
                 .orElseThrow(() -> new RuntimeException("Segment not found"));
 
+        // Resolve bus if busId provided
+        Bus bus = null;
+        if (req.busId() != null) {
+            bus = busRepository.findById(req.busId())
+                    .orElseThrow(() -> new RuntimeException("Bus not found"));
+        }
+
         Fare fare = Fare.builder()
                 .route(route)
                 .routeSegment(segment)
+                .bus(bus)
                 .seatType(req.seatType())
                 .baseFare(req.baseFare())
                 .gstPercent(req.gstPercent())
@@ -123,14 +131,13 @@ public class RouteService {
 
         fare = fareRepository.save(fare);
 
-        // Calculate total fare using request values to avoid lazy loading
         BigDecimal gstAmount = req.baseFare().multiply(req.gstPercent()).divide(BigDecimal.valueOf(100));
         BigDecimal totalFare = req.baseFare().add(gstAmount);
 
         return new FareResponse(
                 fare.getId(),
-                routeId,  // Use parameter instead of route.getId()
-                req.segmentId(),  // Use parameter instead of segment.getId()
+                routeId,
+                req.segmentId(),
                 req.seatType(),
                 req.baseFare(),
                 req.gstPercent(),

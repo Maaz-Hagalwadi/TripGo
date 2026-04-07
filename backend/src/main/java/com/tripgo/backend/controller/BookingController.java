@@ -5,6 +5,7 @@ import com.tripgo.backend.model.entities.*;
 import com.tripgo.backend.model.enums.BookingStatus;
 import com.tripgo.backend.repository.*;
 import com.tripgo.backend.security.service.CustomUserDetails;
+import com.tripgo.backend.service.impl.EmailService;
 import com.tripgo.backend.service.impl.SeatLockService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +29,7 @@ public class BookingController {
     private final BookingRepository bookingRepository;
     private final BookingSeatRepository bookingSeatRepository;
     private final PassengerRepository passengerRepository;
+    private final EmailService emailService;
 
     // ─── GET seats for schedule ───────────────────────────────────────────────
     @GetMapping("/schedules/{scheduleId}/seats")
@@ -225,6 +227,21 @@ public class BookingController {
 
         // Release seat locks
         lockService.release(lockToken);
+
+        // Send booking confirmation email
+        Map<String, Object> emailDetails = new LinkedHashMap<>();
+        emailDetails.put("bookingCode", booking.getBookingCode());
+        emailDetails.put("from", from);
+        emailDetails.put("to", to);
+        emailDetails.put("busName", schedule.getBus().getName());
+        emailDetails.put("operatorName", schedule.getRoute().getOperator().getName());
+        emailDetails.put("departureTime", schedule.getDepartureTime().toString());
+        emailDetails.put("arrivalTime", schedule.getArrivalTime().toString());
+        emailDetails.put("totalAmount", totalAmount);
+        emailDetails.put("gstAmount", gstAmount);
+        emailDetails.put("payableAmount", payableAmount);
+        emailDetails.put("passengers", passengers);
+        emailService.sendBookingConfirmation(user, emailDetails);
 
         return ResponseEntity.ok(Map.of(
                 "bookingId", booking.getId(),
