@@ -77,15 +77,16 @@ public class SeatAvailabilityService {
             BigDecimal gst = BigDecimal.ZERO;
             boolean complete = true;
             for (RouteSegment seg : travelSegments) {
-                // Try bus-specific fare first, then route-level, then any fare
+                // 1. Try bus-specific fare
                 Optional<Fare> fare = busId != null
                         ? fareRepo.findByRouteSegmentIdAndSeatTypeAndBusId(seg.getId(), type, busId)
                         : Optional.empty();
+                // 2. Fallback to route-level (bus_id IS NULL)
                 if (fare.isEmpty()) {
                     fare = fareRepo.findByRouteSegmentIdAndSeatType(seg.getId(), type);
                 }
+                // 3. Final fallback: any fare for this segment+seatType
                 if (fare.isEmpty()) {
-                    // Final fallback: any fare for this segment and seat type
                     fare = fareRepo.findByRouteSegmentId(seg.getId()).stream()
                             .filter(f -> type.equals(f.getSeatType()))
                             .findFirst();
