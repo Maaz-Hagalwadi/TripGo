@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -120,14 +121,45 @@ public class RouteService {
                     .orElseThrow(() -> new RuntimeException("Bus not found"));
         }
 
-        Fare fare = Fare.builder()
-                .route(route)
-                .routeSegment(segment)
-                .bus(bus)
-                .seatType(req.seatType())
-                .baseFare(req.baseFare())
-                .gstPercent(req.gstPercent())
-                .build();
+        // If setting a per-bus fare, ensure route-level fare still exists
+        if (bus != null) {
+            boolean routeLevelExists = fareRepository
+                    .findByRouteSegmentIdAndSeatType(segment.getId(), req.seatType())
+                    .isPresent();
+            if (!routeLevelExists) {
+                // Create route-level fare with same price as default
+                fareRepository.save(Fare.builder()
+                        .route(route)
+                        .routeSegment(segment)
+                        .bus(null)
+                        .seatType(req.seatType())
+                        .baseFare(req.baseFare())
+                        .gstPercent(req.gstPercent())
+                        .build());
+            }
+        }
+
+        // Check if fare already exists for this segment+seatType+bus, update it
+        final Bus finalBus = bus;
+        Optional<Fare> existing = bus != null
+                ? fareRepository.findByRouteSegmentIdAndSeatTypeAndBusId(segment.getId(), req.seatType(), bus.getId())
+                : fareRepository.findByRouteSegmentIdAndSeatType(segment.getId(), req.seatType());
+
+        Fare fare;
+        if (existing.isPresent()) {
+            fare = existing.get();
+            fare.setBaseFare(req.baseFare());
+            fare.setGstPercent(req.gstPercent());
+        } else {
+            fare = Fare.builder()
+                    .route(route)
+                    .routeSegment(segment)
+                    .bus(finalBus)
+                    .seatType(req.seatType())
+                    .baseFare(req.baseFare())
+                    .gstPercent(req.gstPercent())
+                    .build();
+        }
 
         fare = fareRepository.save(fare);
 
