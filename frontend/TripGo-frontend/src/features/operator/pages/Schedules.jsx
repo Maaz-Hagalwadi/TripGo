@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
-import { getRoutes, getRouteSegments, getRouteSchedules, deleteSchedule, deleteRoute, getPoints, addPoint, updatePoint, deletePoint, getFares, addFare, deleteFare, updateFare, startTrip, completeTrip, markDelay, updateSchedule } from '../../../api/routeService';
+import { getRoutes, getRouteSegments, getRouteSchedules, deleteSchedule, deleteRoute, getPoints, addPoint, updatePoint, deletePoint, getFares, addFare, deleteFare, updateFare, startTrip, completeTrip, markDelay, updateSchedule, createSchedule } from '../../../api/routeService';
 import { getDrivers, assignDriverToSchedule } from '../../../api/operatorDriverService';
 import { getBuses } from '../../../api/busService';
 import { toast } from 'sonner';
@@ -38,6 +38,13 @@ const Schedules = () => {
   const [editScheduleModal, setEditScheduleModal] = useState({
     routeId: null,
     scheduleId: null,
+    busId: '',
+    departureTime: '',
+    arrivalTime: '',
+    frequency: 'DAILY'
+  });
+  const [addScheduleModal, setAddScheduleModal] = useState({
+    routeId: null,
     busId: '',
     departureTime: '',
     arrivalTime: '',
@@ -87,6 +94,31 @@ const Schedules = () => {
     } catch {
       setBuses([]);
     }
+  };
+
+  const getLicenseDate = (driver) => {
+    if (!driver?.licenseExpiry) return null;
+    const expiry = new Date(driver.licenseExpiry);
+    if (Number.isNaN(expiry.getTime())) return null;
+    expiry.setHours(0, 0, 0, 0);
+    return expiry;
+  };
+
+  const isDriverExpired = (driver) => {
+    const expiry = getLicenseDate(driver);
+    if (!expiry) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return expiry < today;
+  };
+
+  const formatLicenseStatus = (driver) => {
+    const expiry = getLicenseDate(driver);
+    if (!expiry) return 'License expiry not added';
+    if (isDriverExpired(driver)) {
+      return `License expired on ${expiry.toLocaleDateString()}`;
+    }
+    return `License valid till ${expiry.toLocaleDateString()}`;
   };
 
   const fetchSegments = async (routeId) => {
@@ -426,10 +458,17 @@ const Schedules = () => {
       });
       return;
     }
+    const validDrivers = drivers.filter((driver) => !isDriverExpired(driver));
+    if (!validDrivers.length) {
+      toast.error('All drivers currently have expired licenses. Renew one before assigning.');
+      return;
+    }
+    const currentAssignedId = getScheduleDriverId(schedule);
+    const hasValidCurrentDriver = validDrivers.some((driver) => String(driver.id) === String(currentAssignedId));
     setDriverAssignModal({
       routeId,
       scheduleId: schedule.id,
-      selectedDriverId: getScheduleDriverId(schedule) || String(drivers[0].id)
+      selectedDriverId: hasValidCurrentDriver ? currentAssignedId : String(validDrivers[0].id)
     });
   };
 
@@ -438,10 +477,15 @@ const Schedules = () => {
       toast.error(drivers.length ? 'Please select a driver' : 'No drivers available. Add a driver first.');
       return;
     }
+    const selectedDriver = drivers.find((driver) => String(driver.id) === String(driverId));
+    if (selectedDriver && isDriverExpired(selectedDriver)) {
+      toast.error('Driver expired license. Renew the license before assigning this driver.');
+      return;
+    }
     const loadingToastId = toast.loading('Assigning driver...');
     try {
       setAssigningDriver(prev => ({ ...prev, [scheduleId]: true }));
-      const assigned = drivers.find(d => String(d.id) === String(driverId));
+      const assigned = selectedDriver;
       const response = await assignDriverToSchedule(scheduleId, driverId);
       updateScheduleState(routeId, scheduleId, {
         driver: response?.driver || assigned || { id: driverId },
@@ -473,6 +517,26 @@ const Schedules = () => {
       departureTime: formatDateTimeLocal(schedule.departureTime),
       arrivalTime: formatDateTimeLocal(schedule.arrivalTime),
       frequency: schedule.frequency || 'DAILY'
+    });
+  };
+
+  const openAddScheduleModal = (routeId) => {
+    setAddScheduleModal({
+      routeId,
+      busId: '',
+      departureTime: '',
+      arrivalTime: '',
+      frequency: 'DAILY'
+    });
+  };
+
+  const closeAddScheduleModal = () => {
+    setAddScheduleModal({
+      routeId: null,
+      busId: '',
+      departureTime: '',
+      arrivalTime: '',
+      frequency: 'DAILY'
     });
   };
 
@@ -520,6 +584,44 @@ const Schedules = () => {
       closeEditScheduleModal();
     } catch (e) {
       toast.error(e.message || 'Failed to update schedule', { id: loadingToast });
+    }
+  };
+
+  const submitNewSchedule = async () => {
+    const { routeId, busId, departureTime, arrivalTime, frequency } = addScheduleModal;
+    if (!routeId || !busId || !departureTime || !arrivalTime || !frequency) {
+      toast.error('Bus, departure time, arrival time and frequency are required');
+      return;
+    }
+
+    const dep = new Date(departureTime);
+    const arr = new Date(arrivalTime);
+    if (Number.isNaN(dep.getTime()) || Number.isNaN(arr.getTime())) {
+      toast.error('Please enter valid date/time values');
+      return;
+    }
+    if (arr <= dep) {
+      toast.error('Arrival time must be after departure time');
+      return;
+    }
+
+    const loadingToast = toast.loading('Adding bus schedule...');
+    try {
+      const created = await createSchedule(routeId, {
+        busId,
+        departureTime: dep.toISOString(),
+        arrivalTime: arr.toISOString(),
+        frequency
+      });
+      const bus = buses.find((item) => String(item.id) === String(busId));
+      setSchedules((prev) => ({
+        ...prev,
+        [routeId]: [...(prev[routeId] || []), { ...created, bus: created?.bus || bus }]
+      }));
+      toast.success('Additional bus schedule added', { id: loadingToast });
+      closeAddScheduleModal();
+    } catch (e) {
+      toast.error(e.message || 'Failed to add schedule', { id: loadingToast });
     }
   };
 
@@ -581,6 +683,12 @@ const Schedules = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openAddScheduleModal(route.id); }}
+                        className="px-2.5 py-1 text-xs rounded-md bg-primary text-black font-semibold hover:bg-primary/90 transition-colors"
+                      >
+                        Add Bus Schedule
+                      </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); openManageFares(route.id); }}
                         className="px-2.5 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
@@ -694,6 +802,12 @@ const Schedules = () => {
                                   <span className="material-symbols-outlined text-sm">badge</span>
                                   Driver: {getDriverName(schedule.driver || schedule.assignedDriver)}
                                 </div>
+                                {isDriverExpired(schedule.driver || schedule.assignedDriver) && (
+                                  <div className="flex items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-red-600 dark:text-red-400">
+                                    <span className="material-symbols-outlined text-sm">warning</span>
+                                    Driver expired license. Assign a different driver for this bus.
+                                  </div>
+                                )}
                                 {schedule.actualDepartureTime && (
                                   <div className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-sm">play_arrow</span>
@@ -1119,29 +1233,48 @@ const Schedules = () => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-op-card rounded-xl p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800">
             <h3 className="text-lg font-bold mb-4">Assign Driver</h3>
+            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+              Drivers with expired licenses are blocked from assignment until their license is renewed.
+            </p>
             <div className="max-h-64 overflow-y-auto space-y-2">
               {drivers.map((driver) => (
-                <label
-                  key={driver.id}
-                  className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
-                    String(driverAssignModal.selectedDriverId) === String(driver.id)
-                      ? 'border-primary bg-primary/5'
-                      : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="radio"
-                      name="assign-driver"
-                      checked={String(driverAssignModal.selectedDriverId) === String(driver.id)}
-                      onChange={() => setDriverAssignModal(prev => ({ ...prev, selectedDriverId: String(driver.id) }))}
-                    />
-                    <div>
-                      <p className="text-sm font-semibold">{getDriverName(driver)}</p>
-                      <p className="text-xs text-slate-500">{driver.phone} · {driver.licenseNumber}</p>
-                    </div>
-                  </div>
-                </label>
+                (() => {
+                  const expired = isDriverExpired(driver);
+                  return (
+                    <label
+                      key={driver.id}
+                      className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                        expired
+                          ? 'cursor-not-allowed border-red-200 bg-red-50/80 dark:border-red-900/60 dark:bg-red-950/30 opacity-80'
+                          : String(driverAssignModal.selectedDriverId) === String(driver.id)
+                            ? 'border-primary bg-primary/5 cursor-pointer'
+                            : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="radio"
+                          name="assign-driver"
+                          disabled={expired}
+                          checked={String(driverAssignModal.selectedDriverId) === String(driver.id)}
+                          onChange={() => setDriverAssignModal(prev => ({ ...prev, selectedDriverId: String(driver.id) }))}
+                        />
+                        <div>
+                          <p className="text-sm font-semibold">{getDriverName(driver)}</p>
+                          <p className="text-xs text-slate-500">{driver.phone} · {driver.licenseNumber}</p>
+                          <p className={`text-xs mt-1 ${expired ? 'text-red-600 dark:text-red-400 font-medium' : 'text-slate-400'}`}>
+                            {formatLicenseStatus(driver)}
+                          </p>
+                        </div>
+                      </div>
+                      {expired && (
+                        <span className="rounded-full bg-red-500/10 px-2 py-1 text-[11px] font-semibold text-red-600 dark:text-red-400">
+                          Expired License
+                        </span>
+                      )}
+                    </label>
+                  );
+                })()
               ))}
             </div>
             <div className="flex gap-3 justify-end mt-6">
@@ -1230,6 +1363,82 @@ const Schedules = () => {
                 className="px-4 py-2 rounded-lg bg-primary text-black hover:bg-primary/90 transition-colors font-semibold"
               >
                 Save Schedule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addScheduleModal.routeId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-op-card rounded-xl p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800">
+            <h3 className="text-lg font-bold mb-2">Add Bus To This Route</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+              Use the same route with multiple buses by creating another schedule here.
+            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Bus *</label>
+                <select
+                  value={addScheduleModal.busId}
+                  onChange={(e) => setAddScheduleModal((prev) => ({ ...prev, busId: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
+                >
+                  <option value="">Select bus</option>
+                  {buses.map((bus) => (
+                    <option key={bus.id} value={bus.id}>
+                      {bus.name} ({bus.busCode}) · {bus.busType?.replace(/_/g, ' ')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Departure *</label>
+                  <input
+                    type="datetime-local"
+                    value={addScheduleModal.departureTime}
+                    onChange={(e) => setAddScheduleModal((prev) => ({ ...prev, departureTime: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Arrival *</label>
+                  <input
+                    type="datetime-local"
+                    value={addScheduleModal.arrivalTime}
+                    onChange={(e) => setAddScheduleModal((prev) => ({ ...prev, arrivalTime: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Frequency *</label>
+                <select
+                  value={addScheduleModal.frequency}
+                  onChange={(e) => setAddScheduleModal((prev) => ({ ...prev, frequency: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
+                >
+                  <option value="DAILY">Daily</option>
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="WEEKDAYS">Weekdays</option>
+                  <option value="WEEKENDS">Weekends</option>
+                  <option value="ONCE">One Time</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={closeAddScheduleModal}
+                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitNewSchedule}
+                className="px-4 py-2 rounded-lg bg-primary text-black hover:bg-primary/90 transition-colors font-semibold"
+              >
+                Add Schedule
               </button>
             </div>
           </div>

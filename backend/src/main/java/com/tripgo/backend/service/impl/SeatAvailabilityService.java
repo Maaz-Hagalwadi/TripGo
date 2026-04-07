@@ -73,10 +73,23 @@ public class SeatAvailabilityService {
             throw new RuntimeException("No fares defined for route: " + from + " -> " + to);
         }
 
-        // Seat availability
+        // Seat availability - check actual bookings and blocked seats
         List<Seat> seats = seatRepo.findByBus(schedule.getBus());
+
+        // Get booked seat numbers for this schedule
+        Set<String> bookedSeatNumbers = bookingSeatRepo
+                .findByRouteSchedule(schedule)
+                .stream()
+                .filter(bs -> bs.getBooking().getStatus().name().equals("CONFIRMED"))
+                .map(BookingSeat::getSeatNumber)
+                .collect(Collectors.toSet());
+
         List<SeatAvailability> seatAvailability = seats.stream()
-                .map(seat -> new SeatAvailability(seat.getSeatNumber(), true))
+                .map(seat -> new SeatAvailability(
+                        seat.getSeatNumber(),
+                        !bookedSeatNumbers.contains(seat.getSeatNumber())
+                        && !Boolean.TRUE.equals(seat.getIsBlocked())
+                ))
                 .toList();
 
         return new SearchResult(faresByType, seatAvailability);

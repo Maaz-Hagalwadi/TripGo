@@ -50,12 +50,11 @@ public class SearchController {
         );
         
         return schedules.stream()
+                .filter(schedule -> !"COMPLETED".equals(schedule.getTripStatus()))
                 .map(schedule -> {
-                    // Adjust departure time to the searched date
                     Instant adjustedDeparture = adjustToDate(schedule.getDepartureTime(), date);
                     Instant adjustedArrival = adjustToDate(schedule.getArrivalTime(), date);
-                    
-                    // Create a temporary schedule with adjusted times
+
                     RouteSchedule adjustedSchedule = new RouteSchedule();
                     adjustedSchedule.setId(schedule.getId());
                     adjustedSchedule.setRoute(schedule.getRoute());
@@ -64,7 +63,13 @@ public class SearchController {
                     adjustedSchedule.setArrivalTime(adjustedArrival);
                     adjustedSchedule.setFrequency(schedule.getFrequency());
                     adjustedSchedule.setActive(schedule.getActive());
-                    
+                    // Copy trip status fields
+                    adjustedSchedule.setTripStatus(schedule.getTripStatus());
+                    adjustedSchedule.setDelayMinutes(schedule.getDelayMinutes());
+                    adjustedSchedule.setDelayReason(schedule.getDelayReason());
+                    adjustedSchedule.setActualDepartureTime(schedule.getActualDepartureTime());
+                    adjustedSchedule.setActualArrivalTime(schedule.getActualArrivalTime());
+
                     return availabilityService.search(adjustedSchedule, normalizedFrom, normalizedTo, null);
                 })
                 .toList();

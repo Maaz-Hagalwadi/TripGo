@@ -1,10 +1,18 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { searchBuses } from '../../../api/busService';
+import { getScheduleFeatures, getScheduleSeats } from '../../../api/bookingService';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { ROUTES } from '../../../shared/constants/routes';
 import UserLayout from '../../../shared/components/UserLayout';
+import {
+  getAvailableSeatCount,
+  getDelayMinutes,
+  getTripStatusValue,
+  shouldIncludeBusForDate,
+  flattenSeatInventory,
+} from '../../../shared/utils/scheduleSearchUtils';
 
 const DEPARTURE_SLOTS = [
   { label: 'Early Morning (6am – 12pm)', start: 6, end: 12 },
@@ -44,14 +52,6 @@ const minFare = (faresByType) => {
   return vals.length ? Math.min(...vals) : 0;
 };
 
-const isSeatAvailableForBooking = (seat) => Boolean(seat?.available) && !seat?.isBlocked;
-const getAvailableSeatCount = (bus) => {
-  if (Number.isFinite(Number(bus?.availableSeats))) return Number(bus.availableSeats);
-  if (Number.isFinite(Number(bus?.availableSeatCount))) return Number(bus.availableSeatCount);
-  if (Array.isArray(bus?.seatAvailability)) return bus.seatAvailability.filter(isSeatAvailableForBooking).length;
-  return null;
-};
-
 const toYmd = (date) => date.toISOString().split('T')[0];
 const TODAY_YMD = toYmd(new Date());
 const TOMORROW_YMD = toYmd(new Date(Date.now() + 24 * 60 * 60 * 1000));
@@ -61,9 +61,9 @@ const BusCard = ({ bus, searchParams }) => {
   const fareEntries = Object.entries(bus.faresByType || {});
   const [selectedType, setSelectedType] = useState(fareEntries[0]?.[0] || null);
   const selectedFare = bus.faresByType?.[selectedType];
-  const availableSeats = getAvailableSeatCount(bus);
-  const tripStatus = String(bus.tripStatus || '').toUpperCase();
-  const delayMins = Number(bus.delayMinutes || 0);
+  const availableSeats = bus?.__availableSeatCount ?? getAvailableSeatCount(bus);
+  const tripStatus = getTripStatusValue(bus);
+  const delayMins = getDelayMinutes(bus);
   const statusLabel = tripStatus === 'DELAYED' || delayMins > 0 ? `Delayed${delayMins > 0 ? ` by ${delayMins} min` : ''}` : 'On Time';
   const statusClass = tripStatus === 'DELAYED' || delayMins > 0 ? 'text-amber-400' : 'text-emerald-400';
 
@@ -187,7 +187,40 @@ const SearchResults = () => {
     setError(null);
     try {
       const data = await searchBuses(params.from, params.to, params.date);
-      setBuses(data || []);
+      const rawBuses = Array.isArray(data) ? data : [];
+      const enriched = await Promise.all(
+        rawBuses.map(async (bus) => {
+          if (!bus?.scheduleId) {
+            return {
+              ...bus,
+              __availableSeatCount: getAvailableSeatCount(bus),
+            };
+          }
+
+          const [seatRes, featureRes] = await Promise.allSettled([
+            getScheduleSeats(bus.scheduleId),
+            getScheduleFeatures(bus.scheduleId),
+          ]);
+
+          const seats = seatRes.status === 'fulfilled'
+            ? flattenSeatInventory(seatRes.value, bus.seatAvailability)
+            : flattenSeatInventory(null, bus.seatAvailability);
+
+          const featureData = featureRes.status === 'fulfilled' ? featureRes.value : null;
+          const nextTripStatus = getTripStatusValue(featureData) || getTripStatusValue(bus);
+          const nextDelayMinutes = getDelayMinutes(featureData) || getDelayMinutes(bus);
+
+          return {
+            ...bus,
+            seatAvailability: seats.length ? seats : bus.seatAvailability,
+            __availableSeatCount: seats.length ? getAvailableSeatCount({ seatAvailability: seats }) : getAvailableSeatCount(bus),
+            tripStatus: nextTripStatus || bus.tripStatus,
+            delayMinutes: nextDelayMinutes,
+            delayReason: featureData?.delayReason || bus?.delayReason,
+          };
+        })
+      );
+      setBuses(enriched);
     } catch {
       setError('Failed to fetch buses. Please try again.');
     } finally {
@@ -199,7 +232,7 @@ const SearchResults = () => {
     setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
 
   const filteredBuses = useMemo(() => {
-    let result = [...buses];
+    let result = buses.filter((bus) => shouldIncludeBusForDate(bus, appliedSearch.date));
 
     if (selectedSlots.length > 0) {
       result = result.filter(bus => {
@@ -234,7 +267,10 @@ const SearchResults = () => {
   }, [buses, selectedSlots, selectedBusTypes, maxPrice, selectedAmenities, sortBy]);
 
   const availableBuses = useMemo(
-    () => filteredBuses.filter((bus) => getAvailableSeatCount(bus) !== 0),
+    () => filteredBuses.filter((bus) => {
+      const count = bus?.__availableSeatCount ?? getAvailableSeatCount(bus);
+      return count !== 0;
+    }),
     [filteredBuses]
   );
 
