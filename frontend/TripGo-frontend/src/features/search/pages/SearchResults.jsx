@@ -52,6 +52,82 @@ const minFare = (faresByType) => {
   return vals.length ? Math.min(...vals) : 0;
 };
 
+const mergeTripStatus = (busStatus, featureStatus, busDelayMinutes, featureDelayMinutes) => {
+  const busState = String(busStatus || '').toUpperCase();
+  const featureState = String(featureStatus || '').toUpperCase();
+  const busDelay = Number(busDelayMinutes || 0);
+  const featureDelay = Number(featureDelayMinutes || 0);
+
+  if (busState === 'COMPLETED' || featureState === 'COMPLETED') return 'COMPLETED';
+  if (busState === 'DELAYED' || featureState === 'DELAYED' || busDelay > 0 || featureDelay > 0) return 'DELAYED';
+  if (busState === 'STARTED' || featureState === 'STARTED') return 'STARTED';
+  return featureState || busState || 'SCHEDULED';
+};
+
+const normalizeAmenityCodes = (amenities) => {
+  if (!Array.isArray(amenities)) return [];
+  return amenities
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      return item?.code || item?.name || item?.description || '';
+    })
+    .filter(Boolean);
+};
+
+const normalizeSearchBus = (item) => {
+  const busInfo = item?.bus || {};
+  const routeInfo = item?.route || {};
+  return {
+    ...item,
+    id: item?.id || item?.scheduleId || '',
+    scheduleId: item?.scheduleId || item?.id || '',
+    busId: item?.busId || busInfo?.id || '',
+    busName: item?.busName || busInfo?.name || 'Bus',
+    busCode: item?.busCode || busInfo?.busCode || '',
+    busType: item?.busType || busInfo?.busType || '',
+    operatorName: item?.operatorName || item?.operator?.name || item?.travelsName || '',
+    amenities: normalizeAmenityCodes(item?.amenities?.length ? item.amenities : busInfo?.amenities),
+    route: routeInfo,
+    fromCity: item?.fromCity || routeInfo?.origin || '',
+    toCity: item?.toCity || routeInfo?.destination || '',
+  };
+};
+
+const getTripStatusMeta = (tripStatus, delayMinutes) => {
+  const status = String(tripStatus || '').toUpperCase();
+  const delay = Number(delayMinutes || 0);
+
+  if (status === 'DELAYED' || delay > 0) {
+    return {
+      label: `Delayed${delay > 0 ? ` by ${delay} min` : ''}`,
+      textClass: 'text-amber-500 dark:text-amber-300',
+      chipClass: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200',
+    };
+  }
+
+  if (status === 'STARTED') {
+    return {
+      label: 'Started',
+      textClass: 'text-sky-500 dark:text-sky-300',
+      chipClass: 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-200',
+    };
+  }
+
+  if (status === 'COMPLETED') {
+    return {
+      label: 'Completed',
+      textClass: 'text-emerald-500 dark:text-emerald-300',
+      chipClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200',
+    };
+  }
+
+  return {
+    label: 'On Time',
+    textClass: 'text-emerald-500 dark:text-emerald-300',
+    chipClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200',
+  };
+};
+
 const toYmd = (date) => date.toISOString().split('T')[0];
 const TODAY_YMD = toYmd(new Date());
 const TOMORROW_YMD = toYmd(new Date(Date.now() + 24 * 60 * 60 * 1000));
@@ -64,8 +140,7 @@ const BusCard = ({ bus, searchParams }) => {
   const availableSeats = getAvailableSeatCount(bus);
   const tripStatus = getTripStatusValue(bus);
   const delayMins = getDelayMinutes(bus);
-  const statusLabel = tripStatus === 'DELAYED' || delayMins > 0 ? `Delayed${delayMins > 0 ? ` by ${delayMins} min` : ''}` : 'On Time';
-  const statusClass = tripStatus === 'DELAYED' || delayMins > 0 ? 'text-amber-400' : 'text-emerald-400';
+  const tripStatusMeta = getTripStatusMeta(tripStatus, delayMins);
 
   return (
     <div className="rounded-[28px] bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 transition-all hover:-translate-y-0.5 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)] dark:bg-charcoal dark:ring-white/5 dark:hover:ring-primary/20">
@@ -78,7 +153,19 @@ const BusCard = ({ bus, searchParams }) => {
             <h4 className="font-bold text-slate-900 dark:text-white">{bus.busName}</h4>
             <p className="text-xs text-slate-500 dark:text-slate-400">{bus.busType}</p>
             <p className="text-xs text-slate-400 dark:text-slate-500">{bus.operatorName}</p>
-            <p className={`text-[11px] font-semibold mt-1 ${statusClass}`}>{statusLabel}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${tripStatusMeta.chipClass}`}>
+                {tripStatusMeta.label}
+              </span>
+            </div>
+            <p className={`mt-2 text-[11px] font-semibold ${tripStatusMeta.textClass}`}>
+              {delayMins > 0 ? `Delay Time: ${delayMins} min` : 'Delay Time: 0 min'}
+            </p>
+            {bus.delayReason ? (
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                Reason: {bus.delayReason}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -187,18 +274,23 @@ const SearchResults = () => {
     setError(null);
     try {
       const data = await searchBuses(params.from, params.to, params.date);
-      const rawBuses = Array.isArray(data) ? data : [];
+      const rawBuses = Array.isArray(data) ? data.map(normalizeSearchBus) : [];
       const enrichedBuses = await Promise.all(
         rawBuses.map(async (bus) => {
-          if (!bus?.scheduleId) return bus;
+          const scheduleId = bus?.scheduleId || bus?.id;
+          if (!scheduleId) return bus;
 
           const [seatsRes, featuresRes] = await Promise.allSettled([
-            getScheduleSeats(bus.scheduleId),
-            getScheduleFeatures(bus.scheduleId),
+            getScheduleSeats(scheduleId),
+            getScheduleFeatures(scheduleId),
           ]);
 
           const seatsPayload = seatsRes.status === 'fulfilled' ? seatsRes.value : null;
           const featurePayload = featuresRes.status === 'fulfilled' ? featuresRes.value : null;
+          const busStatus = getTripStatusValue(bus);
+          const featureStatus = getTripStatusValue(featurePayload);
+          const busDelayMinutes = getDelayMinutes(bus);
+          const featureDelayMinutes = getDelayMinutes(featurePayload);
 
           const resolvedSeatAvailability = Array.isArray(seatsPayload?.seatAvailability)
             ? seatsPayload.seatAvailability
@@ -216,11 +308,12 @@ const SearchResults = () => {
 
           return {
             ...bus,
+            scheduleId,
             seatAvailability: resolvedSeatAvailability,
             availableSeats: derivedAvailableCount,
             availableSeatCount: derivedAvailableCount,
-            tripStatus: getTripStatusValue(featurePayload) || getTripStatusValue(bus),
-            delayMinutes: getDelayMinutes(featurePayload) || getDelayMinutes(bus),
+            tripStatus: mergeTripStatus(busStatus, featureStatus, busDelayMinutes, featureDelayMinutes),
+            delayMinutes: Math.max(busDelayMinutes, featureDelayMinutes),
             delayReason: featurePayload?.delayReason || bus?.delayReason,
             actualDepartureTime: featurePayload?.actualDepartureTime || bus?.actualDepartureTime,
             actualArrivalTime: featurePayload?.actualArrivalTime || bus?.actualArrivalTime,

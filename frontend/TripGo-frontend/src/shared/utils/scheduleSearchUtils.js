@@ -1,4 +1,5 @@
 const normalizeStatus = (value) => String(value || '').trim().toUpperCase();
+const isNumericValue = (value) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
 
 export const getTripStatusValue = (item) => (
   normalizeStatus(
@@ -16,7 +17,7 @@ export const getDelayMinutes = (item) => {
     item?.currentDelayMinutes,
     item?.delayInMinutes,
   ];
-  const match = values.find((value) => Number.isFinite(Number(value)));
+  const match = values.find(isNumericValue);
   return match === undefined ? 0 : Number(match);
 };
 

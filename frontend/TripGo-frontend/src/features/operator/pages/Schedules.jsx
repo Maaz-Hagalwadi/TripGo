@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { ROUTES } from '../../../shared/constants/routes';
 import './OperatorDashboard.css';
 
-const OPERATOR_SCHEDULE_STATE_KEY = 'tripgo_operator_schedule_runtime_state';
+const isNumericValue = (value) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
 
 const Schedules = () => {
   const navigate = useNavigate();
@@ -45,29 +45,6 @@ const Schedules = () => {
     arrivalTime: '',
     frequency: 'DAILY'
   });
-
-  const readPersistedScheduleState = () => {
-    if (typeof window === 'undefined') return {};
-    try {
-      const raw = window.localStorage.getItem(OPERATOR_SCHEDULE_STATE_KEY);
-      const parsed = raw ? JSON.parse(raw) : {};
-      return parsed && typeof parsed === 'object' ? parsed : {};
-    } catch {
-      return {};
-    }
-  };
-
-  const writePersistedScheduleState = (updater) => {
-    if (typeof window === 'undefined') return {};
-    const current = readPersistedScheduleState();
-    const next = typeof updater === 'function' ? updater(current) : updater;
-    try {
-      window.localStorage.setItem(OPERATOR_SCHEDULE_STATE_KEY, JSON.stringify(next));
-    } catch {
-      return current;
-    }
-    return next;
-  };
 
   useEffect(() => {
     if (loading) return;
@@ -129,42 +106,29 @@ const Schedules = () => {
       schedule?.currentDelayMinutes,
       schedule?.delayInMinutes,
     ];
-    const match = values.find((value) => Number.isFinite(Number(value)));
+    const match = values.find(isNumericValue);
     return match === undefined ? 0 : Number(match);
   };
 
   const normalizeSchedule = (schedule) => {
-    const persisted = readPersistedScheduleState()?.[schedule?.id] || {};
     const bus = schedule?.bus || buses.find((item) => String(item.id) === String(schedule?.busId)) || null;
-    const merged = { ...persisted, ...schedule };
-    const tripStatus = normalizeTripStatus(merged);
-    const delayMinutes = getScheduleDelayMinutes(merged);
+    const tripStatus = normalizeTripStatus(schedule);
+    const delayMinutes = getScheduleDelayMinutes(schedule);
     return {
       ...schedule,
-      ...persisted,
       bus,
-      busId: merged?.busId || bus?.id || schedule?.bus?.id || '',
+      busId: schedule?.busId || bus?.id || schedule?.bus?.id || '',
       tripStatus,
       status: tripStatus,
-      driverId: merged?.driverId || merged?.assignedDriverId || merged?.driver?.id || merged?.assignedDriver?.id || '',
-      assignedDriverId: merged?.assignedDriverId || merged?.driverId || merged?.driver?.id || merged?.assignedDriver?.id || '',
-      driverName: merged?.driverName || merged?.assignedDriverName || merged?.driver?.name || merged?.assignedDriver?.name || '',
-      assignedDriverName: merged?.assignedDriverName || merged?.driverName || merged?.driver?.name || merged?.assignedDriver?.name || '',
-      actualDepartureTime: merged?.actualDepartureTime || merged?.startedAt || merged?.actualStartTime || null,
-      actualArrivalTime: merged?.actualArrivalTime || merged?.completedAt || merged?.actualEndTime || null,
+      driverId: schedule?.driverId || schedule?.assignedDriverId || schedule?.driver?.id || schedule?.assignedDriver?.id || '',
+      assignedDriverId: schedule?.assignedDriverId || schedule?.driverId || schedule?.driver?.id || schedule?.assignedDriver?.id || '',
+      driverName: schedule?.driverName || schedule?.assignedDriverName || schedule?.driver?.name || schedule?.assignedDriver?.name || '',
+      assignedDriverName: schedule?.assignedDriverName || schedule?.driverName || schedule?.driver?.name || schedule?.assignedDriver?.name || '',
+      actualDepartureTime: schedule?.actualDepartureTime || schedule?.startedAt || schedule?.actualStartTime || null,
+      actualArrivalTime: schedule?.actualArrivalTime || schedule?.completedAt || schedule?.actualEndTime || null,
       delayMinutes,
-      delayReason: merged?.delayReason || merged?.currentDelayReason || '',
+      delayReason: schedule?.delayReason || schedule?.currentDelayReason || '',
     };
-  };
-
-  const persistSchedulePatch = (scheduleId, patch) => {
-    writePersistedScheduleState((current) => ({
-      ...current,
-      [scheduleId]: {
-        ...(current?.[scheduleId] || {}),
-        ...patch,
-      }
-    }));
   };
 
   const fetchSegments = async (routeId) => {
@@ -423,7 +387,6 @@ const Schedules = () => {
   const getTripStatus = (schedule) => normalizeTripStatus(schedule);
 
   const updateScheduleState = (routeId, scheduleId, patch) => {
-    persistSchedulePatch(scheduleId, patch);
     setSchedules(prev => ({
       ...prev,
       [routeId]: (prev[routeId] || []).map(s =>

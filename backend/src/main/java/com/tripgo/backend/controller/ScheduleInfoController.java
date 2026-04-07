@@ -9,6 +9,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
+import java.util.LinkedHashMap;
 
 @RestController
 @RequestMapping("/booking/schedules/{scheduleId}")
@@ -135,30 +136,42 @@ public class ScheduleInfoController {
         RouteSchedule schedule = scheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new RuntimeException("Schedule not found"));
 
-        List<Map<String, String>> amenities = schedule.getBus().getAmenities().stream()
-                .map(a -> Map.of(
-                        "code", a.getCode(),
-                        "label", a.getDescription() != null ? a.getDescription() : a.getCode(),
-                        "icon", getIconForAmenity(a.getCode())
-                ))
-                .toList();
+        Bus bus = schedule.getBus();
+        if (bus == null) {
+            return ResponseEntity.ok(Map.of(
+                    "busType", "STANDARD",
+                    "amenities", List.of(),
+                    "restStops", List.of(),
+                    "tripStatus", "SCHEDULED",
+                    "delayMinutes", 0,
+                    "actualDepartureTime", "",
+                    "actualArrivalTime", ""
+            ));
+        }
+
+        List<Map<String, String>> amenities = bus.getAmenities() != null
+                ? bus.getAmenities().stream()
+                    .map(a -> Map.of(
+                            "code", a.getCode() != null ? a.getCode() : "",
+                            "label", a.getDescription() != null ? a.getDescription() : a.getCode(),
+                            "icon", getIconForAmenity(a.getCode() != null ? a.getCode() : "")
+                    ))
+                    .toList()
+                : List.of();
 
         SchedulePolicy policy = policyRepository.findByScheduleId(scheduleId).orElse(null);
         List<Map<String, Object>> restStops = policy != null && policy.getRestStops() != null
                 ? policy.getRestStops() : List.of();
 
-        return ResponseEntity.ok(Map.of(
-                "busType", schedule.getBus().getBusType() != null
-                        ? schedule.getBus().getBusType().toString() : "STANDARD",
-                "amenities", amenities,
-                "restStops", restStops,
-                "tripStatus", schedule.getTripStatus() != null ? schedule.getTripStatus() : "SCHEDULED",
-                "delayMinutes", schedule.getDelayMinutes() != null ? schedule.getDelayMinutes() : 0,
-                "actualDepartureTime", schedule.getActualDepartureTime() != null
-                        ? schedule.getActualDepartureTime().toString() : null,
-                "actualArrivalTime", schedule.getActualArrivalTime() != null
-                        ? schedule.getActualArrivalTime().toString() : null
-        ));
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("busType", bus.getBusType() != null ? bus.getBusType().toString() : "STANDARD");
+        result.put("amenities", amenities);
+        result.put("restStops", restStops);
+        result.put("tripStatus", schedule.getTripStatus() != null ? schedule.getTripStatus() : "SCHEDULED");
+        result.put("delayMinutes", schedule.getDelayMinutes() != null ? schedule.getDelayMinutes() : 0);
+        result.put("actualDepartureTime", schedule.getActualDepartureTime() != null ? schedule.getActualDepartureTime().toString() : null);
+        result.put("actualArrivalTime", schedule.getActualArrivalTime() != null ? schedule.getActualArrivalTime().toString() : null);
+        return ResponseEntity.ok(result);
     }
 
     private Map<String, Object> buildPolicyResponse(SchedulePolicy policy) {
