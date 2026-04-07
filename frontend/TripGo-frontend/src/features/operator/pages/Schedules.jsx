@@ -9,6 +9,8 @@ import { toast } from 'sonner';
 import { ROUTES } from '../../../shared/constants/routes';
 import './OperatorDashboard.css';
 
+const OPERATOR_SCHEDULE_STATE_KEY = 'tripgo_operator_schedule_runtime_state';
+
 const Schedules = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
@@ -43,6 +45,29 @@ const Schedules = () => {
     arrivalTime: '',
     frequency: 'DAILY'
   });
+
+  const readPersistedScheduleState = () => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const raw = window.localStorage.getItem(OPERATOR_SCHEDULE_STATE_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  };
+
+  const writePersistedScheduleState = (updater) => {
+    if (typeof window === 'undefined') return {};
+    const current = readPersistedScheduleState();
+    const next = typeof updater === 'function' ? updater(current) : updater;
+    try {
+      window.localStorage.setItem(OPERATOR_SCHEDULE_STATE_KEY, JSON.stringify(next));
+    } catch {
+      return current;
+    }
+    return next;
+  };
 
   useEffect(() => {
     if (loading) return;
@@ -89,6 +114,59 @@ const Schedules = () => {
     }
   };
 
+  const normalizeTripStatus = (schedule) => String(
+    schedule?.tripStatus ||
+    schedule?.status ||
+    schedule?.tripState ||
+    schedule?.currentStatus ||
+    'SCHEDULED'
+  ).toUpperCase();
+
+  const getScheduleDelayMinutes = (schedule) => {
+    const values = [
+      schedule?.delayMinutes,
+      schedule?.delayedMinutes,
+      schedule?.currentDelayMinutes,
+      schedule?.delayInMinutes,
+    ];
+    const match = values.find((value) => Number.isFinite(Number(value)));
+    return match === undefined ? 0 : Number(match);
+  };
+
+  const normalizeSchedule = (schedule) => {
+    const persisted = readPersistedScheduleState()?.[schedule?.id] || {};
+    const bus = schedule?.bus || buses.find((item) => String(item.id) === String(schedule?.busId)) || null;
+    const merged = { ...persisted, ...schedule };
+    const tripStatus = normalizeTripStatus(merged);
+    const delayMinutes = getScheduleDelayMinutes(merged);
+    return {
+      ...schedule,
+      ...persisted,
+      bus,
+      busId: merged?.busId || bus?.id || schedule?.bus?.id || '',
+      tripStatus,
+      status: tripStatus,
+      driverId: merged?.driverId || merged?.assignedDriverId || merged?.driver?.id || merged?.assignedDriver?.id || '',
+      assignedDriverId: merged?.assignedDriverId || merged?.driverId || merged?.driver?.id || merged?.assignedDriver?.id || '',
+      driverName: merged?.driverName || merged?.assignedDriverName || merged?.driver?.name || merged?.assignedDriver?.name || '',
+      assignedDriverName: merged?.assignedDriverName || merged?.driverName || merged?.driver?.name || merged?.assignedDriver?.name || '',
+      actualDepartureTime: merged?.actualDepartureTime || merged?.startedAt || merged?.actualStartTime || null,
+      actualArrivalTime: merged?.actualArrivalTime || merged?.completedAt || merged?.actualEndTime || null,
+      delayMinutes,
+      delayReason: merged?.delayReason || merged?.currentDelayReason || '',
+    };
+  };
+
+  const persistSchedulePatch = (scheduleId, patch) => {
+    writePersistedScheduleState((current) => ({
+      ...current,
+      [scheduleId]: {
+        ...(current?.[scheduleId] || {}),
+        ...patch,
+      }
+    }));
+  };
+
   const fetchSegments = async (routeId) => {
     if (segments[routeId]) return;
     try {
@@ -97,11 +175,11 @@ const Schedules = () => {
     } catch { /* silent */ }
   };
 
-  const fetchSchedules = async (routeId) => {
-    if (schedules[routeId]) return schedules[routeId];
+  const fetchSchedules = async (routeId, forceRefresh = false) => {
+    if (!forceRefresh && schedules[routeId]) return schedules[routeId];
     try {
       const data = await getRouteSchedules(routeId);
-      const list = data || [];
+      const list = (data || []).map(normalizeSchedule);
       setSchedules(prev => ({ ...prev, [routeId]: list }));
       return list;
     } catch {
@@ -342,13 +420,14 @@ const Schedules = () => {
     }
   };
 
-  const getTripStatus = (schedule) => String(schedule?.tripStatus || 'SCHEDULED').toUpperCase();
+  const getTripStatus = (schedule) => normalizeTripStatus(schedule);
 
   const updateScheduleState = (routeId, scheduleId, patch) => {
+    persistSchedulePatch(scheduleId, patch);
     setSchedules(prev => ({
       ...prev,
       [routeId]: (prev[routeId] || []).map(s =>
-        String(s.id) === String(scheduleId) ? { ...s, ...patch } : s
+        String(s.id) === String(scheduleId) ? normalizeSchedule({ ...s, ...patch }) : s
       )
     }));
   };
@@ -357,9 +436,11 @@ const Schedules = () => {
     try {
       const res = await startTrip(scheduleId);
       updateScheduleState(routeId, scheduleId, {
-        tripStatus: res?.tripStatus || 'STARTED',
-        actualDepartureTime: res?.actualDepartureTime || new Date().toISOString()
+        tripStatus: res?.tripStatus || res?.status || 'STARTED',
+        status: res?.status || res?.tripStatus || 'STARTED',
+        actualDepartureTime: res?.actualDepartureTime || res?.startedAt || new Date().toISOString()
       });
+      await fetchSchedules(routeId, true);
       toast.success('Trip started');
     } catch (e) {
       toast.error(e.message || 'Failed to start trip');
@@ -370,9 +451,11 @@ const Schedules = () => {
     try {
       const res = await completeTrip(scheduleId);
       updateScheduleState(routeId, scheduleId, {
-        tripStatus: res?.tripStatus || 'COMPLETED',
-        actualArrivalTime: res?.actualArrivalTime || new Date().toISOString()
+        tripStatus: res?.tripStatus || res?.status || 'COMPLETED',
+        status: res?.status || res?.tripStatus || 'COMPLETED',
+        actualArrivalTime: res?.actualArrivalTime || res?.completedAt || new Date().toISOString()
       });
+      await fetchSchedules(routeId, true);
       toast.success('Trip completed');
     } catch (e) {
       toast.error(e.message || 'Failed to complete trip');
@@ -389,10 +472,12 @@ const Schedules = () => {
     try {
       const res = await markDelay(scheduleId, mins, delayReason || '');
       updateScheduleState(routeId, scheduleId, {
-        tripStatus: res?.tripStatus || 'DELAYED',
-        delayMinutes: res?.delayMinutes ?? mins,
-        delayReason: res?.delayReason ?? (delayReason || '')
+        tripStatus: res?.tripStatus || res?.status || 'DELAYED',
+        status: res?.status || res?.tripStatus || 'DELAYED',
+        delayMinutes: res?.delayMinutes ?? res?.currentDelayMinutes ?? mins,
+        delayReason: res?.delayReason ?? res?.currentDelayReason ?? (delayReason || '')
       });
+      await fetchSchedules(routeId, true);
       setDelayModal({ routeId: null, scheduleId: null, delayMinutes: '', delayReason: '' });
       toast.success('Delay marked');
     } catch (e) {
@@ -401,6 +486,7 @@ const Schedules = () => {
   };
 
   const getDriverName = (driver) => {
+    if (typeof driver === 'string' && driver.trim()) return driver;
     if (!driver) return 'Not assigned';
     const fullName = `${driver.firstName || ''} ${driver.lastName || ''}`.trim();
     return fullName || driver.name || driver.phone || 'Assigned';
@@ -414,6 +500,14 @@ const Schedules = () => {
       schedule?.assignedDriverId ||
       ''
     )
+  );
+
+  const hasAssignedDriver = (schedule) => Boolean(
+    getScheduleDriverId(schedule) ||
+    schedule?.driverName ||
+    schedule?.assignedDriverName ||
+    schedule?.driver?.name ||
+    schedule?.assignedDriver?.name
   );
 
   const openAssignDriverModal = (routeId, schedule) => {
@@ -446,8 +540,13 @@ const Schedules = () => {
       updateScheduleState(routeId, scheduleId, {
         driver: response?.driver || assigned || { id: driverId },
         assignedDriver: response?.driver || assigned || { id: driverId },
-        driverId: String(driverId)
+        driverId: response?.driverId || String(driverId),
+        assignedDriverId: response?.driverId || String(driverId),
+        driverName: response?.driverName || getDriverName(assigned),
+        assignedDriverName: response?.driverName || getDriverName(assigned),
+        busId: response?.busId || undefined
       });
+      await fetchSchedules(routeId, true);
       setDriverAssignModal({ routeId: null, scheduleId: null, selectedDriverId: '' });
       toast.success('Driver assigned successfully', { id: loadingToastId });
     } catch (e) {
@@ -692,7 +791,7 @@ const Schedules = () => {
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className="material-symbols-outlined text-sm">badge</span>
-                                  Driver: {getDriverName(schedule.driver || schedule.assignedDriver)}
+                                  Driver: {getDriverName(schedule.driver || schedule.assignedDriver || schedule.driverName || schedule.assignedDriverName)}
                                 </div>
                                 {schedule.actualDepartureTime && (
                                   <div className="flex items-center gap-2">
@@ -706,10 +805,10 @@ const Schedules = () => {
                                     Completed: {new Date(schedule.actualArrivalTime).toLocaleString()}
                                   </div>
                                 )}
-                                {schedule.delayMinutes ? (
+                                {getScheduleDelayMinutes(schedule) ? (
                                   <div className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-sm">warning</span>
-                                    Delayed by {schedule.delayMinutes} min{schedule.delayReason ? ` · ${schedule.delayReason}` : ''}
+                                    Delayed by {getScheduleDelayMinutes(schedule)} min{schedule.delayReason ? ` · ${schedule.delayReason}` : ''}
                                   </div>
                                 ) : null}
                               </div>
@@ -720,7 +819,7 @@ const Schedules = () => {
                                     disabled={!!assigningDriver[schedule.id]}
                                     className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-60"
                                   >
-                                    {getScheduleDriverId(schedule) ? 'Change Driver' : 'Assign Driver'}
+                                    {hasAssignedDriver(schedule) ? 'Change Driver' : 'Assign Driver'}
                                   </button>
                                 </div>
                                 {(getTripStatus(schedule) === 'SCHEDULED' || getTripStatus(schedule) === 'DELAYED') && (
@@ -744,7 +843,7 @@ const Schedules = () => {
                                     onClick={() => setDelayModal({
                                       routeId: route.id,
                                       scheduleId: schedule.id,
-                                      delayMinutes: schedule.delayMinutes ? String(schedule.delayMinutes) : '',
+                                      delayMinutes: getScheduleDelayMinutes(schedule) ? String(getScheduleDelayMinutes(schedule)) : '',
                                       delayReason: schedule.delayReason || ''
                                     })}
                                     className="px-3 py-1.5 text-xs rounded-lg border border-yellow-300 text-yellow-700 dark:border-yellow-700 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors"

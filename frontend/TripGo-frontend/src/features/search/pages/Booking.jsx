@@ -5,6 +5,13 @@ import UserLayout from '../../../shared/components/UserLayout';
 import { ROUTES } from '../../../shared/constants/routes';
 import { INDIA_STATES } from '../../../shared/constants/indiaStates';
 import {
+  getDelayMinutes,
+  getTripStatusValue,
+  isSeatAvailableForBooking,
+  isSeatBlocked,
+  isSeatBooked,
+} from '../../../shared/utils/scheduleSearchUtils';
+import {
   getBusRatingSummary,
   getScheduleFeatures,
   getSchedulePointsForBooking,
@@ -55,8 +62,6 @@ const getTripStatusMeta = (tripStatus, delayMinutes) => {
 };
 
 const stopLabel = (stop) => stop?.name || stop?.stopName || stop?.city || stop?.location || stop?.address || stop?.landmark || '';
-
-const isSeatAvailableForBooking = (seat) => Boolean(seat?.available) && !seat?.isBlocked;
 
 const parseSleeperSeat = (seat) => {
   const match = String(seat.seatNumber || '').trim().toUpperCase().match(/^([LU])(\d+)$/);
@@ -363,8 +368,8 @@ const Booking = () => {
   const selectedSeatSet = useMemo(() => new Set(selectedSeats), [selectedSeats]);
   const baseAvailableSeatCount = useMemo(() => seats.filter(isSeatAvailableForBooking).length, [seats]);
   const remainingAvailableSeatCount = Math.max(0, baseAvailableSeatCount - selectedSeats.length);
-  const blockedSeatCount = useMemo(() => seats.filter((seat) => seat.isBlocked).length, [seats]);
-  const bookedSeatCount = useMemo(() => seats.filter((seat) => !seat.isBlocked && !seat.available).length, [seats]);
+  const blockedSeatCount = useMemo(() => seats.filter((seat) => isSeatBlocked(seat)).length, [seats]);
+  const bookedSeatCount = useMemo(() => seats.filter((seat) => !isSeatBlocked(seat) && isSeatBooked(seat)).length, [seats]);
   const hasLayoutData = parsedLayoutSeats.length === seats.length;
 
   const routeStops = useMemo(() => {
@@ -385,7 +390,10 @@ const Booking = () => {
   const routeDistanceKm = routeInfo?.distanceKm || routeInfo?.distance || bus?.distanceKm || 487;
   const routeDuration = routeInfo?.duration || (routeInfo?.durationMinutes ? `${Math.floor(routeInfo.durationMinutes / 60)} hr ${routeInfo.durationMinutes % 60} min` : formatDuration(bus?.departureTime, bus?.arrivalTime));
   const restStopText = formatRestStopText(featuresInfo, policiesInfo, bus);
-  const tripStatusMeta = getTripStatusMeta(featuresInfo?.tripStatus || bus?.tripStatus, featuresInfo?.delayMinutes ?? bus?.delayMinutes);
+  const tripStatusMeta = getTripStatusMeta(
+    getTripStatusValue(featuresInfo) || getTripStatusValue(bus),
+    getDelayMinutes(featuresInfo) || getDelayMinutes(bus)
+  );
   const averageRating = Number(ratingSummary?.averageRating ?? ratingSummary?.avgRating ?? 0);
   const totalRatings = Number(ratingSummary?.totalRatings ?? ratingSummary?.count ?? 0);
   const cancellationLines = formatCancellationLines(policiesInfo);
