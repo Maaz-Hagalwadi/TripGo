@@ -7,8 +7,10 @@ import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { ROUTES } from '../../../shared/constants/routes';
 import UserLayout from '../../../shared/components/UserLayout';
 import {
+  formatUtcTime,
   getAvailableSeatCount,
   getDelayMinutes,
+  projectScheduleToSearchDate,
   getTripStatusValue,
   isSeatAvailableForBooking,
   shouldShowBusForSearch,
@@ -34,8 +36,7 @@ const CITY_OPTIONS = [
 ];
 
 const formatTime = (instant) => {
-  if (!instant) return '--';
-  return new Date(instant).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return formatUtcTime(instant);
 };
 
 const formatDuration = (dep, arr) => {
@@ -320,7 +321,7 @@ const SearchResults = () => {
           };
         })
       );
-      setBuses(enrichedBuses);
+      setBuses(enrichedBuses.map((bus) => projectScheduleToSearchDate(bus, params.date)));
     } catch {
       setError('Failed to fetch buses. Please try again.');
     } finally {
@@ -336,7 +337,7 @@ const SearchResults = () => {
 
     if (selectedSlots.length > 0) {
       result = result.filter(bus => {
-        const hour = new Date(bus.departureTime).getHours();
+        const hour = new Date(bus.departureTime).getUTCHours();
         return selectedSlots.some(label => {
           const slot = DEPARTURE_SLOTS.find(s => s.label === label);
           return slot && hour >= slot.start && hour < slot.end;

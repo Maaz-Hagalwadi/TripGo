@@ -1,5 +1,6 @@
 const normalizeStatus = (value) => String(value || '').trim().toUpperCase();
 const isNumericValue = (value) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+const pad = (value) => String(value).padStart(2, '0');
 
 export const getTripStatusValue = (item) => (
   normalizeStatus(
@@ -73,11 +74,100 @@ export const toLocalYmd = (value) => {
   return `${year}-${month}-${day}`;
 };
 
+export const toUtcYmd = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+};
+
+export const formatUtcTime = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '--';
+  let hours = date.getUTCHours();
+  const minutes = pad(date.getUTCMinutes());
+  const suffix = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  return `${pad(hours)}:${minutes} ${suffix}`;
+};
+
+export const formatUtcDateTime = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '--';
+  const day = pad(date.getUTCDate());
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${day} ${months[date.getUTCMonth()]} ${date.getUTCFullYear()}, ${formatUtcTime(date)}`;
+};
+
+const parseSearchDate = (searchDate) => {
+  if (!searchDate) return null;
+  const parsed = new Date(`${searchDate}T00:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+export const projectScheduleToSearchDate = (bus, searchDate) => {
+  if (!bus || !searchDate) return bus;
+
+  const frequency = normalizeStatus(bus?.frequency || bus?.scheduleFrequency || 'ONCE');
+  if (!['DAILY', 'WEEKDAYS', 'WEEKENDS', 'WEEKLY'].includes(frequency)) return bus;
+
+  const targetDate = parseSearchDate(searchDate);
+  const departure = new Date(bus?.departureTime);
+  const arrival = new Date(bus?.arrivalTime);
+  if (!targetDate || Number.isNaN(departure.getTime()) || Number.isNaN(arrival.getTime())) return bus;
+
+  const projectedDeparture = new Date(Date.UTC(
+    targetDate.getUTCFullYear(),
+    targetDate.getUTCMonth(),
+    targetDate.getUTCDate(),
+    departure.getUTCHours(),
+    departure.getUTCMinutes(),
+    departure.getUTCSeconds(),
+    departure.getUTCMilliseconds()
+  ));
+
+  const durationMs = arrival.getTime() - departure.getTime();
+  const projectedArrival = Number.isFinite(durationMs)
+    ? new Date(projectedDeparture.getTime() + Math.max(durationMs, 0))
+    : arrival;
+
+  return {
+    ...bus,
+    departureTime: projectedDeparture.toISOString(),
+    arrivalTime: projectedArrival.toISOString(),
+  };
+};
+
+const matchesFrequency = (bus, searchDate) => {
+  if (!searchDate) return true;
+  const scheduleDate = parseSearchDate(searchDate);
+  if (!scheduleDate) return true;
+
+  const frequency = normalizeStatus(bus?.frequency || bus?.scheduleFrequency || 'ONCE');
+  const weekday = scheduleDate.getUTCDay();
+  const templateDeparture = new Date(bus?.departureTime);
+  const templateWeekday = Number.isNaN(templateDeparture.getTime()) ? weekday : templateDeparture.getUTCDay();
+  const templateDate = toUtcYmd(templateDeparture);
+
+  if (frequency === 'DAILY') return true;
+  if (frequency === 'WEEKDAYS') return weekday >= 1 && weekday <= 5;
+  if (frequency === 'WEEKENDS') return weekday === 0 || weekday === 6;
+  if (frequency === 'WEEKLY') return weekday === templateWeekday;
+  return searchDate === templateDate;
+};
+
 export const shouldShowBusForSearch = (bus, searchDate, now = new Date()) => {
   const departure = new Date(bus?.departureTime);
   if (Number.isNaN(departure.getTime())) return false;
   if (getTripStatusValue(bus) === 'COMPLETED') return false;
-  if (searchDate && toLocalYmd(departure) !== searchDate) return false;
-  if (searchDate && searchDate === toLocalYmd(now) && departure.getTime() <= now.getTime()) return false;
+  if (!matchesFrequency(bus, searchDate)) return false;
+  if (searchDate) {
+    const searchMoment = parseSearchDate(searchDate);
+    const nowUtcYmd = toUtcYmd(now);
+    if (searchMoment && searchDate === nowUtcYmd) {
+      const departureMinutes = departure.getUTCHours() * 60 + departure.getUTCMinutes();
+      const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+      if (departureMinutes <= nowMinutes) return false;
+    }
+  }
   return true;
 };
