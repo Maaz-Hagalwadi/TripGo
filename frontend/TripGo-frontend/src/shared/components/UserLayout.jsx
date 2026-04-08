@@ -25,6 +25,7 @@ const UserLayout = ({ activeItem = 'dashboard', title = 'Dashboard', children })
         />
       </div>
 
+      <main className={`operator-main flex-1 flex flex-col min-w-0 overflow-visible transition-all ml-0 ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <OperatorHeader
           title={title}
           searchPlaceholder="Search routes, cities, or bookings..."
