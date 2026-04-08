@@ -6,7 +6,6 @@ import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.repository.UserRepository;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
@@ -16,6 +15,7 @@ import org.thymeleaf.context.Context;
 
 import java.util.List;
 import java.util.Map;
+
 @Service
 @RequiredArgsConstructor
 public class EmailService {
@@ -84,36 +84,24 @@ public class EmailService {
 
     @Async
     public void notifyAdminsOperatorVerification(Operator op) {
-        System.out.println("🔍 DEBUG: Starting admin notification for operator: " + op.getName());
-        
         List<User> admins = userRepository.findAllAdmins();
-        System.out.println("🔍 DEBUG: Found " + admins.size() + " admin users");
-        
-        if (admins.isEmpty()) {
-            System.out.println("❌ ERROR: No admin users found in database!");
-            return;
-        }
-        
+        if (admins.isEmpty()) return;
+
         User opUser = userRepository.findByOperator(op).orElseThrow();
-        System.out.println("🔍 DEBUG: Operator user email: " + opUser.getEmail());
 
         for (User admin : admins) {
-            System.out.println("📧 DEBUG: Sending email to admin: " + admin.getEmail());
-            try {
-                sendTemplate(
-                        admin.getEmail(),
-                        "Operator Pending Approval",
-                        "operator-pending",
-                        Map.of(
-                                "operatorName", op.getName(),
-                                "operatorEmail", opUser.getEmail(),
-                                "adminUrl", frontendUrl + "/admin/operators"
-                        )
-                );
-                System.out.println("✅ DEBUG: Email sent successfully to " + admin.getEmail());
-            } catch (Exception e) {
-                System.out.println("❌ ERROR: Failed to send email to " + admin.getEmail() + ": " + e.getMessage());
-            }
+            sendTemplate(
+                    admin.getEmail(),
+                    "Operator Pending Approval",
+                    "operator-pending",
+                    Map.of(
+                            "operatorName", op.getName(),
+                            "operatorEmail", opUser.getEmail(),
+                            "approveUrl", backendUrl + "/admin/operators/" + op.getId() + "/approve",
+                            "rejectUrl", backendUrl + "/admin/operators/" + op.getId() + "/reject",
+                            "adminUrl", frontendUrl + "/admin/operators"
+                    )
+            );
         }
     }
 
@@ -146,11 +134,10 @@ public class EmailService {
         sendTemplate(
                 opUser.getEmail(),
                 "Your Bus Has Been Approved - " + bus.getName(),
-                "bus-approved",
+                "operator-approved",
                 Map.of(
                         "operatorName", bus.getOperator().getName(),
-                        "busName", bus.getName(),
-                        "busCode", bus.getBusCode()
+                        "loginUrl", frontendUrl + "/login"
                 )
         );
     }
@@ -161,27 +148,33 @@ public class EmailService {
         sendTemplate(
                 opUser.getEmail(),
                 "Your Bus Has Been Rejected - " + bus.getName(),
-                "bus-rejected",
-                Map.of(
-                        "operatorName", bus.getOperator().getName(),
-                        "busName", bus.getName(),
-                        "busCode", bus.getBusCode()
-                )
+                "operator-rejected",
+                Map.of("operatorName", bus.getOperator().getName())
         );
     }
 
     @Async
     public void sendOperatorApproved(Operator op) {
         User opUser = userRepository.findByOperator(op).orElseThrow();
-
         sendTemplate(
                 opUser.getEmail(),
                 "Operator Account Approved",
                 "operator-approved",
                 Map.of(
                         "operatorName", op.getName(),
-                        "loginUrl", "https://tripgo.com/login"
+                        "loginUrl", frontendUrl + "/login"
                 )
+        );
+    }
+
+    @Async
+    public void sendOperatorRejected(Operator op) {
+        User opUser = userRepository.findByOperator(op).orElseThrow();
+        sendTemplate(
+                opUser.getEmail(),
+                "Operator Account Rejected",
+                "operator-rejected",
+                Map.of("operatorName", op.getName())
         );
     }
 
@@ -194,21 +187,6 @@ public class EmailService {
                 Map.of("operatorName", op.getName())
         );
     }
-
-    @Async
-    public void sendOperatorRejected(Operator op) {
-        User opUser = userRepository.findByOperator(op).orElseThrow();
-
-        sendTemplate(
-                opUser.getEmail(),
-                "Operator Account Rejected",
-                "operator-rejected",
-                Map.of(
-                        "operatorName", op.getName()
-                )
-        );
-    }
-
 
     private void sendTemplate(String to, String subject, String template, Map<String, Object> model) {
         try {
@@ -224,12 +202,7 @@ public class EmailService {
             helper.setText(html, true);
 
             mailSender.send(message);
-            System.out.println("✅ Email sent successfully to " + to);
         } catch (Exception e) {
-            System.err.println("❌ Failed to send email to " + to);
-            System.err.println("Error type: " + e.getClass().getName());
-            System.err.println("Error message: " + e.getMessage());
-            e.printStackTrace();
             throw new RuntimeException("Failed to send email to " + to + ": " + e.getMessage(), e);
         }
     }

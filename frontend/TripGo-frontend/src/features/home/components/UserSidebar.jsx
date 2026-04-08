@@ -16,7 +16,7 @@ const UserSidebar = ({ activeItem = 'dashboard', collapsed = false, onToggleColl
   ];
 
   return (
-    <aside className={`bg-white dark:bg-op-sidebar border-r border-slate-200 dark:border-slate-800 flex flex-col fixed left-0 top-0 h-screen overflow-y-auto transition-all ${collapsed ? 'w-20' : 'w-64'}`}>
+    <aside className={`hidden md:flex bg-white dark:bg-op-sidebar border-r border-slate-200 dark:border-slate-800 flex-col fixed left-0 top-0 h-screen overflow-y-auto transition-all ${collapsed ? 'w-20' : 'w-64'}`}>
       <div className="p-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {!collapsed && (

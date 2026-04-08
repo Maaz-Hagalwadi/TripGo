@@ -231,7 +231,21 @@ const Schedules = () => {
     try {
       const data = await getFares(routeId);
       const list = Array.isArray(data) ? data : [];
-      setFares(prev => ({ ...prev, [routeId]: list }));
+      setFares(prev => {
+        const previousById = new Map((prev[routeId] || []).map((fare) => [String(fare.id), fare]));
+        const merged = list.map((fare) => {
+          const previous = previousById.get(String(fare.id));
+          if (!previous) return fare;
+          return {
+            ...previous,
+            ...fare,
+            busId: fare?.busId ?? fare?.bus?.id ?? previous?.busId ?? previous?.bus?.id ?? null,
+            bus: fare?.bus || previous?.bus || null,
+            busName: fare?.busName || previous?.busName || previous?.bus?.name || '',
+          };
+        });
+        return { ...prev, [routeId]: merged };
+      });
     } catch (e) {
       toast.error('Failed to load fares: ' + e.message);
     }
@@ -289,6 +303,17 @@ const Schedules = () => {
     });
   };
 
+  const getRouteBusById = (routeId, busId) => {
+    if (!busId) return null;
+    const fromSchedules = (schedules[routeId] || []).find((schedule) => String(schedule?.bus?.id) === String(busId))?.bus;
+    if (fromSchedules) return fromSchedules;
+    return buses.find((bus) => String(bus.id) === String(busId)) || null;
+  };
+
+  const getRouteSegmentById = (routeId, segmentId) => (
+    (segments[routeId] || []).find((segment) => String(segment.id) === String(segmentId)) || null
+  );
+
   const handleAddFare = async (routeId) => {
     const form = fareForm[routeId] || {};
     if (!form.segmentId || !form.seatType || !form.baseFare) return toast.error('Segment, seat type and fare are required');
@@ -296,15 +321,36 @@ const Schedules = () => {
       return toast.error('Fare for this segment and seat type already exists');
     }
     try {
-      await addFare(routeId, {
+      const created = await addFare(routeId, {
         segmentId: form.segmentId,
         seatType: normalizeSeatType(form.seatType),
         baseFare: parseFloat(form.baseFare),
         gstPercent: 5,
         busId: form.busId || null,
       });
+      const linkedBus = getRouteBusById(routeId, form.busId);
+      const linkedSegment = getRouteSegmentById(routeId, form.segmentId);
+      setFares(prev => ({
+        ...prev,
+        [routeId]: [
+          ...(prev[routeId] || []),
+          {
+            ...created,
+            segmentId: created?.segmentId || form.segmentId,
+            segment: created?.segment || linkedSegment || null,
+            segmentFromStop: created?.segmentFromStop || linkedSegment?.fromStop || '',
+            segmentToStop: created?.segmentToStop || linkedSegment?.toStop || '',
+            segmentName: created?.segmentName || (linkedSegment ? `${linkedSegment.fromStop} → ${linkedSegment.toStop}` : ''),
+            seatType: created?.seatType || normalizeSeatType(form.seatType),
+            baseFare: created?.baseFare ?? parseFloat(form.baseFare),
+            gstPercent: created?.gstPercent ?? 5,
+            busId: created?.busId ?? form.busId ?? null,
+            bus: created?.bus || linkedBus || null,
+            busName: created?.busName || linkedBus?.name || '',
+          },
+        ],
+      }));
       setFareForm(prev => ({ ...prev, [routeId]: {} }));
-      await fetchFares(routeId); // re-fetch so segment names resolve correctly
       toast.success('Fare added');
     } catch (e) { toast.error(e.message); }
   };
@@ -344,8 +390,15 @@ const Schedules = () => {
         gstPercent: fare.gstPercent ?? 5,
         busId: fare?.busId || fare?.bus?.id || null
       });
+      setFares(prev => ({
+        ...prev,
+        [routeId]: (prev[routeId] || []).map((item) => (
+          String(item.id) === String(fare.id)
+            ? { ...item, baseFare: nextBaseFare }
+            : item
+        )),
+      }));
       setEditingFare(prev => ({ ...prev, [routeId]: null }));
-      await fetchFares(routeId);
       toast.success('Fare updated');
     } catch (e) {
       toast.error(e.message || 'Failed to update fare');

@@ -37,4 +37,5 @@ export const ROUTES = {
   OPERATOR_SETTINGS: '/operator/settings',
   OPERATOR_SUPPORT: '/operator/support',
   PAYMENT: '/payment',
+  PAYMENT_SUCCESS: '/booking/success',
 };

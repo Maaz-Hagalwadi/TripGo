@@ -94,6 +94,11 @@ const normalizeSearchBus = (item) => {
   };
 };
 
+const hasNumericSeatCount = (bus) => (
+  Number.isFinite(Number(bus?.availableSeatCount)) ||
+  Number.isFinite(Number(bus?.availableSeats))
+);
+
 const getTripStatusMeta = (tripStatus, delayMinutes) => {
   const status = String(tripStatus || '').toUpperCase();
   const delay = Number(delayMinutes || 0);
@@ -281,38 +286,40 @@ const SearchResults = () => {
           const scheduleId = bus?.scheduleId || bus?.id;
           if (!scheduleId) return bus;
 
-          const [seatsRes, featuresRes] = await Promise.allSettled([
-            getScheduleSeats(scheduleId),
+          const [featuresRes, seatsRes] = await Promise.allSettled([
             getScheduleFeatures(scheduleId),
+            hasNumericSeatCount(bus) ? Promise.resolve(null) : getScheduleSeats(scheduleId),
           ]);
 
-          const seatsPayload = seatsRes.status === 'fulfilled' ? seatsRes.value : null;
           const featurePayload = featuresRes.status === 'fulfilled' ? featuresRes.value : null;
+          const seatsPayload = seatsRes.status === 'fulfilled' ? seatsRes.value : null;
           const busStatus = getTripStatusValue(bus);
           const featureStatus = getTripStatusValue(featurePayload);
           const busDelayMinutes = getDelayMinutes(bus);
           const featureDelayMinutes = getDelayMinutes(featurePayload);
-
-          const resolvedSeatAvailability = Array.isArray(seatsPayload?.seatAvailability)
+          const fallbackSeatAvailability = Array.isArray(seatsPayload?.seatAvailability)
             ? seatsPayload.seatAvailability
             : Array.isArray(seatsPayload?.seats)
               ? seatsPayload.seats
               : Array.isArray(seatsPayload?.upperDeck) || Array.isArray(seatsPayload?.lowerDeck)
                 ? [...(seatsPayload?.lowerDeck || []), ...(seatsPayload?.upperDeck || [])]
-              : Array.isArray(bus?.seatAvailability)
-                ? bus.seatAvailability
                 : [];
-
-          const derivedAvailableCount = resolvedSeatAvailability.length
-            ? resolvedSeatAvailability.filter(isSeatAvailableForBooking).length
-            : getAvailableSeatCount(bus);
+          const fallbackAvailableCount = fallbackSeatAvailability.length
+            ? fallbackSeatAvailability.filter(isSeatAvailableForBooking).length
+            : null;
 
           return {
             ...bus,
             scheduleId,
-            seatAvailability: resolvedSeatAvailability,
-            availableSeats: derivedAvailableCount,
-            availableSeatCount: derivedAvailableCount,
+            seatAvailability: Array.isArray(bus?.seatAvailability) && bus.seatAvailability.length
+              ? bus.seatAvailability
+              : fallbackSeatAvailability,
+            availableSeatCount: hasNumericSeatCount(bus)
+              ? getAvailableSeatCount(bus)
+              : fallbackAvailableCount,
+            availableSeats: hasNumericSeatCount(bus)
+              ? getAvailableSeatCount(bus)
+              : fallbackAvailableCount,
             tripStatus: mergeTripStatus(busStatus, featureStatus, busDelayMinutes, featureDelayMinutes),
             delayMinutes: Math.max(busDelayMinutes, featureDelayMinutes),
             delayReason: featurePayload?.delayReason || bus?.delayReason,
@@ -395,7 +402,7 @@ const SearchResults = () => {
 
   return (
     <UserLayout activeItem="search" title="Search Buses">
-      <div className={`overflow-hidden rounded-[32px] ${isDark ? 'bg-deep-black text-slate-100' : 'bg-[linear-gradient(180deg,#f8fbff_0%,#eef4ff_100%)] text-slate-900'}`}>
+      <div className={`overflow-visible rounded-[32px] ${isDark ? 'bg-deep-black text-slate-100' : 'bg-[linear-gradient(180deg,#f8fbff_0%,#eef4ff_100%)] text-slate-900'}`}>
 
       <div className={`sticky top-0 z-40 py-5 backdrop-blur-xl ${isDark ? 'bg-charcoal/90' : 'bg-white/85 shadow-[0_12px_30px_rgba(15,23,42,0.06)]'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -461,7 +468,8 @@ const SearchResults = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col gap-8 lg:flex-row">
 
-          <aside className="w-full flex-shrink-0 space-y-6 lg:w-72">
+          <aside className="w-full flex-shrink-0 lg:w-72">
+            <div className="space-y-6 lg:sticky lg:top-36 lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto lg:pr-1">
             <div className="rounded-[28px] bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-charcoal dark:ring-white/5">
               <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-400">Departure Time</h3>
               <div className="space-y-3">
@@ -524,6 +532,7 @@ const SearchResults = () => {
                   Reset Filters
                 </button>
               )}
+            </div>
             </div>
           </aside>
 

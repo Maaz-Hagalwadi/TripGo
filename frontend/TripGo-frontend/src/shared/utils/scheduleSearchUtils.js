@@ -57,11 +57,11 @@ export const isSeatAvailableForBooking = (seat) => {
 };
 
 export const getAvailableSeatCount = (item) => {
+  if (Number.isFinite(Number(item?.availableSeatCount))) return Number(item.availableSeatCount);
+  if (Number.isFinite(Number(item?.availableSeats))) return Number(item.availableSeats);
   if (Array.isArray(item?.seatAvailability)) {
     return item.seatAvailability.filter(isSeatAvailableForBooking).length;
   }
-  if (Number.isFinite(Number(item?.availableSeatCount))) return Number(item.availableSeatCount);
-  if (Number.isFinite(Number(item?.availableSeats))) return Number(item.availableSeats);
   return null;
 };
 
@@ -161,13 +161,8 @@ export const shouldShowBusForSearch = (bus, searchDate, now = new Date()) => {
   if (getTripStatusValue(bus) === 'COMPLETED') return false;
   if (!matchesFrequency(bus, searchDate)) return false;
   if (searchDate) {
-    const searchMoment = parseSearchDate(searchDate);
-    const nowUtcYmd = toUtcYmd(now);
-    if (searchMoment && searchDate === nowUtcYmd) {
-      const departureMinutes = departure.getUTCHours() * 60 + departure.getUTCMinutes();
-      const nowMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-      if (departureMinutes <= nowMinutes) return false;
-    }
+    const todayLocalYmd = toLocalYmd(now);
+    if (searchDate === todayLocalYmd && departure.getTime() <= now.getTime()) return false;
   }
   return true;
 };

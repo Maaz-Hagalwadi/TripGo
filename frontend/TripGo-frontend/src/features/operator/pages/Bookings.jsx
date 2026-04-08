@@ -53,6 +53,51 @@ const extractPassengers = (booking) => {
   return [];
 };
 
+const getPaymentAwareStatus = (booking) => {
+  const bookingStatus = String(pick(booking, ['status'], '')).toUpperCase();
+  const paymentStatus = String(pick(booking, ['paymentStatus'], '')).toUpperCase();
+
+  if (bookingStatus === 'CONFIRMED') {
+    return {
+      label: 'CONFIRMED',
+      className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    };
+  }
+
+  if (paymentStatus === 'SUCCESS' && bookingStatus === 'PENDING') {
+    return {
+      label: 'PAYMENT RECEIVED',
+      className: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    };
+  }
+
+  if (paymentStatus === 'FAILED') {
+    return {
+      label: 'PAYMENT FAILED',
+      className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    };
+  }
+
+  if (paymentStatus === 'INITIATED' || !paymentStatus) {
+    return {
+      label: 'AWAITING PAYMENT',
+      className: 'bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300',
+    };
+  }
+
+  if (bookingStatus === 'CANCELLED') {
+    return {
+      label: 'CANCELLED',
+      className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    };
+  }
+
+  return {
+    label: bookingStatus || 'UNKNOWN',
+    className: 'bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300',
+  };
+};
+
 const toTitleCase = (value) => String(value || '')
   .trim()
   .toLowerCase()
@@ -159,6 +204,7 @@ const Bookings = () => {
             const bookingId = pick(booking, ['id', 'bookingId'], '');
             const displayBookingId = toDisplayBookingId(booking);
             const bookingStatus = String(pick(booking, ['status'], 'UNKNOWN')).toUpperCase();
+            const paymentAwareStatus = getPaymentAwareStatus(booking);
             const passengers = extractPassengers(booking);
             const passenger = passengers.length
               ? [toTitleCase(passengers[0]?.firstName), toTitleCase(passengers[0]?.lastName)].filter(Boolean).join(' ')
@@ -181,12 +227,8 @@ const Bookings = () => {
                     {createdAt && <p className="text-xs text-slate-500">Booked: {new Date(createdAt).toLocaleString()}</p>}
                   </div>
                   <div className="text-right space-y-2">
-                    <span className={`inline-block px-2 py-1 text-xs rounded-full font-medium ${
-                      bookingStatus === 'CANCELLED'
-                        ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                        : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                    }`}>
-                      {bookingStatus}
+                    <span className={`inline-block px-2 py-1 text-xs rounded-full font-medium ${paymentAwareStatus.className}`}>
+                      {paymentAwareStatus.label}
                     </span>
                     {amount !== null && amount !== undefined && (
                       <p className="text-sm font-bold text-primary">₹{amount}</p>
