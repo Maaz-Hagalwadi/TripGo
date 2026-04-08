@@ -5,6 +5,14 @@ import UserLayout from '../../../shared/components/UserLayout';
 import { ROUTES } from '../../../shared/constants/routes';
 import { INDIA_STATES } from '../../../shared/constants/indiaStates';
 import {
+  formatUtcDateTime,
+  getDelayMinutes,
+  getTripStatusValue,
+  isSeatAvailableForBooking,
+  isSeatBlocked,
+  isSeatBooked,
+} from '../../../shared/utils/scheduleSearchUtils';
+import {
   getBusRatingSummary,
   getScheduleFeatures,
   getSchedulePointsForBooking,
@@ -33,16 +41,7 @@ const formatCountdown = (seconds) => {
 };
 
 const formatInstant = (instant) => {
-  if (!instant) return '--';
-  const date = new Date(instant);
-  if (Number.isNaN(date.getTime())) return '--';
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
+  return formatUtcDateTime(instant);
 };
 
 const getTripStatusMeta = (tripStatus, delayMinutes) => {
@@ -55,8 +54,10 @@ const getTripStatusMeta = (tripStatus, delayMinutes) => {
 };
 
 const stopLabel = (stop) => stop?.name || stop?.stopName || stop?.city || stop?.location || stop?.address || stop?.landmark || '';
-
-const isSeatAvailableForBooking = (seat) => Boolean(seat?.available) && !seat?.isBlocked;
+const amenityLabel = (item) => {
+  if (typeof item === 'string') return item;
+  return item?.code || item?.name || item?.description || '';
+};
 
 const parseSleeperSeat = (seat) => {
   const match = String(seat.seatNumber || '').trim().toUpperCase().match(/^([LU])(\d+)$/);
@@ -222,6 +223,7 @@ const formatRestStopText = (featuresInfo, policiesInfo, bus) => {
 const INPUT_SHELL_CLASS = 'w-full rounded-2xl bg-slate-50 px-3 py-2 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-white/[0.04] dark:text-white dark:ring-white/10';
 const SUBTLE_PANEL_CLASS = 'rounded-2xl bg-slate-50 ring-1 ring-slate-200/70 dark:bg-white/[0.03] dark:ring-white/10';
 const SOFT_BUTTON_CLASS = 'rounded-xl bg-slate-100 px-4 py-2 text-slate-700 hover:bg-slate-200 dark:bg-white/[0.05] dark:text-slate-200 dark:hover:bg-white/[0.09]';
+const createEmptyPassenger = (seatNumber = '') => ({ seatNumber, name: '', age: '', gender: '', phone: '', email: '' });
 
 const DetailCard = ({ icon, title, subtitle, children, className = '' }) => (
   <div className={`rounded-[30px] bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,rgba(12,12,12,0.96)_0%,rgba(6,6,6,0.98)_100%)] dark:shadow-[0_30px_70px_rgba(0,0,0,0.45)] dark:ring-white/10 ${className}`}>
@@ -242,7 +244,7 @@ const Booking = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { bus, selectedType, selectedFare, searchParams } = location.state || {};
-  const scheduleId = bus?.scheduleId;
+  const scheduleId = bus?.scheduleId || bus?.id;
 
   const [step, setStep] = useState('seats');
   const [selectedSeats, setSelectedSeats] = useState([]);
@@ -257,27 +259,29 @@ const Booking = () => {
   const [loadingPoints, setLoadingPoints] = useState(false);
   const [selection, setSelection] = useState({ boardingPointId: '', droppingPointId: '' });
   const [contact, setContact] = useState({ countryCode: '+91', phone: '', email: '', stateOfResidence: '', whatsappOptIn: false });
-  const [passenger, setPassenger] = useState({ name: '', age: '', gender: '', phone: '', email: '' });
+  const [passengers, setPassengers] = useState([]);
   const [routeInfo, setRouteInfo] = useState(null);
   const [policiesInfo, setPoliciesInfo] = useState(null);
   const [featuresInfo, setFeaturesInfo] = useState(null);
   const [ratingSummary, setRatingSummary] = useState(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
 
+  const refreshSeats = async () => {
+    if (!scheduleId) return;
+    setLoadingSeats(true);
+    setLoadingSeatsError('');
+    try {
+      setSeatsResponse(await getScheduleSeats(scheduleId));
+    } catch (e) {
+      setLoadingSeatsError(e.message || 'Failed to load seats');
+    } finally {
+      setLoadingSeats(false);
+    }
+  };
+
   useEffect(() => {
     if (!scheduleId) return;
-    const fetchSeats = async () => {
-      setLoadingSeats(true);
-      setLoadingSeatsError('');
-      try {
-        setSeatsResponse(await getScheduleSeats(scheduleId));
-      } catch (e) {
-        setLoadingSeatsError(e.message || 'Failed to load seats');
-      } finally {
-        setLoadingSeats(false);
-      }
-    };
-    fetchSeats();
+    refreshSeats();
   }, [scheduleId]);
 
   useEffect(() => {
@@ -308,6 +312,13 @@ const Booking = () => {
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, [lockExpiresAt]);
+
+  useEffect(() => {
+    setPassengers((prev) => {
+      const bySeat = new Map(prev.map((item) => [item.seatNumber, item]));
+      return selectedSeats.map((seatNumber) => bySeat.get(seatNumber) || createEmptyPassenger(seatNumber));
+    });
+  }, [selectedSeats]);
 
   useEffect(() => {
     if (!scheduleId) return;
@@ -363,8 +374,8 @@ const Booking = () => {
   const selectedSeatSet = useMemo(() => new Set(selectedSeats), [selectedSeats]);
   const baseAvailableSeatCount = useMemo(() => seats.filter(isSeatAvailableForBooking).length, [seats]);
   const remainingAvailableSeatCount = Math.max(0, baseAvailableSeatCount - selectedSeats.length);
-  const blockedSeatCount = useMemo(() => seats.filter((seat) => seat.isBlocked).length, [seats]);
-  const bookedSeatCount = useMemo(() => seats.filter((seat) => !seat.isBlocked && !seat.available).length, [seats]);
+  const blockedSeatCount = useMemo(() => seats.filter((seat) => isSeatBlocked(seat)).length, [seats]);
+  const bookedSeatCount = useMemo(() => seats.filter((seat) => !isSeatBlocked(seat) && isSeatBooked(seat)).length, [seats]);
   const hasLayoutData = parsedLayoutSeats.length === seats.length;
 
   const routeStops = useMemo(() => {
@@ -376,16 +387,24 @@ const Booking = () => {
   }, [routeInfo, bus, searchParams]);
 
   const busFeatures = useMemo(() => {
-    if (Array.isArray(featuresInfo?.amenities) && featuresInfo.amenities.length) return featuresInfo.amenities;
-    if (Array.isArray(featuresInfo?.features) && featuresInfo.features.length) return featuresInfo.features;
+    if (Array.isArray(featuresInfo?.amenities) && featuresInfo.amenities.length) {
+      return featuresInfo.amenities.map(amenityLabel).filter(Boolean);
+    }
+    if (Array.isArray(featuresInfo?.features) && featuresInfo.features.length) {
+      return featuresInfo.features.map(amenityLabel).filter(Boolean);
+    }
     const amenities = Array.isArray(bus?.amenities) ? bus.amenities : [];
-    return amenities.length ? amenities : ['Charging Point', 'Reading Light'];
+    const normalizedAmenities = amenities.map(amenityLabel).filter(Boolean);
+    return normalizedAmenities.length ? normalizedAmenities : ['Charging Point', 'Reading Light'];
   }, [featuresInfo, bus]);
 
   const routeDistanceKm = routeInfo?.distanceKm || routeInfo?.distance || bus?.distanceKm || 487;
   const routeDuration = routeInfo?.duration || (routeInfo?.durationMinutes ? `${Math.floor(routeInfo.durationMinutes / 60)} hr ${routeInfo.durationMinutes % 60} min` : formatDuration(bus?.departureTime, bus?.arrivalTime));
   const restStopText = formatRestStopText(featuresInfo, policiesInfo, bus);
-  const tripStatusMeta = getTripStatusMeta(featuresInfo?.tripStatus || bus?.tripStatus, featuresInfo?.delayMinutes ?? bus?.delayMinutes);
+  const tripStatusMeta = getTripStatusMeta(
+    getTripStatusValue(featuresInfo) || getTripStatusValue(bus),
+    getDelayMinutes(featuresInfo) || getDelayMinutes(bus)
+  );
   const averageRating = Number(ratingSummary?.averageRating ?? ratingSummary?.avgRating ?? 0);
   const totalRatings = Number(ratingSummary?.totalRatings ?? ratingSummary?.count ?? 0);
   const cancellationLines = formatCancellationLines(policiesInfo);
@@ -403,6 +422,14 @@ const Booking = () => {
     setLockInfo(null);
     setLockExpiresAt(null);
     setLockSecondsLeft(0);
+  };
+
+  const updatePassenger = (seatNumber, field, value) => {
+    setPassengers((prev) => prev.map((item) => (
+      item.seatNumber === seatNumber
+        ? { ...item, [field]: value }
+        : item
+    )));
   };
 
   if (!bus) {
@@ -569,6 +596,8 @@ const Booking = () => {
                     toast.success(`Seats locked. Complete payment within ${result?.expiresInMinutes || 15} minutes to confirm booking.`);
                     setStep('details');
                   } catch (e) {
+                    await refreshSeats();
+                    setSelectedSeats([]);
                     toast.error(e.message || 'Failed to lock seats');
                   } finally {
                     setLockingSeats(false);
@@ -622,12 +651,22 @@ const Booking = () => {
                   </button>
                 </div>
 
-                <div className="mt-5 grid gap-4 md:grid-cols-2">
-                  <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Passenger Name *</label><input value={passenger.name} onChange={(e) => setPassenger((p) => ({ ...p, name: e.target.value }))} placeholder="Enter passenger name" className={INPUT_SHELL_CLASS} /></div>
-                  <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Age *</label><input type="number" min="1" value={passenger.age} onChange={(e) => setPassenger((p) => ({ ...p, age: e.target.value }))} placeholder="Enter age" className={INPUT_SHELL_CLASS} /></div>
-                  <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Gender *</label><select value={passenger.gender} onChange={(e) => setPassenger((p) => ({ ...p, gender: e.target.value }))} className={INPUT_SHELL_CLASS}><option value="">Select gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option><option value="OTHER">Other</option></select></div>
-                  <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Phone *</label><input value={passenger.phone} onChange={(e) => setPassenger((p) => ({ ...p, phone: e.target.value.replace(/[^\d]/g, '').slice(0, 10) }))} placeholder="Enter phone number" className={INPUT_SHELL_CLASS} /></div>
-                  <div className="md:col-span-2"><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Email *</label><input type="email" value={passenger.email} onChange={(e) => setPassenger((p) => ({ ...p, email: e.target.value }))} placeholder="Enter email" className={INPUT_SHELL_CLASS} /></div>
+                <div className="mt-5 space-y-4">
+                  {passengers.map((passenger, index) => (
+                    <div key={passenger.seatNumber || index} className={`${SUBTLE_PANEL_CLASS} p-4`}>
+                      <div className="mb-4 flex items-center justify-between gap-3">
+                        <p className="text-sm font-bold text-slate-900 dark:text-white">Passenger {index + 1}</p>
+                        <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">Seat {passenger.seatNumber || '--'}</span>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Passenger Name *</label><input value={passenger.name} onChange={(e) => updatePassenger(passenger.seatNumber, 'name', e.target.value)} placeholder="Enter passenger name" className={INPUT_SHELL_CLASS} /></div>
+                        <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Age *</label><input type="number" min="1" value={passenger.age} onChange={(e) => updatePassenger(passenger.seatNumber, 'age', e.target.value)} placeholder="Enter age" className={INPUT_SHELL_CLASS} /></div>
+                        <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Gender *</label><select value={passenger.gender} onChange={(e) => updatePassenger(passenger.seatNumber, 'gender', e.target.value)} className={INPUT_SHELL_CLASS}><option value="">Select gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option><option value="OTHER">Other</option></select></div>
+                        <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Phone *</label><input value={passenger.phone} onChange={(e) => updatePassenger(passenger.seatNumber, 'phone', e.target.value.replace(/[^\d]/g, '').slice(0, 10))} placeholder="Enter phone number" className={INPUT_SHELL_CLASS} /></div>
+                        <div className="md:col-span-2"><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Email *</label><input type="email" value={passenger.email} onChange={(e) => updatePassenger(passenger.seatNumber, 'email', e.target.value)} placeholder="Enter email" className={INPUT_SHELL_CLASS} /></div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </DetailCard>
 
@@ -637,8 +676,8 @@ const Booking = () => {
                 ) : (
                   <>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Boarding Point *</label><select value={selection.boardingPointId} onChange={(e) => setSelection((p) => ({ ...p, boardingPointId: e.target.value }))} className={INPUT_SHELL_CLASS}><option value="">Select boarding point</option>{boardingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
-                      <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Dropping Point *</label><select value={selection.droppingPointId} onChange={(e) => setSelection((p) => ({ ...p, droppingPointId: e.target.value }))} className={INPUT_SHELL_CLASS}><option value="">Select dropping point</option>{droppingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
+                      <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">{`Boarding Point${boardingPoints.length > 0 ? ' *' : ''}`}</label><select value={selection.boardingPointId} onChange={(e) => setSelection((p) => ({ ...p, boardingPointId: e.target.value }))} className={INPUT_SHELL_CLASS} disabled={boardingPoints.length === 0}><option value="">{boardingPoints.length > 0 ? 'Select boarding point' : 'No boarding point required'}</option>{boardingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
+                      <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">{`Dropping Point${droppingPoints.length > 0 ? ' *' : ''}`}</label><select value={selection.droppingPointId} onChange={(e) => setSelection((p) => ({ ...p, droppingPointId: e.target.value }))} className={INPUT_SHELL_CLASS} disabled={droppingPoints.length === 0}><option value="">{droppingPoints.length > 0 ? 'Select dropping point' : 'No dropping point required'}</option>{droppingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
                     </div>
                     <div className="mt-4 grid gap-4 md:grid-cols-2">
                       <div className={`${SUBTLE_PANEL_CLASS} p-4`}><p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Boarding points</p>{boardingPoints.length === 0 ? <p className="text-xs text-slate-500 dark:text-slate-400">No boarding points available</p> : boardingPoints.map((point) => <p key={point.id} className="mb-2 text-xs text-slate-600 dark:text-slate-300">{pointLabel(point)}</p>)}</div>
@@ -653,6 +692,7 @@ const Booking = () => {
               <DetailCard icon="confirmation_number" title="Review before payment" subtitle="A quick final check before moving to the payment screen.">
                 <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
                   <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Selected seats</span><span className="font-bold text-slate-900 dark:text-white">{selectedSeats.join(', ') || '--'}</span></div>
+                  <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Travelers</span><span className="font-bold text-slate-900 dark:text-white">{passengers.length || selectedSeats.length || 0}</span></div>
                   <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Seat fare</span><span className="font-bold text-slate-900 dark:text-white">₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}</span></div>
                   <div className="rounded-2xl bg-primary/10 px-4 py-4 dark:bg-primary/12 dark:ring-1 dark:ring-primary/20">
                     <p className="text-xs uppercase tracking-[0.2em] text-primary/90">Payment timer</p>
@@ -669,10 +709,13 @@ const Booking = () => {
                       if (!phoneValid) return toast.error('Enter a valid 10-digit phone number');
                       if (!emailValid) return toast.error('Enter a valid email address');
                       if (!contact.stateOfResidence.trim()) return toast.error('State of residence is required');
-                      if (!passenger.name.trim() || !passenger.age || !passenger.gender || !passenger.phone.trim() || !passenger.email.trim()) return toast.error('Please fill passenger details');
+                      if (!passengers.length || passengers.length !== selectedSeats.length) return toast.error('Please add passenger details for each selected seat');
+                      const hasInvalidPassenger = passengers.some((passenger) => !passenger.name.trim() || !passenger.age || !passenger.gender || !passenger.phone.trim() || !passenger.email.trim());
+                      if (hasInvalidPassenger) return toast.error('Please fill passenger details for all selected seats');
                       if (lockSecondsLeft <= 0) return toast.error('Seat lock expired. Please select and lock seats again.');
-                      if (boardingPoints.length + droppingPoints.length > 0 && (!selection.boardingPointId || !selection.droppingPointId)) return toast.error('Please select boarding and dropping points');
-                      navigate(ROUTES.PAYMENT, { state: { bus, scheduleId, selectedSeats, selectedFare, selectedType, searchParams, contact, passenger, selection, lockSecondsLeft, lockToken: lockInfo?.lockToken || '', lockInfo } });
+                      if (boardingPoints.length > 0 && !selection.boardingPointId) return toast.error('Please select a boarding point');
+                      if (droppingPoints.length > 0 && !selection.droppingPointId) return toast.error('Please select a dropping point');
+                      navigate(ROUTES.PAYMENT, { state: { bus, scheduleId, selectedSeats, selectedFare, selectedType, searchParams, contact, passengers, selection, lockSecondsLeft, lockToken: lockInfo?.lockToken || '', lockInfo } });
                     }}
                     className="flex-1 rounded-xl bg-primary px-4 py-2 font-semibold text-black hover:bg-primary/90"
                   >

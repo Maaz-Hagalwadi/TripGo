@@ -268,6 +268,7 @@ const CreateRoute = () => {
                   {selectedBus && (
                     <p className="text-xs text-slate-400 mt-1">Fare will be set for: <span className="text-primary font-semibold">{getFareSeatTypes(selectedBus.busType).join(', ')}</span></p>
                   )}
+                  <p className="text-xs text-slate-400 mt-2">Need more buses on this route? Create the route first, then use `Add Schedule` from the Routes & Schedules page.</p>
                 </div>
                 <button onClick={handleStep1Submit} disabled={submitting}
                   className="w-full bg-primary text-black px-6 py-3 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 font-bold">

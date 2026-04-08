@@ -2,6 +2,7 @@ package com.tripgo.backend.controller;
 
 import com.tripgo.backend.dto.response.AmenityDTO;
 import com.tripgo.backend.dto.response.BusResponse;
+import com.tripgo.backend.model.entities.AmenityMaster;
 import com.tripgo.backend.model.entities.Bus;
 import com.tripgo.backend.repository.BusRepository;
 import com.tripgo.backend.service.impl.EmailService;
@@ -78,7 +79,7 @@ public class AdminBusController {
                 bus.getTotalSeats(),
                 bus.isActive(),
                 bus.getAmenities().stream()
-                        .sorted(Comparator.comparing(a -> a.getCode()))
+                        .sorted(Comparator.comparing(AmenityMaster::getCode))
                         .map(a -> new AmenityDTO(a.getId(), a.getCode(), a.getDescription()))
                         .toList(),
                 bus.getCreatedAt(),

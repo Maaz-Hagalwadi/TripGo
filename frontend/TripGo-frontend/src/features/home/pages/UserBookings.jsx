@@ -4,6 +4,9 @@ import { toast } from 'sonner';
 import UserLayout from '../../../shared/components/UserLayout';
 import { getMyBookings } from '../../../api/bookingService';
 import { ROUTES } from '../../../shared/constants/routes';
+import { formatUtcDateTime } from '../../../shared/utils/scheduleSearchUtils';
+
+const PAYMENT_STORAGE_KEY = 'tripgo_pending_payment';
 
 const normalizeList = (data) => {
   if (Array.isArray(data)) return data;
@@ -14,22 +17,79 @@ const normalizeList = (data) => {
 };
 
 const formatDateTime = (value) => {
-  if (!value) return '--';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '--';
-  return date.toLocaleString('en-IN', {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return formatUtcDateTime(value);
+  return new Intl.DateTimeFormat('en-IN', {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
-  });
+  }).format(date);
+};
+
+const getBookingTimestamp = (booking) => {
+  const value = booking?.bookedAt || booking?.createdAt || booking?.bookingTime || booking?.departureTime;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
+};
+
+const getTimestampMinuteBucket = (booking) => {
+  const timestamp = getBookingTimestamp(booking);
+  return timestamp ? Math.floor(timestamp / 60000) : 0;
+};
+
+const getBookingIdentity = (booking) => String(
+  booking?.bookingCode ||
+  booking?.publicBookingId ||
+  booking?.bookingId ||
+  booking?.id ||
+  booking?.reference ||
+  booking?.paymentIntentId ||
+  ''
+).trim();
+
+const getStatusRank = (status) => {
+  const upper = String(status || '').toUpperCase();
+  if (upper === 'CONFIRMED') return 4;
+  if (upper === 'PAYMENT_SUCCESSFUL') return 3;
+  if (upper === 'PENDING') return 2;
+  if (upper === 'CANCELLED') return 1;
+  return 0;
+};
+
+const getPendingPayment = () => {
+  try {
+    const raw = localStorage.getItem(PAYMENT_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const isPendingPaymentMatch = (booking, pendingPayment) => {
+  if (!pendingPayment) return false;
+  const bookingIds = [
+    booking?.bookingCode,
+    booking?.publicBookingId,
+    booking?.bookingId,
+    booking?.id,
+    booking?.reference,
+    booking?.paymentIntentId,
+  ].filter(Boolean).map(String);
+  const pendingIds = [
+    pendingPayment?.bookingCode,
+    pendingPayment?.bookingId,
+    pendingPayment?.paymentIntentId,
+  ].filter(Boolean).map(String);
+  return pendingIds.some((id) => bookingIds.includes(id));
 };
 
 const getStatusClass = (status) => {
   const upper = String(status || '').toUpperCase();
   if (upper === 'CONFIRMED') return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300';
+  if (upper === 'PAYMENT_SUCCESSFUL') return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300';
   if (upper === 'CANCELLED') return 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300';
   return 'bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300';
 };
@@ -108,13 +168,15 @@ const UserBookings = () => {
   const location = useLocation();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+  const pendingPayment = useMemo(() => getPendingPayment(), []);
 
   useEffect(() => {
     const fetchBookings = async () => {
       try {
         setLoading(true);
         const data = await getMyBookings();
-        setBookings(normalizeList(data));
+        const normalized = normalizeList(data).sort((a, b) => getBookingTimestamp(b) - getBookingTimestamp(a));
+        setBookings(normalized);
       } catch (error) {
         toast.error(error?.message || 'Failed to load your bookings.');
         setBookings([]);
@@ -130,12 +192,54 @@ const UserBookings = () => {
   const hasFreshBooking = Boolean(latestBooking);
 
   const visibleBookings = useMemo(() => {
-    if (!latestBooking) return bookings;
-    const latestId = latestBooking?.bookingCode || latestBooking?.publicBookingId || latestBooking?.bookingId || latestBooking?.id || latestBooking?.reference;
-    if (!latestId) return bookings;
-    const exists = bookings.some((item) => String(item?.bookingCode || item?.publicBookingId || item?.bookingId || item?.id || item?.reference) === String(latestId));
-    return exists ? bookings : [latestBooking, ...bookings];
-  }, [bookings, latestBooking]);
+    const merged = latestBooking ? [latestBooking, ...bookings] : bookings;
+    const dedupedById = [];
+    const seenIds = new Set();
+
+    merged.forEach((item) => {
+      const identity = getBookingIdentity(item);
+      if (!identity || !seenIds.has(identity)) {
+        if (identity) seenIds.add(identity);
+        dedupedById.push(item);
+      }
+    });
+
+    const collapsedByTrip = new Map();
+
+    dedupedById.forEach((item) => {
+      const rawStatus = String(item?.status || 'CONFIRMED').toUpperCase();
+      const displayStatus = rawStatus === 'PENDING' && isPendingPaymentMatch(item, pendingPayment)
+        ? 'PAYMENT_SUCCESSFUL'
+        : rawStatus;
+      const routeFrom = item?.from || item?.source || item?.origin || item?.route?.from || '';
+      const routeTo = item?.to || item?.destination || item?.route?.to || '';
+      const seats = extractSeats(item).join(',');
+      const amount = Number(item?.payableAmount ?? item?.totalAmount ?? item?.amount ?? 0);
+      const passengerCount = extractPassengers(item).length || extractSeats(item).length || 1;
+      const tripKey = [
+        routeFrom,
+        routeTo,
+        seats,
+        amount,
+        passengerCount,
+        getTimestampMinuteBucket(item),
+      ].join('|');
+
+      const existing = collapsedByTrip.get(tripKey);
+      if (!existing) {
+        collapsedByTrip.set(tripKey, { ...item, __displayStatus: displayStatus });
+        return;
+      }
+
+      const existingRank = getStatusRank(existing.__displayStatus || existing.status);
+      const nextRank = getStatusRank(displayStatus);
+      if (nextRank > existingRank) {
+        collapsedByTrip.set(tripKey, { ...item, __displayStatus: displayStatus });
+      }
+    });
+
+    return [...collapsedByTrip.values()].sort((a, b) => getBookingTimestamp(b) - getBookingTimestamp(a));
+  }, [bookings, latestBooking, pendingPayment]);
 
   return (
     <UserLayout activeItem="bookings" title="My Bookings">
@@ -179,7 +283,10 @@ const UserBookings = () => {
               const passengers = extractPassengers(booking);
               const bookedAt = booking?.bookedAt || booking?.createdAt || booking?.bookingTime;
               const amount = Number(booking?.payableAmount ?? booking?.totalAmount ?? booking?.amount ?? 0);
-              const status = booking?.status || 'CONFIRMED';
+              const rawStatus = String(booking?.status || 'CONFIRMED').toUpperCase();
+              const displayStatus = booking?.__displayStatus || (rawStatus === 'PENDING' && isPendingPaymentMatch(booking, pendingPayment)
+                ? 'PAYMENT_SUCCESSFUL'
+                : rawStatus);
 
               return (
                 <div key={`${bookingId}-${index}`} className="rounded-[30px] bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,rgba(12,12,12,0.96)_0%,rgba(6,6,6,0.98)_100%)] dark:ring-white/10">
@@ -187,7 +294,9 @@ const UserBookings = () => {
                     <div>
                       <div className="flex flex-wrap items-center gap-3">
                         <h2 className="text-xl font-black text-slate-900 dark:text-white">{routeFrom} to {routeTo}</h2>
-                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusClass(status)}`}>{status}</span>
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusClass(displayStatus)}`}>
+                          {displayStatus === 'PAYMENT_SUCCESSFUL' ? 'PAYMENT SUCCESSFUL' : displayStatus}
+                        </span>
                       </div>
                       <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Booking ID: {bookingId}</p>
                       <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Booked on {formatDateTime(bookedAt)}</p>

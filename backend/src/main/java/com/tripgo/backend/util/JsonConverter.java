@@ -14,7 +14,7 @@ public class JsonConverter implements AttributeConverter<Map<String, Object>, St
 
     @Override
     public String convertToDatabaseColumn(Map<String, Object> data) {
-        if (data == null) return null;
+        if (data == null) return "{}";
 
         try {
             return objectMapper.writeValueAsString(data);

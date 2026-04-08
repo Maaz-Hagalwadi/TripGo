@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
-import { getRoutes, getRouteSegments, getRouteSchedules, deleteSchedule, deleteRoute, getPoints, addPoint, updatePoint, deletePoint, getFares, addFare, deleteFare, updateFare, startTrip, completeTrip, markDelay, updateSchedule } from '../../../api/routeService';
+import { getRoutes, getRouteSegments, getRouteSchedules, deleteSchedule, deleteRoute, getPoints, addPoint, updatePoint, deletePoint, getFares, addFare, deleteFare, updateFare, startTrip, completeTrip, markDelay, updateSchedule, createSchedule } from '../../../api/routeService';
 import { getDrivers, assignDriverToSchedule } from '../../../api/operatorDriverService';
 import { getBuses } from '../../../api/busService';
 import { toast } from 'sonner';
 import { ROUTES } from '../../../shared/constants/routes';
 import './OperatorDashboard.css';
+
+const isNumericValue = (value) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
 
 const Schedules = () => {
   const navigate = useNavigate();
@@ -38,6 +40,13 @@ const Schedules = () => {
   const [editScheduleModal, setEditScheduleModal] = useState({
     routeId: null,
     scheduleId: null,
+    busId: '',
+    departureTime: '',
+    arrivalTime: '',
+    frequency: 'DAILY'
+  });
+  const [addScheduleModal, setAddScheduleModal] = useState({
+    routeId: null,
     busId: '',
     departureTime: '',
     arrivalTime: '',
@@ -83,10 +92,50 @@ const Schedules = () => {
   const fetchBuses = async () => {
     try {
       const data = await getBuses();
-      setBuses(Array.isArray(data) ? data : []);
+      setBuses(Array.isArray(data) ? data.filter((bus) => bus?.active) : []);
     } catch {
       setBuses([]);
     }
+  };
+
+  const normalizeTripStatus = (schedule) => String(
+    schedule?.tripStatus ||
+    schedule?.status ||
+    schedule?.tripState ||
+    schedule?.currentStatus ||
+    'SCHEDULED'
+  ).toUpperCase();
+
+  const getScheduleDelayMinutes = (schedule) => {
+    const values = [
+      schedule?.delayMinutes,
+      schedule?.delayedMinutes,
+      schedule?.currentDelayMinutes,
+      schedule?.delayInMinutes,
+    ];
+    const match = values.find(isNumericValue);
+    return match === undefined ? 0 : Number(match);
+  };
+
+  const normalizeSchedule = (schedule) => {
+    const bus = schedule?.bus || buses.find((item) => String(item.id) === String(schedule?.busId)) || null;
+    const tripStatus = normalizeTripStatus(schedule);
+    const delayMinutes = getScheduleDelayMinutes(schedule);
+    return {
+      ...schedule,
+      bus,
+      busId: schedule?.busId || bus?.id || schedule?.bus?.id || '',
+      tripStatus,
+      status: tripStatus,
+      driverId: schedule?.driverId || schedule?.assignedDriverId || schedule?.driver?.id || schedule?.assignedDriver?.id || '',
+      assignedDriverId: schedule?.assignedDriverId || schedule?.driverId || schedule?.driver?.id || schedule?.assignedDriver?.id || '',
+      driverName: schedule?.driverName || schedule?.assignedDriverName || schedule?.driver?.name || schedule?.assignedDriver?.name || '',
+      assignedDriverName: schedule?.assignedDriverName || schedule?.driverName || schedule?.driver?.name || schedule?.assignedDriver?.name || '',
+      actualDepartureTime: schedule?.actualDepartureTime || schedule?.startedAt || schedule?.actualStartTime || null,
+      actualArrivalTime: schedule?.actualArrivalTime || schedule?.completedAt || schedule?.actualEndTime || null,
+      delayMinutes,
+      delayReason: schedule?.delayReason || schedule?.currentDelayReason || '',
+    };
   };
 
   const fetchSegments = async (routeId) => {
@@ -97,11 +146,11 @@ const Schedules = () => {
     } catch { /* silent */ }
   };
 
-  const fetchSchedules = async (routeId) => {
-    if (schedules[routeId]) return schedules[routeId];
+  const fetchSchedules = async (routeId, forceRefresh = false) => {
+    if (!forceRefresh && schedules[routeId]) return schedules[routeId];
     try {
       const data = await getRouteSchedules(routeId);
-      const list = data || [];
+      const list = (data || []).map(normalizeSchedule);
       setSchedules(prev => ({ ...prev, [routeId]: list }));
       return list;
     } catch {
@@ -182,7 +231,21 @@ const Schedules = () => {
     try {
       const data = await getFares(routeId);
       const list = Array.isArray(data) ? data : [];
-      setFares(prev => ({ ...prev, [routeId]: list }));
+      setFares(prev => {
+        const previousById = new Map((prev[routeId] || []).map((fare) => [String(fare.id), fare]));
+        const merged = list.map((fare) => {
+          const previous = previousById.get(String(fare.id));
+          if (!previous) return fare;
+          return {
+            ...previous,
+            ...fare,
+            busId: fare?.busId ?? fare?.bus?.id ?? previous?.busId ?? previous?.bus?.id ?? null,
+            bus: fare?.bus || previous?.bus || null,
+            busName: fare?.busName || previous?.busName || previous?.bus?.name || '',
+          };
+        });
+        return { ...prev, [routeId]: merged };
+      });
     } catch (e) {
       toast.error('Failed to load fares: ' + e.message);
     }
@@ -228,14 +291,28 @@ const Schedules = () => {
   };
   const fareExistsForRoute = (routeId, segmentId, seatType) => {
     const selectedSegment = getSelectedSegmentKey(routeId, segmentId);
+    const selectedBusId = String(fareForm[routeId]?.busId || '');
     return (fares[routeId] || []).some(f => {
       const fareSegment = getFareSegmentKeys(f);
+      const fareBusId = String(f?.busId || f?.bus?.id || '');
       return (
         isSameSegment(selectedSegment, fareSegment) &&
-        normalizeSeatType(f.seatType) === normalizeSeatType(seatType)
+        normalizeSeatType(f.seatType) === normalizeSeatType(seatType) &&
+        fareBusId === selectedBusId
       );
     });
   };
+
+  const getRouteBusById = (routeId, busId) => {
+    if (!busId) return null;
+    const fromSchedules = (schedules[routeId] || []).find((schedule) => String(schedule?.bus?.id) === String(busId))?.bus;
+    if (fromSchedules) return fromSchedules;
+    return buses.find((bus) => String(bus.id) === String(busId)) || null;
+  };
+
+  const getRouteSegmentById = (routeId, segmentId) => (
+    (segments[routeId] || []).find((segment) => String(segment.id) === String(segmentId)) || null
+  );
 
   const handleAddFare = async (routeId) => {
     const form = fareForm[routeId] || {};
@@ -244,14 +321,36 @@ const Schedules = () => {
       return toast.error('Fare for this segment and seat type already exists');
     }
     try {
-      await addFare(routeId, {
+      const created = await addFare(routeId, {
         segmentId: form.segmentId,
         seatType: normalizeSeatType(form.seatType),
         baseFare: parseFloat(form.baseFare),
         gstPercent: 5,
+        busId: form.busId || null,
       });
+      const linkedBus = getRouteBusById(routeId, form.busId);
+      const linkedSegment = getRouteSegmentById(routeId, form.segmentId);
+      setFares(prev => ({
+        ...prev,
+        [routeId]: [
+          ...(prev[routeId] || []),
+          {
+            ...created,
+            segmentId: created?.segmentId || form.segmentId,
+            segment: created?.segment || linkedSegment || null,
+            segmentFromStop: created?.segmentFromStop || linkedSegment?.fromStop || '',
+            segmentToStop: created?.segmentToStop || linkedSegment?.toStop || '',
+            segmentName: created?.segmentName || (linkedSegment ? `${linkedSegment.fromStop} → ${linkedSegment.toStop}` : ''),
+            seatType: created?.seatType || normalizeSeatType(form.seatType),
+            baseFare: created?.baseFare ?? parseFloat(form.baseFare),
+            gstPercent: created?.gstPercent ?? 5,
+            busId: created?.busId ?? form.busId ?? null,
+            bus: created?.bus || linkedBus || null,
+            busName: created?.busName || linkedBus?.name || '',
+          },
+        ],
+      }));
       setFareForm(prev => ({ ...prev, [routeId]: {} }));
-      await fetchFares(routeId); // re-fetch so segment names resolve correctly
       toast.success('Fare added');
     } catch (e) { toast.error(e.message); }
   };
@@ -288,10 +387,18 @@ const Schedules = () => {
         segmentId: fareSegment.idKey,
         seatType: fare.seatType,
         baseFare: nextBaseFare,
-        gstPercent: fare.gstPercent ?? 5
+        gstPercent: fare.gstPercent ?? 5,
+        busId: fare?.busId || fare?.bus?.id || null
       });
+      setFares(prev => ({
+        ...prev,
+        [routeId]: (prev[routeId] || []).map((item) => (
+          String(item.id) === String(fare.id)
+            ? { ...item, baseFare: nextBaseFare }
+            : item
+        )),
+      }));
       setEditingFare(prev => ({ ...prev, [routeId]: null }));
-      await fetchFares(routeId);
       toast.success('Fare updated');
     } catch (e) {
       toast.error(e.message || 'Failed to update fare');
@@ -342,13 +449,13 @@ const Schedules = () => {
     }
   };
 
-  const getTripStatus = (schedule) => String(schedule?.tripStatus || 'SCHEDULED').toUpperCase();
+  const getTripStatus = (schedule) => normalizeTripStatus(schedule);
 
   const updateScheduleState = (routeId, scheduleId, patch) => {
     setSchedules(prev => ({
       ...prev,
       [routeId]: (prev[routeId] || []).map(s =>
-        String(s.id) === String(scheduleId) ? { ...s, ...patch } : s
+        String(s.id) === String(scheduleId) ? normalizeSchedule({ ...s, ...patch }) : s
       )
     }));
   };
@@ -357,9 +464,11 @@ const Schedules = () => {
     try {
       const res = await startTrip(scheduleId);
       updateScheduleState(routeId, scheduleId, {
-        tripStatus: res?.tripStatus || 'STARTED',
-        actualDepartureTime: res?.actualDepartureTime || new Date().toISOString()
+        tripStatus: res?.tripStatus || res?.status || 'STARTED',
+        status: res?.status || res?.tripStatus || 'STARTED',
+        actualDepartureTime: res?.actualDepartureTime || res?.startedAt || new Date().toISOString()
       });
+      await fetchSchedules(routeId, true);
       toast.success('Trip started');
     } catch (e) {
       toast.error(e.message || 'Failed to start trip');
@@ -370,9 +479,11 @@ const Schedules = () => {
     try {
       const res = await completeTrip(scheduleId);
       updateScheduleState(routeId, scheduleId, {
-        tripStatus: res?.tripStatus || 'COMPLETED',
-        actualArrivalTime: res?.actualArrivalTime || new Date().toISOString()
+        tripStatus: res?.tripStatus || res?.status || 'COMPLETED',
+        status: res?.status || res?.tripStatus || 'COMPLETED',
+        actualArrivalTime: res?.actualArrivalTime || res?.completedAt || new Date().toISOString()
       });
+      await fetchSchedules(routeId, true);
       toast.success('Trip completed');
     } catch (e) {
       toast.error(e.message || 'Failed to complete trip');
@@ -389,10 +500,12 @@ const Schedules = () => {
     try {
       const res = await markDelay(scheduleId, mins, delayReason || '');
       updateScheduleState(routeId, scheduleId, {
-        tripStatus: res?.tripStatus || 'DELAYED',
-        delayMinutes: res?.delayMinutes ?? mins,
-        delayReason: res?.delayReason ?? (delayReason || '')
+        tripStatus: res?.tripStatus || res?.status || 'DELAYED',
+        status: res?.status || res?.tripStatus || 'DELAYED',
+        delayMinutes: res?.delayMinutes ?? res?.currentDelayMinutes ?? mins,
+        delayReason: res?.delayReason ?? res?.currentDelayReason ?? (delayReason || '')
       });
+      await fetchSchedules(routeId, true);
       setDelayModal({ routeId: null, scheduleId: null, delayMinutes: '', delayReason: '' });
       toast.success('Delay marked');
     } catch (e) {
@@ -401,6 +514,7 @@ const Schedules = () => {
   };
 
   const getDriverName = (driver) => {
+    if (typeof driver === 'string' && driver.trim()) return driver;
     if (!driver) return 'Not assigned';
     const fullName = `${driver.firstName || ''} ${driver.lastName || ''}`.trim();
     return fullName || driver.name || driver.phone || 'Assigned';
@@ -414,6 +528,14 @@ const Schedules = () => {
       schedule?.assignedDriverId ||
       ''
     )
+  );
+
+  const hasAssignedDriver = (schedule) => Boolean(
+    getScheduleDriverId(schedule) ||
+    schedule?.driverName ||
+    schedule?.assignedDriverName ||
+    schedule?.driver?.name ||
+    schedule?.assignedDriver?.name
   );
 
   const openAssignDriverModal = (routeId, schedule) => {
@@ -446,8 +568,13 @@ const Schedules = () => {
       updateScheduleState(routeId, scheduleId, {
         driver: response?.driver || assigned || { id: driverId },
         assignedDriver: response?.driver || assigned || { id: driverId },
-        driverId: String(driverId)
+        driverId: response?.driverId || String(driverId),
+        assignedDriverId: response?.driverId || String(driverId),
+        driverName: response?.driverName || getDriverName(assigned),
+        assignedDriverName: response?.driverName || getDriverName(assigned),
+        busId: response?.busId || undefined
       });
+      await fetchSchedules(routeId, true);
       setDriverAssignModal({ routeId: null, scheduleId: null, selectedDriverId: '' });
       toast.success('Driver assigned successfully', { id: loadingToastId });
     } catch (e) {
@@ -480,6 +607,26 @@ const Schedules = () => {
     setEditScheduleModal({
       routeId: null,
       scheduleId: null,
+      busId: '',
+      departureTime: '',
+      arrivalTime: '',
+      frequency: 'DAILY'
+    });
+  };
+
+  const openAddScheduleModal = (routeId) => {
+    setAddScheduleModal({
+      routeId,
+      busId: '',
+      departureTime: '',
+      arrivalTime: '',
+      frequency: 'DAILY'
+    });
+  };
+
+  const closeAddScheduleModal = () => {
+    setAddScheduleModal({
+      routeId: null,
       busId: '',
       departureTime: '',
       arrivalTime: '',
@@ -520,6 +667,39 @@ const Schedules = () => {
       closeEditScheduleModal();
     } catch (e) {
       toast.error(e.message || 'Failed to update schedule', { id: loadingToast });
+    }
+  };
+
+  const submitNewSchedule = async () => {
+    const { routeId, busId, departureTime, arrivalTime, frequency } = addScheduleModal;
+    if (!routeId || !busId || !departureTime || !arrivalTime || !frequency) {
+      toast.error('All schedule fields are required');
+      return;
+    }
+    const dep = new Date(departureTime);
+    const arr = new Date(arrivalTime);
+    if (Number.isNaN(dep.getTime()) || Number.isNaN(arr.getTime())) {
+      toast.error('Please enter valid date/time values');
+      return;
+    }
+    if (arr <= dep) {
+      toast.error('Arrival time must be after departure time');
+      return;
+    }
+
+    const loadingToast = toast.loading('Creating schedule...');
+    try {
+      await createSchedule(routeId, {
+        busId,
+        departureTime: dep.toISOString(),
+        arrivalTime: arr.toISOString(),
+        frequency
+      });
+      await fetchSchedules(routeId, true);
+      toast.success('Schedule added successfully', { id: loadingToast });
+      closeAddScheduleModal();
+    } catch (e) {
+      toast.error(e.message || 'Failed to create schedule', { id: loadingToast });
     }
   };
 
@@ -582,6 +762,12 @@ const Schedules = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <button
+                        onClick={(e) => { e.stopPropagation(); openAddScheduleModal(route.id); }}
+                        className="px-2.5 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                      >
+                        Add Schedule
+                      </button>
+                      <button
                         onClick={(e) => { e.stopPropagation(); openManageFares(route.id); }}
                         className="px-2.5 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                       >
@@ -631,7 +817,6 @@ const Schedules = () => {
                         </div>
                       </div>
                     )}
-
                     {schedules[route.id]?.length > 0 ? (
                       <div>
                         <h4 className="font-semibold mb-3 flex items-center gap-2">
@@ -692,7 +877,7 @@ const Schedules = () => {
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className="material-symbols-outlined text-sm">badge</span>
-                                  Driver: {getDriverName(schedule.driver || schedule.assignedDriver)}
+                                  Driver: {getDriverName(schedule.driver || schedule.assignedDriver || schedule.driverName || schedule.assignedDriverName)}
                                 </div>
                                 {schedule.actualDepartureTime && (
                                   <div className="flex items-center gap-2">
@@ -706,10 +891,10 @@ const Schedules = () => {
                                     Completed: {new Date(schedule.actualArrivalTime).toLocaleString()}
                                   </div>
                                 )}
-                                {schedule.delayMinutes ? (
+                                {getScheduleDelayMinutes(schedule) ? (
                                   <div className="flex items-center gap-2">
                                     <span className="material-symbols-outlined text-sm">warning</span>
-                                    Delayed by {schedule.delayMinutes} min{schedule.delayReason ? ` · ${schedule.delayReason}` : ''}
+                                    Delayed by {getScheduleDelayMinutes(schedule)} min{schedule.delayReason ? ` · ${schedule.delayReason}` : ''}
                                   </div>
                                 ) : null}
                               </div>
@@ -720,7 +905,7 @@ const Schedules = () => {
                                     disabled={!!assigningDriver[schedule.id]}
                                     className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-60"
                                   >
-                                    {getScheduleDriverId(schedule) ? 'Change Driver' : 'Assign Driver'}
+                                    {hasAssignedDriver(schedule) ? 'Change Driver' : 'Assign Driver'}
                                   </button>
                                 </div>
                                 {(getTripStatus(schedule) === 'SCHEDULED' || getTripStatus(schedule) === 'DELAYED') && (
@@ -744,7 +929,7 @@ const Schedules = () => {
                                     onClick={() => setDelayModal({
                                       routeId: route.id,
                                       scheduleId: schedule.id,
-                                      delayMinutes: schedule.delayMinutes ? String(schedule.delayMinutes) : '',
+                                      delayMinutes: getScheduleDelayMinutes(schedule) ? String(getScheduleDelayMinutes(schedule)) : '',
                                       delayReason: schedule.delayReason || ''
                                     })}
                                     className="px-3 py-1.5 text-xs rounded-lg border border-yellow-300 text-yellow-700 dark:border-yellow-700 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors"
@@ -813,6 +998,9 @@ const Schedules = () => {
                         <div key={f.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-lg text-xs mb-1 gap-2">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="px-1.5 py-0.5 rounded font-bold bg-primary/10 text-primary">{f.seatType?.replace(/_/g, ' ')}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
+                              {f?.bus?.name || f?.busName || (f?.busId ? `Bus ${f.busId}` : 'Default Route Fare')}
+                            </span>
                             {isEditing ? (
                               <div className="relative">
                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
@@ -851,7 +1039,27 @@ const Schedules = () => {
                 ))
               )}
 
-              <div className="grid grid-cols-2 gap-2 pt-3 mt-3 border-t border-slate-100 dark:border-slate-700">
+              <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-700">
+                <div className="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  Choose `Default route fare (all buses)` to apply one fare to every bus on this route, or choose a specific bus to create a bus-specific override.
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={fareForm[routeId]?.busId || ''}
+                  onChange={e => setFareForm(prev => ({ ...prev, [routeId]: { ...prev[routeId], busId: e.target.value, seatType: '' } }))}
+                  className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-primary col-span-2"
+                >
+                  <option value="">Default route fare (all buses)</option>
+                  {Array.from(new Map(
+                    (schedules[routeId] || [])
+                      .filter((schedule) => schedule?.bus?.id)
+                      .map((schedule) => [String(schedule.bus.id), schedule.bus])
+                  ).values()).map((bus) => (
+                    <option key={bus.id} value={bus.id}>
+                      {bus.name} ({bus.busCode}) - Bus-specific fare
+                    </option>
+                  ))}
+                </select>
                 <select
                   value={fareForm[routeId]?.segmentId || ''}
                   onChange={e => setFareForm(prev => ({ ...prev, [routeId]: { ...prev[routeId], segmentId: e.target.value, seatType: '' } }))}
@@ -867,9 +1075,13 @@ const Schedules = () => {
                   const t = busType.toUpperCase();
                   const selectedSegmentId = fareForm[routeId]?.segmentId || '';
                   const selectedSegment = getSelectedSegmentKey(routeId, selectedSegmentId);
+                  const selectedBusId = String(fareForm[routeId]?.busId || '');
                   const usedSeatTypes = new Set(
                     (fares[routeId] || [])
-                      .filter(f => isSameSegment(selectedSegment, getFareSegmentKeys(f)))
+                      .filter(f => (
+                        isSameSegment(selectedSegment, getFareSegmentKeys(f)) &&
+                        String(f?.busId || f?.bus?.id || '') === selectedBusId
+                      ))
                       .map(f => normalizeSeatType(f.seatType))
                   );
                   const seatOptions = (() => {
@@ -912,6 +1124,7 @@ const Schedules = () => {
                   <span className="material-symbols-outlined text-sm">add</span>
                   Add Fare
                 </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1230,6 +1443,79 @@ const Schedules = () => {
                 className="px-4 py-2 rounded-lg bg-primary text-black hover:bg-primary/90 transition-colors font-semibold"
               >
                 Save Schedule
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addScheduleModal.routeId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-op-card rounded-xl p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800">
+            <h3 className="text-lg font-bold mb-4">Add Schedule</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Bus *</label>
+                <select
+                  value={addScheduleModal.busId}
+                  onChange={(e) => setAddScheduleModal(prev => ({ ...prev, busId: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
+                >
+                  <option value="">Select bus</option>
+                  {buses.map((bus) => (
+                    <option key={bus.id} value={bus.id}>
+                      {bus.name} ({bus.busCode}) · {bus.busType?.replace(/_/g, ' ')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Departure *</label>
+                  <input
+                    type="datetime-local"
+                    value={addScheduleModal.departureTime}
+                    onChange={(e) => setAddScheduleModal(prev => ({ ...prev, departureTime: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Arrival *</label>
+                  <input
+                    type="datetime-local"
+                    value={addScheduleModal.arrivalTime}
+                    onChange={(e) => setAddScheduleModal(prev => ({ ...prev, arrivalTime: e.target.value }))}
+                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Frequency *</label>
+                <select
+                  value={addScheduleModal.frequency}
+                  onChange={(e) => setAddScheduleModal(prev => ({ ...prev, frequency: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
+                >
+                  <option value="DAILY">Daily</option>
+                  <option value="WEEKLY">Weekly</option>
+                  <option value="WEEKDAYS">Weekdays</option>
+                  <option value="WEEKENDS">Weekends</option>
+                  <option value="ONCE">One Time</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={closeAddScheduleModal}
+                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitNewSchedule}
+                className="px-4 py-2 rounded-lg bg-primary text-black hover:bg-primary/90 transition-colors font-semibold"
+              >
+                Create Schedule
               </button>
             </div>
           </div>

@@ -4,6 +4,7 @@ import com.tripgo.backend.model.entities.*;
 import com.tripgo.backend.model.enums.BookingStatus;
 import com.tripgo.backend.repository.BookingRepository;
 import com.tripgo.backend.repository.BookingSeatRepository;
+import com.tripgo.backend.repository.PaymentRepository;
 import com.tripgo.backend.repository.RouteScheduleRepository;
 import com.tripgo.backend.security.service.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class OperatorBookingController {
     private final BookingRepository bookingRepository;
     private final BookingSeatRepository bookingSeatRepository;
     private final RouteScheduleRepository scheduleRepository;
+    private final PaymentRepository paymentRepository;
 
     // GET /operator/bookings - All bookings for operator
     @GetMapping("/bookings")
@@ -121,6 +123,16 @@ public class OperatorBookingController {
         result.put("bookingId", booking.getId());
         result.put("bookingCode", booking.getBookingCode());
         result.put("status", booking.getStatus());
+
+        paymentRepository.findTopByBookingOrderByCreatedAtDesc(booking).ifPresentOrElse(payment -> {
+            result.put("paymentStatus", payment.getStatus());
+            result.put("paymentIntentId", payment.getProviderTransactionId());
+            result.put("paidAt", payment.getStatus().name().equals("SUCCESS") ? payment.getUpdatedAt() : null);
+        }, () -> {
+            result.put("paymentStatus", null);
+            result.put("paymentIntentId", null);
+            result.put("paidAt", null);
+        });
         result.put("from", booking.getRouteSchedule().getRoute().getOrigin());
         result.put("to", booking.getRouteSchedule().getRoute().getDestination());
         result.put("seatNumbers", seatDetails.stream().map(s -> s.get("seatNumber")).toList());

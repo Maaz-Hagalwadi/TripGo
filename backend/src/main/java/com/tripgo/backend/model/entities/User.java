@@ -61,6 +61,7 @@ public class User {
 
 
     @Builder.Default
+    @Getter
     @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "user_roles",

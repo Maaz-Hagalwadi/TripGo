@@ -45,21 +45,52 @@ public class SeatAvailabilityService {
             for (Fare f : fares) System.out.println("    Fare: seatType=" + f.getSeatType() + " base=" + f.getBaseFare());
         }
 
-        // Collect seat types from segment IDs directly (avoids Hibernate identity issues)
-        Set<String> seatTypes = travelSegments.stream()
-                .flatMap(seg -> fareRepo.findByRouteSegmentId(seg.getId()).stream())
-                .map(Fare::getSeatType)
-                .filter(t -> t != null && !t.isBlank())
-                .collect(Collectors.toSet());
+        // Build fare map: seatType -> FareResult
+        // Priority: bus-specific fare > route-level fare
+        UUID busId = schedule.getBus() != null ? schedule.getBus().getId() : null;
 
-        // Build fare map: seatType -> FareResult (only include types with fares on ALL segments)
+        // Collect all seat types: bus-specific first, then route-level
+        Set<String> seatTypes = new java.util.LinkedHashSet<>();
+        for (RouteSegment seg : travelSegments) {
+            List<Fare> busFares = busId != null
+                    ? fareRepo.findByRouteSegmentIdAndBusId(seg.getId(), busId)
+                    : List.of();
+            List<Fare> routeFares = fareRepo.findByRouteSegmentIdAndBusIsNull(seg.getId());
+            // Also get ALL fares for this segment as final fallback
+            List<Fare> allFares = fareRepo.findByRouteSegmentId(seg.getId());
+            System.out.println("💰 Segment " + seg.getFromStop() + "->" + seg.getToStop()
+                    + " | busFares=" + busFares.size()
+                    + " | routeFares=" + routeFares.size()
+                    + " | allFares=" + allFares.size());
+            busFares.stream().map(Fare::getSeatType).filter(t -> t != null && !t.isBlank()).forEach(seatTypes::add);
+            routeFares.stream().map(Fare::getSeatType).filter(t -> t != null && !t.isBlank()).forEach(seatTypes::add);
+            // Fallback: if still empty, use all fares
+            if (seatTypes.isEmpty()) {
+                allFares.stream().map(Fare::getSeatType).filter(t -> t != null && !t.isBlank()).forEach(seatTypes::add);
+            }
+        }
+        System.out.println("🎫 Seat types found: " + seatTypes);
+
         Map<String, FareResult> faresByType = new java.util.LinkedHashMap<>();
         for (String type : seatTypes) {
             BigDecimal base = BigDecimal.ZERO;
             BigDecimal gst = BigDecimal.ZERO;
             boolean complete = true;
             for (RouteSegment seg : travelSegments) {
-                Optional<Fare> fare = fareRepo.findByRouteSegmentIdAndSeatType(seg.getId(), type);
+                // 1. Try bus-specific fare
+                Optional<Fare> fare = busId != null
+                        ? fareRepo.findByRouteSegmentIdAndSeatTypeAndBusId(seg.getId(), type, busId)
+                        : Optional.empty();
+                // 2. Fallback to route-level (bus_id IS NULL)
+                if (fare.isEmpty()) {
+                    fare = fareRepo.findByRouteSegmentIdAndSeatType(seg.getId(), type);
+                }
+                // 3. Final fallback: any fare for this segment+seatType
+                if (fare.isEmpty()) {
+                    fare = fareRepo.findByRouteSegmentId(seg.getId()).stream()
+                            .filter(f -> type.equals(f.getSeatType()))
+                            .findFirst();
+                }
                 if (fare.isEmpty()) { complete = false; break; }
                 base = base.add(fare.get().getBaseFare());
                 gst = gst.add(fare.get().getBaseFare()
@@ -73,10 +104,23 @@ public class SeatAvailabilityService {
             throw new RuntimeException("No fares defined for route: " + from + " -> " + to);
         }
 
-        // Seat availability
+        // Seat availability - check actual bookings and blocked seats
         List<Seat> seats = seatRepo.findByBus(schedule.getBus());
+
+        // Get booked seat numbers for this schedule
+        Set<String> bookedSeatNumbers = bookingSeatRepo
+                .findByRouteSchedule(schedule)
+                .stream()
+                .filter(bs -> bs.getBooking().getStatus().name().equals("CONFIRMED"))
+                .map(BookingSeat::getSeatNumber)
+                .collect(Collectors.toSet());
+
         List<SeatAvailability> seatAvailability = seats.stream()
-                .map(seat -> new SeatAvailability(seat.getSeatNumber(), true))
+                .map(seat -> new SeatAvailability(
+                        seat.getSeatNumber(),
+                        !bookedSeatNumbers.contains(seat.getSeatNumber())
+                        && !Boolean.TRUE.equals(seat.getIsBlocked())
+                ))
                 .toList();
 
         return new SearchResult(faresByType, seatAvailability);

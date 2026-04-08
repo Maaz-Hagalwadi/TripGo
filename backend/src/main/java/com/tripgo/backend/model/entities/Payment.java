@@ -1,11 +1,12 @@
 package com.tripgo.backend.model.entities;
 
 import com.tripgo.backend.model.enums.PaymentStatus;
-import com.tripgo.backend.util.JsonConverter;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -41,8 +42,8 @@ public class Payment {
     private PaymentStatus status;
 
     @Column(columnDefinition = "jsonb")
-    @Convert(converter = JsonConverter.class)
-    private Map<String, Object> metadata; // full payment gateway response
+    @JdbcTypeCode(SqlTypes.JSON)
+    private Map<String, Object> metadata;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

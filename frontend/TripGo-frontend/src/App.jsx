@@ -41,6 +41,7 @@ const OperatorSupport = lazy(() => import('./features/operator/pages/OperatorSup
 const SearchResults = lazy(() => import('./features/search/pages/SearchResults'));
 const Booking = lazy(() => import('./features/search/pages/Booking'));
 const DummyPayment = lazy(() => import('./features/search/pages/DummyPayment'));
+const PaymentSuccess = lazy(() => import('./features/search/pages/PaymentSuccess'));
 
 const CompleteProfile = lazy(() => import('./features/auth/pages/CompleteProfile'));
 const AdminOperatorAction = lazy(() => import('./pages/AdminOperatorAction'));
@@ -102,6 +103,9 @@ function App() {
           } />
           <Route path={ROUTES.PAYMENT} element={
             <ProtectedRoute allowedRoles={['USER']}><DummyPayment /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.PAYMENT_SUCCESS} element={
+            <ProtectedRoute allowedRoles={['USER']}><PaymentSuccess /></ProtectedRoute>
           } />
           <Route path={ROUTES.USER_PROFILE} element={
             <ProtectedRoute allowedRoles={['USER']}><UserProfile /></ProtectedRoute>

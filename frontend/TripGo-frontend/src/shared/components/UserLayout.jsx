@@ -17,7 +17,7 @@ const UserLayout = ({ activeItem = 'dashboard', title = 'Dashboard', children })
 
   return (
     <div className="bg-background-light dark:bg-op-bg text-slate-900 dark:text-slate-100 min-h-screen flex">
-      <div className="operator-sidebar">
+      <div className="operator-sidebar hidden md:block">
         <UserSidebar
           activeItem={activeItem}
           collapsed={sidebarCollapsed}
@@ -25,7 +25,7 @@ const UserLayout = ({ activeItem = 'dashboard', title = 'Dashboard', children })
         />
       </div>
 
-      <main className={`operator-main flex-1 flex flex-col min-w-0 overflow-hidden transition-all ${sidebarCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <main className={`operator-main flex-1 flex flex-col min-w-0 overflow-visible transition-all ml-0 ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <OperatorHeader
           title={title}
           searchPlaceholder="Search routes, cities, or bookings..."
@@ -37,7 +37,7 @@ const UserLayout = ({ activeItem = 'dashboard', title = 'Dashboard', children })
         </div>
       </main>
 
-      <nav className="mobile-bottom-nav fixed bottom-0 left-0 right-0 bg-white dark:bg-op-card border-t border-slate-200 dark:border-slate-800 z-50 lg:hidden">
+      <nav className="mobile-bottom-nav fixed bottom-0 left-0 right-0 bg-white dark:bg-op-card border-t border-slate-200 dark:border-slate-800 z-50 md:hidden">
         <div className="grid grid-cols-4 h-16">
           {MOBILE_NAV.map((item) => (
             <button

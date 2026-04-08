@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -27,6 +28,7 @@ public class RouteService {
     private final FareRepository fareRepository;
     private final RouteScheduleRepository scheduleRepository;
     private final BusRepository busRepository;
+    private final BusDriverAssignmentRepository assignmentRepository;
 
     public RouteResponse createRoute(CreateRouteRequest req, User user) {
         if (user.getOperator() == null) {
@@ -112,24 +114,62 @@ public class RouteService {
         RouteSegment segment = segmentRepository.findById(req.segmentId())
                 .orElseThrow(() -> new RuntimeException("Segment not found"));
 
-        Fare fare = Fare.builder()
-                .route(route)
-                .routeSegment(segment)
-                .seatType(req.seatType())
-                .baseFare(req.baseFare())
-                .gstPercent(req.gstPercent())
-                .build();
+        // Resolve bus if busId provided
+        Bus bus = null;
+        if (req.busId() != null) {
+            bus = busRepository.findById(req.busId())
+                    .orElseThrow(() -> new RuntimeException("Bus not found"));
+        }
+
+        // If setting a per-bus fare, ensure route-level fare still exists
+        if (bus != null) {
+            boolean routeLevelExists = fareRepository
+                    .findByRouteSegmentIdAndSeatType(segment.getId(), req.seatType())
+                    .isPresent();
+            if (!routeLevelExists) {
+                // Create route-level fare with same price as default
+                fareRepository.save(Fare.builder()
+                        .route(route)
+                        .routeSegment(segment)
+                        .bus(null)
+                        .seatType(req.seatType())
+                        .baseFare(req.baseFare())
+                        .gstPercent(req.gstPercent())
+                        .build());
+            }
+        }
+
+        // Check if fare already exists for this segment+seatType+bus, update it
+        final Bus finalBus = bus;
+        Optional<Fare> existing = bus != null
+                ? fareRepository.findByRouteSegmentIdAndSeatTypeAndBusId(segment.getId(), req.seatType(), bus.getId())
+                : fareRepository.findByRouteSegmentIdAndSeatType(segment.getId(), req.seatType());
+
+        Fare fare;
+        if (existing.isPresent()) {
+            fare = existing.get();
+            fare.setBaseFare(req.baseFare());
+            fare.setGstPercent(req.gstPercent());
+        } else {
+            fare = Fare.builder()
+                    .route(route)
+                    .routeSegment(segment)
+                    .bus(finalBus)
+                    .seatType(req.seatType())
+                    .baseFare(req.baseFare())
+                    .gstPercent(req.gstPercent())
+                    .build();
+        }
 
         fare = fareRepository.save(fare);
 
-        // Calculate total fare using request values to avoid lazy loading
         BigDecimal gstAmount = req.baseFare().multiply(req.gstPercent()).divide(BigDecimal.valueOf(100));
         BigDecimal totalFare = req.baseFare().add(gstAmount);
 
         return new FareResponse(
                 fare.getId(),
-                routeId,  // Use parameter instead of route.getId()
-                req.segmentId(),  // Use parameter instead of segment.getId()
+                routeId,
+                req.segmentId(),
                 req.seatType(),
                 req.baseFare(),
                 req.gstPercent(),
@@ -154,22 +194,7 @@ public class RouteService {
                 .build();
 
         schedule = scheduleRepository.save(schedule);
-
-        return new RouteScheduleResponse(
-                schedule.getId(),
-                new RouteResponse(
-                        route.getId(),
-                        route.getName(),
-                        route.getOrigin(),
-                        route.getDestination(),
-                        route.getDistanceKm()
-                ),
-                toBusResponse(bus),
-                req.departureTime(),
-                req.arrivalTime(),
-                req.frequency(),
-                true
-        );
+        return toScheduleResponse(schedule);
     }
 
     public List<RouteResponse> listRoutes(User user) {
@@ -215,24 +240,10 @@ public class RouteService {
         }
 
         List<Route> routes = routeRepository.findByOperator(user.getOperator());
-        
+
         return routes.stream()
                 .flatMap(route -> scheduleRepository.findByRoute(route).stream())
-                .map(schedule -> new RouteScheduleResponse(
-                        schedule.getId(),
-                        new RouteResponse(
-                                schedule.getRoute().getId(),
-                                schedule.getRoute().getName(),
-                                schedule.getRoute().getOrigin(),
-                                schedule.getRoute().getDestination(),
-                                schedule.getRoute().getDistanceKm()
-                        ),
-                        toBusResponse(schedule.getBus()),
-                        schedule.getDepartureTime(),
-                        schedule.getArrivalTime(),
-                        schedule.getFrequency(),
-                        schedule.getActive()
-                ))
+                .map(this::toScheduleResponse)
                 .toList();
     }
 
@@ -240,26 +251,12 @@ public class RouteService {
         RouteSchedule schedule = scheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new RuntimeException("Schedule not found"));
 
-        if (user.getOperator() == null || 
+        if (user.getOperator() == null ||
             !schedule.getRoute().getOperator().getId().equals(user.getOperator().getId())) {
             throw new RuntimeException("Access denied");
         }
 
-        return new RouteScheduleResponse(
-                schedule.getId(),
-                new RouteResponse(
-                        schedule.getRoute().getId(),
-                        schedule.getRoute().getName(),
-                        schedule.getRoute().getOrigin(),
-                        schedule.getRoute().getDestination(),
-                        schedule.getRoute().getDistanceKm()
-                ),
-                toBusResponse(schedule.getBus()),
-                schedule.getDepartureTime(),
-                schedule.getArrivalTime(),
-                schedule.getFrequency(),
-                schedule.getActive()
-        );
+        return toScheduleResponse(schedule);
     }
 
     public void deleteSchedule(UUID scheduleId, User user) {
@@ -293,15 +290,37 @@ public class RouteService {
         schedule.setFrequency(req.frequency());
         scheduleRepository.save(schedule);
 
+        return toScheduleResponse(schedule);
+    }
+
+    private RouteScheduleResponse toScheduleResponse(RouteSchedule schedule) {
         Route route = schedule.getRoute();
+
+        // Get assigned driver for this bus
+        UUID driverId = null;
+        String driverName = null;
+        var assignment = assignmentRepository.findByBusAndAssignedToIsNull(schedule.getBus());
+        if (assignment.isPresent()) {
+            Driver driver = assignment.get().getDriver();
+            driverId = driver.getId();
+            driverName = driver.getFirstName() + " " + (driver.getLastName() != null ? driver.getLastName() : "");
+        }
+
         return new RouteScheduleResponse(
                 schedule.getId(),
                 new RouteResponse(route.getId(), route.getName(), route.getOrigin(), route.getDestination(), route.getDistanceKm()),
-                toBusResponse(bus),
+                toBusResponse(schedule.getBus()),
                 schedule.getDepartureTime(),
                 schedule.getArrivalTime(),
                 schedule.getFrequency(),
-                schedule.getActive()
+                Boolean.TRUE.equals(schedule.getActive()),
+                driverId,
+                driverName,
+                schedule.getTripStatus() != null ? schedule.getTripStatus() : "SCHEDULED",
+                schedule.getDelayMinutes(),
+                schedule.getDelayReason(),
+                schedule.getActualDepartureTime(),
+                schedule.getActualArrivalTime()
         );
     }
 

@@ -27,6 +27,22 @@ const getDriverName = (driver) => {
   return fullName || driver?.phone || 'Driver';
 };
 
+const getLicenseDate = (driver) => {
+  if (!driver?.licenseExpiry) return null;
+  const expiry = new Date(driver.licenseExpiry);
+  if (Number.isNaN(expiry.getTime())) return null;
+  expiry.setHours(0, 0, 0, 0);
+  return expiry;
+};
+
+const isLicenseExpired = (driver) => {
+  const expiry = getLicenseDate(driver);
+  if (!expiry) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return expiry < today;
+};
+
 const Drivers = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
@@ -46,6 +62,7 @@ const Drivers = () => {
     const diff = (expiry - today) / (1000 * 60 * 60 * 24);
     return diff >= 0 && diff <= 30;
   }).length;
+  const expiredLicenses = drivers.filter((driver) => isLicenseExpired(driver)).length;
 
   useEffect(() => {
     if (loading) return;
@@ -142,7 +159,7 @@ const Drivers = () => {
 
   return (
     <OperatorLayout activeItem="drivers" title="Drivers">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-white dark:bg-op-card border border-slate-200 dark:border-slate-800 rounded-xl p-5">
           <p className="text-sm text-slate-500">Total Drivers</p>
           <p className="text-3xl font-bold mt-1">{drivers.length}</p>
@@ -150,6 +167,10 @@ const Drivers = () => {
         <div className="bg-white dark:bg-op-card border border-slate-200 dark:border-slate-800 rounded-xl p-5">
           <p className="text-sm text-slate-500">Licenses Expiring in 30 Days</p>
           <p className="text-3xl font-bold mt-1">{expiringSoon}</p>
+        </div>
+        <div className="bg-white dark:bg-op-card border border-red-200 dark:border-red-900/50 rounded-xl p-5">
+          <p className="text-sm text-slate-500">Expired Licenses</p>
+          <p className="text-3xl font-bold mt-1 text-red-600 dark:text-red-400">{expiredLicenses}</p>
         </div>
       </div>
 
@@ -233,7 +254,14 @@ const Drivers = () => {
         ) : (
           <div className="space-y-2">
             {drivers.map((driver) => (
-              <div key={driver.id} className="bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2 text-sm flex items-center justify-between">
+              <div
+                key={driver.id}
+                className={`rounded-lg px-3 py-2 text-sm flex items-center justify-between ${
+                  isLicenseExpired(driver)
+                    ? 'bg-red-50 dark:bg-red-950/25 ring-1 ring-red-200 dark:ring-red-900/50'
+                    : 'bg-slate-50 dark:bg-slate-800'
+                }`}
+              >
                 {editingDriverId === driver.id ? (
                   <div className="w-full grid grid-cols-1 md:grid-cols-5 gap-2 items-end">
                     <input
@@ -288,10 +316,19 @@ const Drivers = () => {
                       <span className="font-semibold">{getDriverName(driver)}</span>
                       {driver.phone && <span className="text-slate-400">· {driver.phone}</span>}
                       {driver.licenseNumber && <span className="text-slate-400">· {driver.licenseNumber}</span>}
+                      {isLicenseExpired(driver) && (
+                        <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-600 dark:text-red-400">
+                          Driver Expired License
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-slate-400 text-xs">
-                        {driver.licenseExpiry ? `Expires ${new Date(driver.licenseExpiry).toLocaleDateString()}` : ''}
+                      <span className={`text-xs ${isLicenseExpired(driver) ? 'text-red-600 dark:text-red-400 font-medium' : 'text-slate-400'}`}>
+                        {driver.licenseExpiry
+                          ? isLicenseExpired(driver)
+                            ? `Expired ${new Date(driver.licenseExpiry).toLocaleDateString()}`
+                            : `Expires ${new Date(driver.licenseExpiry).toLocaleDateString()}`
+                          : ''}
                       </span>
                       <button
                         onClick={() => startEditDriver(driver)}

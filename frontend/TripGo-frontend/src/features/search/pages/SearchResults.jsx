@@ -1,10 +1,20 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { searchBuses } from '../../../api/busService';
+import { getScheduleFeatures, getScheduleSeats } from '../../../api/bookingService';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { ROUTES } from '../../../shared/constants/routes';
 import UserLayout from '../../../shared/components/UserLayout';
+import {
+  formatUtcTime,
+  getAvailableSeatCount,
+  getDelayMinutes,
+  projectScheduleToSearchDate,
+  getTripStatusValue,
+  isSeatAvailableForBooking,
+  shouldShowBusForSearch,
+} from '../../../shared/utils/scheduleSearchUtils';
 
 const DEPARTURE_SLOTS = [
   { label: 'Early Morning (6am – 12pm)', start: 6, end: 12 },
@@ -26,8 +36,7 @@ const CITY_OPTIONS = [
 ];
 
 const formatTime = (instant) => {
-  if (!instant) return '--';
-  return new Date(instant).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return formatUtcTime(instant);
 };
 
 const formatDuration = (dep, arr) => {
@@ -44,12 +53,85 @@ const minFare = (faresByType) => {
   return vals.length ? Math.min(...vals) : 0;
 };
 
-const isSeatAvailableForBooking = (seat) => Boolean(seat?.available) && !seat?.isBlocked;
-const getAvailableSeatCount = (bus) => {
-  if (Number.isFinite(Number(bus?.availableSeats))) return Number(bus.availableSeats);
-  if (Number.isFinite(Number(bus?.availableSeatCount))) return Number(bus.availableSeatCount);
-  if (Array.isArray(bus?.seatAvailability)) return bus.seatAvailability.filter(isSeatAvailableForBooking).length;
-  return null;
+const mergeTripStatus = (busStatus, featureStatus, busDelayMinutes, featureDelayMinutes) => {
+  const busState = String(busStatus || '').toUpperCase();
+  const featureState = String(featureStatus || '').toUpperCase();
+  const busDelay = Number(busDelayMinutes || 0);
+  const featureDelay = Number(featureDelayMinutes || 0);
+
+  if (busState === 'COMPLETED' || featureState === 'COMPLETED') return 'COMPLETED';
+  if (busState === 'DELAYED' || featureState === 'DELAYED' || busDelay > 0 || featureDelay > 0) return 'DELAYED';
+  if (busState === 'STARTED' || featureState === 'STARTED') return 'STARTED';
+  return featureState || busState || 'SCHEDULED';
+};
+
+const normalizeAmenityCodes = (amenities) => {
+  if (!Array.isArray(amenities)) return [];
+  return amenities
+    .map((item) => {
+      if (typeof item === 'string') return item;
+      return item?.code || item?.name || item?.description || '';
+    })
+    .filter(Boolean);
+};
+
+const normalizeSearchBus = (item) => {
+  const busInfo = item?.bus || {};
+  const routeInfo = item?.route || {};
+  return {
+    ...item,
+    id: item?.busId || busInfo?.id || item?.id || '',
+    scheduleId: item?.scheduleId || item?.id || '',
+    busId: item?.busId || busInfo?.id || '',
+    busName: item?.busName || busInfo?.name || 'Bus',
+    busCode: item?.busCode || busInfo?.busCode || '',
+    busType: item?.busType || busInfo?.busType || '',
+    operatorName: item?.operatorName || item?.operator?.name || item?.travelsName || '',
+    amenities: normalizeAmenityCodes(item?.amenities?.length ? item.amenities : busInfo?.amenities),
+    route: routeInfo,
+    fromCity: item?.fromCity || routeInfo?.origin || '',
+    toCity: item?.toCity || routeInfo?.destination || '',
+  };
+};
+
+const hasNumericSeatCount = (bus) => (
+  Number.isFinite(Number(bus?.availableSeatCount)) ||
+  Number.isFinite(Number(bus?.availableSeats))
+);
+
+const getTripStatusMeta = (tripStatus, delayMinutes) => {
+  const status = String(tripStatus || '').toUpperCase();
+  const delay = Number(delayMinutes || 0);
+
+  if (status === 'DELAYED' || delay > 0) {
+    return {
+      label: 'Delayed',
+      textClass: 'text-amber-500 dark:text-amber-300',
+      chipClass: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200',
+    };
+  }
+
+  if (status === 'STARTED') {
+    return {
+      label: 'Started',
+      textClass: 'text-sky-500 dark:text-sky-300',
+      chipClass: 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-200',
+    };
+  }
+
+  if (status === 'COMPLETED') {
+    return {
+      label: 'Completed',
+      textClass: 'text-emerald-500 dark:text-emerald-300',
+      chipClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200',
+    };
+  }
+
+  return {
+    label: 'On Time',
+    textClass: 'text-emerald-500 dark:text-emerald-300',
+    chipClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200',
+  };
 };
 
 const toYmd = (date) => date.toISOString().split('T')[0];
@@ -62,10 +144,9 @@ const BusCard = ({ bus, searchParams }) => {
   const [selectedType, setSelectedType] = useState(fareEntries[0]?.[0] || null);
   const selectedFare = bus.faresByType?.[selectedType];
   const availableSeats = getAvailableSeatCount(bus);
-  const tripStatus = String(bus.tripStatus || '').toUpperCase();
-  const delayMins = Number(bus.delayMinutes || 0);
-  const statusLabel = tripStatus === 'DELAYED' || delayMins > 0 ? `Delayed${delayMins > 0 ? ` by ${delayMins} min` : ''}` : 'On Time';
-  const statusClass = tripStatus === 'DELAYED' || delayMins > 0 ? 'text-amber-400' : 'text-emerald-400';
+  const tripStatus = getTripStatusValue(bus);
+  const delayMins = getDelayMinutes(bus);
+  const tripStatusMeta = getTripStatusMeta(tripStatus, delayMins);
 
   return (
     <div className="rounded-[28px] bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 transition-all hover:-translate-y-0.5 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)] dark:bg-charcoal dark:ring-white/5 dark:hover:ring-primary/20">
@@ -78,7 +159,19 @@ const BusCard = ({ bus, searchParams }) => {
             <h4 className="font-bold text-slate-900 dark:text-white">{bus.busName}</h4>
             <p className="text-xs text-slate-500 dark:text-slate-400">{bus.busType}</p>
             <p className="text-xs text-slate-400 dark:text-slate-500">{bus.operatorName}</p>
-            <p className={`text-[11px] font-semibold mt-1 ${statusClass}`}>{statusLabel}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${tripStatusMeta.chipClass}`}>
+                {tripStatusMeta.label}
+              </span>
+            </div>
+            <p className={`mt-2 text-[11px] font-semibold ${tripStatusMeta.textClass}`}>
+              {delayMins > 0 ? `Delay Time: ${delayMins} min` : 'Delay Time: 0 min'}
+            </p>
+            {bus.delayReason ? (
+              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                Reason: {bus.delayReason}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -187,7 +280,55 @@ const SearchResults = () => {
     setError(null);
     try {
       const data = await searchBuses(params.from, params.to, params.date);
-      setBuses(data || []);
+      const rawBuses = Array.isArray(data) ? data.map(normalizeSearchBus) : [];
+      const enrichedBuses = await Promise.all(
+        rawBuses.map(async (bus) => {
+          const scheduleId = bus?.scheduleId || bus?.id;
+          if (!scheduleId) return bus;
+
+          const [featuresRes, seatsRes] = await Promise.allSettled([
+            getScheduleFeatures(scheduleId),
+            hasNumericSeatCount(bus) ? Promise.resolve(null) : getScheduleSeats(scheduleId),
+          ]);
+
+          const featurePayload = featuresRes.status === 'fulfilled' ? featuresRes.value : null;
+          const seatsPayload = seatsRes.status === 'fulfilled' ? seatsRes.value : null;
+          const busStatus = getTripStatusValue(bus);
+          const featureStatus = getTripStatusValue(featurePayload);
+          const busDelayMinutes = getDelayMinutes(bus);
+          const featureDelayMinutes = getDelayMinutes(featurePayload);
+          const fallbackSeatAvailability = Array.isArray(seatsPayload?.seatAvailability)
+            ? seatsPayload.seatAvailability
+            : Array.isArray(seatsPayload?.seats)
+              ? seatsPayload.seats
+              : Array.isArray(seatsPayload?.upperDeck) || Array.isArray(seatsPayload?.lowerDeck)
+                ? [...(seatsPayload?.lowerDeck || []), ...(seatsPayload?.upperDeck || [])]
+                : [];
+          const fallbackAvailableCount = fallbackSeatAvailability.length
+            ? fallbackSeatAvailability.filter(isSeatAvailableForBooking).length
+            : null;
+
+          return {
+            ...bus,
+            scheduleId,
+            seatAvailability: Array.isArray(bus?.seatAvailability) && bus.seatAvailability.length
+              ? bus.seatAvailability
+              : fallbackSeatAvailability,
+            availableSeatCount: hasNumericSeatCount(bus)
+              ? getAvailableSeatCount(bus)
+              : fallbackAvailableCount,
+            availableSeats: hasNumericSeatCount(bus)
+              ? getAvailableSeatCount(bus)
+              : fallbackAvailableCount,
+            tripStatus: mergeTripStatus(busStatus, featureStatus, busDelayMinutes, featureDelayMinutes),
+            delayMinutes: Math.max(busDelayMinutes, featureDelayMinutes),
+            delayReason: featurePayload?.delayReason || bus?.delayReason,
+            actualDepartureTime: featurePayload?.actualDepartureTime || bus?.actualDepartureTime,
+            actualArrivalTime: featurePayload?.actualArrivalTime || bus?.actualArrivalTime,
+          };
+        })
+      );
+      setBuses(enrichedBuses.map((bus) => projectScheduleToSearchDate(bus, params.date)));
     } catch {
       setError('Failed to fetch buses. Please try again.');
     } finally {
@@ -199,11 +340,11 @@ const SearchResults = () => {
     setter(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
 
   const filteredBuses = useMemo(() => {
-    let result = [...buses];
+    let result = buses.filter((bus) => shouldShowBusForSearch(bus, appliedSearch.date));
 
     if (selectedSlots.length > 0) {
       result = result.filter(bus => {
-        const hour = new Date(bus.departureTime).getHours();
+        const hour = new Date(bus.departureTime).getUTCHours();
         return selectedSlots.some(label => {
           const slot = DEPARTURE_SLOTS.find(s => s.label === label);
           return slot && hour >= slot.start && hour < slot.end;
@@ -261,7 +402,7 @@ const SearchResults = () => {
 
   return (
     <UserLayout activeItem="search" title="Search Buses">
-      <div className={`overflow-hidden rounded-[32px] ${isDark ? 'bg-deep-black text-slate-100' : 'bg-[linear-gradient(180deg,#f8fbff_0%,#eef4ff_100%)] text-slate-900'}`}>
+      <div className={`overflow-visible rounded-[32px] ${isDark ? 'bg-deep-black text-slate-100' : 'bg-[linear-gradient(180deg,#f8fbff_0%,#eef4ff_100%)] text-slate-900'}`}>
 
       <div className={`sticky top-0 z-40 py-5 backdrop-blur-xl ${isDark ? 'bg-charcoal/90' : 'bg-white/85 shadow-[0_12px_30px_rgba(15,23,42,0.06)]'}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -327,7 +468,8 @@ const SearchResults = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col gap-8 lg:flex-row">
 
-          <aside className="w-full flex-shrink-0 space-y-6 lg:w-72">
+          <aside className="w-full flex-shrink-0 lg:w-72">
+            <div className="space-y-6 lg:sticky lg:top-36 lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto lg:pr-1">
             <div className="rounded-[28px] bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-charcoal dark:ring-white/5">
               <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-400">Departure Time</h3>
               <div className="space-y-3">
@@ -390,6 +532,7 @@ const SearchResults = () => {
                   Reset Filters
                 </button>
               )}
+            </div>
             </div>
           </aside>
 

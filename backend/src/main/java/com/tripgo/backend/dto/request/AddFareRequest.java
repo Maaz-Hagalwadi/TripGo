@@ -7,6 +7,6 @@ public record AddFareRequest(
         UUID segmentId,
         String seatType,
         BigDecimal baseFare,
-        BigDecimal gstPercent
+        BigDecimal gstPercent,
+        UUID busId  // null = route-level default, non-null = per-bus override
 ) {}
-
