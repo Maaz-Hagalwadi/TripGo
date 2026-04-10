@@ -36,7 +36,8 @@ public class RatingController {
         boolean hasCompletedBooking = bookingRepository
                 .findByUserAndStatus(user, BookingStatus.CONFIRMED)
                 .stream()
-                .anyMatch(b -> b.getRouteSchedule().getId().equals(scheduleId));
+                .anyMatch(b -> b.getRouteSchedule().getId().equals(scheduleId)
+                        && "COMPLETED".equals(b.getRouteSchedule().getTripStatus()));
 
         if (!hasCompletedBooking) {
             return ResponseEntity.badRequest()
@@ -128,6 +129,7 @@ public class RatingController {
         List<Map<String, Object>> trips = bookingRepository
                 .findByUserAndStatus(user, BookingStatus.CONFIRMED)
                 .stream()
+                .filter(b -> "COMPLETED".equals(b.getRouteSchedule().getTripStatus()))
                 .map(b -> {
                     RouteSchedule s = b.getRouteSchedule();
                     boolean alreadyRated = reviewRepository

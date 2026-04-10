@@ -3,19 +3,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import UserLayout from '../../../shared/components/UserLayout';
 import { getMyBookings } from '../../../api/bookingService';
+import { confirmBookingPayment } from '../../../api/paymentService';
 import { ROUTES } from '../../../shared/constants/routes';
 
 const PAYMENT_STORAGE_KEY = 'tripgo_pending_payment';
 const PAYMENT_INTENT_CACHE_KEY = 'tripgo_payment_intent_cache';
-
-const getBookingIdentity = (item) => String(
-  item?.bookingId ||
-  item?.id ||
-  item?.bookingCode ||
-  item?.publicBookingId ||
-  item?.reference ||
-  ''
-).trim();
+const PAYMENT_FLOW_STORAGE_KEY = 'tripgo_payment_flow_state';
+const CURRENT_BOOKING_STORAGE_KEY = 'tripgo_current_booking_state';
+const BOOKING_DRAFT_PREFIX = 'tripgo_booking_draft_';
 
 const findMatchingBooking = (bookings, pendingPayment) => {
   if (!pendingPayment) return null;
@@ -36,6 +31,48 @@ const findMatchingBooking = (bookings, pendingPayment) => {
     ].filter(Boolean).map(String);
     return pendingIds.some((id) => candidates.includes(id));
   }) || null;
+};
+
+const InlineLoader = ({ label }) => (
+  <div className="flex items-center justify-center gap-3 text-sm text-slate-500 dark:text-slate-400">
+    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/40 border-t-primary" />
+    <span>{label}</span>
+  </div>
+);
+
+const buildLatestBookingFallback = (pendingPayment, paymentIntentId) => {
+  if (!pendingPayment) return null;
+  const bookingState = pendingPayment?.bookingState || {};
+  const passengers = Array.isArray(bookingState?.passengers) ? bookingState.passengers : [];
+
+  return {
+    id: pendingPayment?.bookingId || paymentIntentId || pendingPayment?.paymentIntentId || `pending-${Date.now()}`,
+    bookingId: pendingPayment?.bookingId || '',
+    bookingCode: pendingPayment?.bookingCode || '',
+    paymentIntentId: paymentIntentId || pendingPayment?.paymentIntentId || '',
+    scheduleId: pendingPayment?.scheduleId || bookingState?.scheduleId || bookingState?.bus?.scheduleId || '',
+    from: bookingState?.searchParams?.from || '',
+    to: bookingState?.searchParams?.to || '',
+    busName: bookingState?.bus?.busName || bookingState?.bus?.name || '',
+    seatNumbers: bookingState?.selectedSeats || [],
+    passengers: passengers.map((passenger) => {
+      const parts = String(passenger?.name || '').trim().split(/\s+/).filter(Boolean);
+      return {
+        seatNumber: passenger?.seatNumber || '',
+        firstName: parts[0] || '',
+        lastName: parts.slice(1).join(' '),
+        age: passenger?.age,
+        gender: passenger?.gender,
+        phone: passenger?.phone,
+      };
+    }),
+    payableAmount: Number(pendingPayment?.payableAmount ?? 0),
+    totalAmount: Number(pendingPayment?.totalAmount ?? pendingPayment?.payableAmount ?? 0),
+    amount: Number(pendingPayment?.payableAmount ?? 0),
+    createdAt: pendingPayment?.createdAt || new Date().toISOString(),
+    bookedAt: pendingPayment?.createdAt || new Date().toISOString(),
+    status: 'PAYMENT_SUCCESSFUL',
+  };
 };
 
 const PaymentSuccess = () => {
@@ -69,6 +106,18 @@ const PaymentSuccess = () => {
 
     const verifyBooking = async () => {
       try {
+        // Immediately confirm via fallback endpoint if we have the required info
+        if (pendingPayment?.bookingId && (paymentIntentId || pendingPayment?.paymentIntentId)) {
+          try {
+            await confirmBookingPayment(
+              pendingPayment.bookingId,
+              paymentIntentId || pendingPayment.paymentIntentId
+            );
+          } catch {
+            // ignore — webhook may have already confirmed it
+          }
+        }
+
         for (let attempt = 0; attempt < 6; attempt += 1) {
           const response = await getMyBookings();
           const bookings = Array.isArray(response) ? response : Array.isArray(response?.bookings) ? response.bookings : Array.isArray(response?.data) ? response.data : [];
@@ -76,13 +125,21 @@ const PaymentSuccess = () => {
             ...pendingPayment,
             paymentIntentId: paymentIntentId || pendingPayment?.paymentIntentId,
           });
+          const matchStatus = String(match?.status || '').toUpperCase();
 
-          if (match && String(match?.status || '').toUpperCase() === 'CONFIRMED') {
+          if (match && ['CONFIRMED', 'PAYMENT_SUCCESSFUL', 'PENDING'].includes(matchStatus)) {
             if (cancelled) return;
             setBooking(match);
-            setStatusMessage('Booking confirmed successfully.');
-            localStorage.removeItem(PAYMENT_STORAGE_KEY);
-            sessionStorage.removeItem(PAYMENT_INTENT_CACHE_KEY);
+            setStatusMessage(matchStatus === 'CONFIRMED' ? 'Booking confirmed successfully.' : 'Payment received. Booking is syncing to your account.');
+            if (matchStatus === 'CONFIRMED') {
+              localStorage.removeItem(PAYMENT_STORAGE_KEY);
+              sessionStorage.removeItem(PAYMENT_INTENT_CACHE_KEY);
+              sessionStorage.removeItem(PAYMENT_FLOW_STORAGE_KEY);
+              localStorage.removeItem(CURRENT_BOOKING_STORAGE_KEY);
+              if (pendingPayment?.scheduleId) {
+                localStorage.removeItem(`${BOOKING_DRAFT_PREFIX}${pendingPayment.scheduleId}`);
+              }
+            }
             setLoading(false);
             return;
           }
@@ -100,6 +157,14 @@ const PaymentSuccess = () => {
               : `Waiting for booking confirmation${attempt < 5 ? '...' : '.'}`
           );
           await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+
+        if (!cancelled && paymentSucceeded) {
+          const fallbackBooking = buildLatestBookingFallback(pendingPayment, paymentIntentId);
+          if (fallbackBooking) {
+            setBooking(fallbackBooking);
+            setStatusMessage('Payment received. Your booking will appear in My Bookings shortly.');
+          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -134,7 +199,7 @@ const PaymentSuccess = () => {
       : statusMessage;
 
   return (
-    <UserLayout activeItem="bookings" title="Payment Status">
+    <UserLayout activeItem="bookings" title="Payment Status" showHeaderSearch={false}>
       <div className="mx-auto max-w-4xl rounded-[32px] bg-[radial-gradient(circle_at_top,#fff3cf_0%,#f7fbff_28%,#eef4ff_100%)] p-4 text-slate-900 dark:bg-[linear-gradient(180deg,#040404_0%,#0b0b0b_100%)] dark:text-slate-100 md:p-6">
         <div className="rounded-[28px] bg-white p-6 shadow-[0_24px_70px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,#050505_0%,#0d0d0d_100%)] dark:ring-slate-900 md:p-8">
           <div className="mx-auto max-w-2xl text-center">
@@ -176,9 +241,7 @@ const PaymentSuccess = () => {
               <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">
                 {visualState === 'confirmed' ? 'Confirmed' : visualState === 'paid' ? 'Paid, syncing booking' : 'Processing'}
               </p>
-              {paymentIntentId ? (
-                <p className="mt-2 break-all text-xs text-slate-400 dark:text-slate-500">Payment Intent: {paymentIntentId}</p>
-              ) : null}
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Your payment has been received safely.</p>
             </div>
           </div>
 
@@ -187,12 +250,12 @@ const PaymentSuccess = () => {
               <span className="material-symbols-outlined mt-0.5 text-2xl text-amber-500">info</span>
               <div>
                 <p className="font-bold text-slate-900 dark:text-white">
-                  {visualState === 'confirmed' ? 'Everything is complete.' : 'Your payment is successful.'}
+                  {visualState === 'confirmed' ? 'Your booking is confirmed.' : 'Payment received successfully.'}
                 </p>
                 <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
                   {visualState === 'confirmed'
-                    ? 'You can open My Bookings to see the confirmed ticket details.'
-                    : 'Stripe has accepted the payment. If booking confirmation takes a few seconds, your ticket status will update automatically in My Bookings once the webhook finishes.'}
+                    ? 'You can now open My Bookings to view your ticket details and trip info.'
+                    : 'We are finishing your booking confirmation. This usually takes only a few seconds.'}
                 </p>
               </div>
             </div>
@@ -214,7 +277,9 @@ const PaymentSuccess = () => {
           </div>
 
           {loading && !booking ? (
-            <p className="mt-4 text-center text-xs text-slate-400 dark:text-slate-500">Confirmation usually appears within a few seconds.</p>
+            <div className="mt-4">
+              <InlineLoader label="Confirming your booking..." />
+            </div>
           ) : null}
         </div>
       </div>

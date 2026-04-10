@@ -43,4 +43,12 @@ public interface RouteScheduleRepository extends JpaRepository<RouteSchedule, UU
         @Param("departureTime") Instant departureTime,
         @Param("arrivalTime") Instant arrivalTime
     );
+
+    @Query("""
+        SELECT rs FROM RouteSchedule rs
+        WHERE rs.tripStatus NOT IN ('COMPLETED', 'CANCELLED')
+        AND rs.arrivalTime < :now
+        AND rs.frequency IS NULL
+        """)
+    List<RouteSchedule> findPastUncompletedSchedules(@Param("now") Instant now);
 }

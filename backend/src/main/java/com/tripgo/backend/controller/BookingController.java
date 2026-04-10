@@ -2,17 +2,14 @@ package com.tripgo.backend.controller;
 
 import com.tripgo.backend.dto.response.BoardingDroppingPointResponse;
 import com.tripgo.backend.model.entities.*;
-import com.tripgo.backend.model.enums.BookingStatus;
 import com.tripgo.backend.repository.*;
 import com.tripgo.backend.security.service.CustomUserDetails;
-import com.tripgo.backend.service.impl.EmailService;
 import com.tripgo.backend.service.impl.SeatLockService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
-import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
 
@@ -28,8 +25,6 @@ public class BookingController {
     private final BoardingDroppingPointRepository pointRepository;
     private final BookingRepository bookingRepository;
     private final BookingSeatRepository bookingSeatRepository;
-    private final PassengerRepository passengerRepository;
-    private final EmailService emailService;
 
     // ─── GET seats for schedule ───────────────────────────────────────────────
     @GetMapping("/schedules/{scheduleId}/seats")
@@ -111,155 +106,14 @@ public class BookingController {
         );
     }
 
-    // ─── POST confirm booking ─────────────────────────────────────────────────
-    /**
-     * Called after dummy/real payment succeeds.
-     * Body:
-     * {
-     *   "lockToken": "uuid",
-     *   "scheduleId": "uuid",
-     *   "from": "Bangalore",
-     *   "to": "Honnavar",
-     *   "totalAmount": 500,
-     *   "gstAmount": 90,
-     *   "payableAmount": 590,
-     *   "passengers": [
-     *     { "seatNumber": "L1", "firstName": "John", "lastName": "Doe",
-     *       "age": 25, "gender": "MALE", "phone": "9876543210" }
-     *   ]
-     * }
-     */
-    @PostMapping("/confirm")
-    public ResponseEntity<?> confirmBooking(
-            @RequestBody Map<String, Object> body,
-            Authentication auth) {
-
-        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
-
-        UUID scheduleId = UUID.fromString((String) body.get("scheduleId"));
-        UUID lockToken = UUID.fromString((String) body.get("lockToken"));
-        String from = (String) body.get("from");
-        String to = (String) body.get("to");
-        BigDecimal totalAmount = new BigDecimal(body.get("totalAmount").toString());
-        BigDecimal gstAmount = new BigDecimal(body.get("gstAmount").toString());
-        BigDecimal payableAmount = new BigDecimal(body.get("payableAmount").toString());
-
-        RouteSchedule schedule = scheduleRepo.findById(scheduleId)
-                .orElseThrow(() -> new RuntimeException("Schedule not found"));
-
-        // Verify lock token is valid
-        List<SeatLock> locks = lockRepo.findAll().stream()
-                .filter(l -> l.getLockToken().equals(lockToken)
-                        && l.getExpiresAt().isAfter(Instant.now())
-                        && l.getLockedBy().getId().equals(user.getId()))
-                .toList();
-
-        if (locks.isEmpty()) {
-            return ResponseEntity.badRequest()
-                    .body(Map.of("error", "Lock token expired or invalid. Please select seats again."));
-        }
-
-        // Create booking
-        String bookingCode = "TG" + System.currentTimeMillis() % 100000000;
-        Booking booking = Booking.builder()
-                .user(user)
-                .routeSchedule(schedule)
-                .operator(schedule.getRoute().getOperator())
-                .totalAmount(totalAmount)
-                .gstAmount(gstAmount)
-                .discountAmount(BigDecimal.ZERO)
-                .payableAmount(payableAmount)
-                .status(BookingStatus.CONFIRMED)
-                .bookingCode(bookingCode)
-                .build();
-
-        bookingRepository.save(booking);
-
-        // Save each passenger + booking seat
-        List<?> rawPassengers = (List<?>) body.get("passengers");
-        List<Map<String, Object>> passengers = rawPassengers.stream()
-                .map(p -> (Map<String, Object>) p)
-                .toList();
-
-        List<Map<String, Object>> bookedSeats = new ArrayList<>();
-
-        for (Map<String, Object> p : passengers) {
-            String seatNumber = (String) p.get("seatNumber");
-
-            // Save passenger
-            Passenger passenger = Passenger.builder()
-                    .user(user)
-                    .firstName((String) p.get("firstName"))
-                    .lastName((String) p.getOrDefault("lastName", ""))
-                    .age(p.get("age") != null ? (Integer) p.get("age") : null)
-                    .gender((String) p.getOrDefault("gender", ""))
-                    .phone((String) p.getOrDefault("phone", ""))
-                    .build();
-
-            passengerRepository.save(passenger);
-
-            // Find seat
-            Seat seat = seatRepository.findByBus(schedule.getBus()).stream()
-                    .filter(s -> s.getSeatNumber().equals(seatNumber))
-                    .findFirst()
-                    .orElse(null);
-
-            // Save booking seat
-            BigDecimal seatFare = payableAmount.divide(BigDecimal.valueOf(passengers.size()), 2, java.math.RoundingMode.HALF_UP);
-
-            BookingSeat bookingSeat = BookingSeat.builder()
-                    .booking(booking)
-                    .seat(seat)
-                    .seatNumber(seatNumber)
-                    .fare(seatFare)
-                    .passenger(passenger)
-                    .fromStop(from)
-                    .toStop(to)
-                    .build();
-
-            bookingSeatRepository.save(bookingSeat);
-
-            bookedSeats.add(Map.of(
-                    "seatNumber", seatNumber,
-                    "passenger", passenger.getFirstName() + " " + passenger.getLastName()
-            ));
-        }
-
-        // Release seat locks
-        lockService.release(lockToken);
-
-        // Send booking confirmation email
-        Map<String, Object> emailDetails = new LinkedHashMap<>();
-        emailDetails.put("bookingCode", booking.getBookingCode());
-        emailDetails.put("from", from);
-        emailDetails.put("to", to);
-        emailDetails.put("busName", schedule.getBus().getName());
-        emailDetails.put("operatorName", schedule.getRoute().getOperator().getName());
-        emailDetails.put("departureTime", schedule.getDepartureTime().toString());
-        emailDetails.put("arrivalTime", schedule.getArrivalTime().toString());
-        emailDetails.put("totalAmount", totalAmount);
-        emailDetails.put("gstAmount", gstAmount);
-        emailDetails.put("payableAmount", payableAmount);
-        emailDetails.put("passengers", passengers);
-        emailService.sendBookingConfirmation(user, emailDetails);
-
-        return ResponseEntity.ok(Map.of(
-                "bookingId", booking.getId(),
-                "bookingCode", booking.getBookingCode(),
-                "status", "CONFIRMED",
-                "totalAmount", totalAmount,
-                "payableAmount", payableAmount,
-                "seats", bookedSeats,
-                "message", "Booking confirmed successfully!"
-        ));
-    }
-
     // ─── GET my bookings (user) ───────────────────────────────────────────────
     @GetMapping("/my-bookings")
     public ResponseEntity<?> getMyBookings(Authentication auth) {
         User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
 
         List<Map<String, Object>> bookings = bookingRepository.findByUser(user).stream()
+                .filter(b -> b.getStatus() != com.tripgo.backend.model.enums.BookingStatus.PENDING
+                          && b.getStatus() != com.tripgo.backend.model.enums.BookingStatus.FAILED)
                 .map(b -> {
                     List<BookingSeat> seats = bookingSeatRepository.findByBookingId(b.getId());
 
@@ -275,6 +129,10 @@ public class BookingController {
                     result.put("totalAmount", b.getTotalAmount());
                     result.put("payableAmount", b.getPayableAmount());
                     result.put("bookedAt", b.getCreatedAt());
+                    result.put("cancelledBy", b.getCancelledBy());
+                    result.put("cancelReason", b.getCancelReason());
+                    result.put("refundAmount", b.getRefundAmount());
+                    result.put("refundStatus", b.getRefundStatus());
                     result.put("passengers", seats.stream().map(s -> {
                         Map<String, Object> p = new LinkedHashMap<>();
                         p.put("seatNumber", s.getSeatNumber());

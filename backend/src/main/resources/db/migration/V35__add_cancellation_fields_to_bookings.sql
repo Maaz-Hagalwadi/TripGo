@@ -1,0 +1,6 @@
+ALTER TABLE bookings
+    ADD COLUMN IF NOT EXISTS cancelled_by VARCHAR(20),
+    ADD COLUMN IF NOT EXISTS cancel_reason TEXT,
+    ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMP,
+    ADD COLUMN IF NOT EXISTS refund_amount NUMERIC(10, 2),
+    ADD COLUMN IF NOT EXISTS refund_status VARCHAR(20);

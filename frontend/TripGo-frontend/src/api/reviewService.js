@@ -1,4 +1,4 @@
-import { apiGet, apiPatch } from './apiClient';
+import { apiGet, apiPatch, apiPost } from './apiClient';
 
 const toQuery = (params = {}) => {
   const search = new URLSearchParams();
@@ -25,6 +25,14 @@ export const getOperatorScheduleReviews = async (scheduleId, { page = 0, size = 
 
 export const getAdminReviews = async (params = {}) => {
   return apiGet(`/admin/reviews${toQuery(params)}`);
+};
+
+export const getMyCompletedTrips = async () => {
+  return apiGet('/booking/my-completed-trips');
+};
+
+export const submitTripRating = async (scheduleId, payload) => {
+  return apiPost(`/booking/trips/${encodeURIComponent(scheduleId)}/rating`, payload);
 };
 
 export const hideAdminReview = async (reviewId, reason) => {

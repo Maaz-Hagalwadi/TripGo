@@ -15,14 +15,13 @@ const Dashboard = () => {
   useEffect(() => {
     if (loading) return;
     if (!user) { navigate(ROUTES.HOME); return; }
-    if (!user.phone) { navigate(ROUTES.COMPLETE_PROFILE, { replace: true }); return; }
     if (user.role === 'OPERATOR') { navigate(ROUTES.OPERATOR_DASHBOARD); return; }
     if (user.role === 'ADMIN') { navigate(ROUTES.ADMIN_DASHBOARD); return; }
     if (user.role && user.role !== 'USER') { navigate(ROUTES.HOME); }
   }, [user, loading, navigate]);
 
   return (
-    <UserLayout activeItem="dashboard" title="Dashboard">
+    <UserLayout activeItem="dashboard" title="" showHeaderTitle={false} showHeaderSearch={false}>
       <div className="min-h-screen bg-deep-black rounded-2xl overflow-hidden">
       <HeroSection />
       <WhyChooseUs />

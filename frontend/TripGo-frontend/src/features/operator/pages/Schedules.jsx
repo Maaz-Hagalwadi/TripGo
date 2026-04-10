@@ -10,6 +10,20 @@ import { ROUTES } from '../../../shared/constants/routes';
 import './OperatorDashboard.css';
 
 const isNumericValue = (value) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
+const getLicenseDate = (driver) => {
+  if (!driver?.licenseExpiry) return null;
+  const expiry = new Date(driver.licenseExpiry);
+  if (Number.isNaN(expiry.getTime())) return null;
+  expiry.setHours(0, 0, 0, 0);
+  return expiry;
+};
+const isDriverLicenseExpired = (driver) => {
+  const expiry = getLicenseDate(driver);
+  if (!expiry) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return expiry < today;
+};
 
 const Schedules = () => {
   const navigate = useNavigate();
@@ -560,10 +574,15 @@ const Schedules = () => {
       toast.error(drivers.length ? 'Please select a driver' : 'No drivers available. Add a driver first.');
       return;
     }
+    const assignedDriver = drivers.find(d => String(d.id) === String(driverId));
+    if (assignedDriver && isDriverLicenseExpired(assignedDriver)) {
+      toast.error('Expired drivers cannot be assigned to a bus.');
+      return;
+    }
     const loadingToastId = toast.loading('Assigning driver...');
     try {
       setAssigningDriver(prev => ({ ...prev, [scheduleId]: true }));
-      const assigned = drivers.find(d => String(d.id) === String(driverId));
+      const assigned = assignedDriver;
       const response = await assignDriverToSchedule(scheduleId, driverId);
       updateScheduleState(routeId, scheduleId, {
         driver: response?.driver || assigned || { id: driverId },
@@ -1336,7 +1355,11 @@ const Schedules = () => {
               {drivers.map((driver) => (
                 <label
                   key={driver.id}
-                  className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${
+                  className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                    isDriverLicenseExpired(driver)
+                      ? 'cursor-not-allowed border-red-200 bg-red-50/80 opacity-70 dark:border-red-900/40 dark:bg-red-950/20'
+                      : 'cursor-pointer'
+                  } ${
                     String(driverAssignModal.selectedDriverId) === String(driver.id)
                       ? 'border-primary bg-primary/5'
                       : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
@@ -1346,12 +1369,18 @@ const Schedules = () => {
                     <input
                       type="radio"
                       name="assign-driver"
+                      disabled={isDriverLicenseExpired(driver)}
                       checked={String(driverAssignModal.selectedDriverId) === String(driver.id)}
                       onChange={() => setDriverAssignModal(prev => ({ ...prev, selectedDriverId: String(driver.id) }))}
                     />
                     <div>
                       <p className="text-sm font-semibold">{getDriverName(driver)}</p>
                       <p className="text-xs text-slate-500">{driver.phone} · {driver.licenseNumber}</p>
+                      {isDriverLicenseExpired(driver) ? (
+                        <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
+                          License expired{driver.licenseExpiry ? ` on ${new Date(driver.licenseExpiry).toLocaleDateString()}` : ''}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 </label>

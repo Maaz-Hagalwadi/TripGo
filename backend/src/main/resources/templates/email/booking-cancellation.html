@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8"/>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f4f4; margin: 0; padding: 0; }
+        .container { max-width: 600px; margin: 30px auto; background: #fff; border-radius: 8px; overflow: hidden; }
+        .header { background: #e53e3e; padding: 24px; text-align: center; color: white; }
+        .header h1 { margin: 0; font-size: 22px; }
+        .body { padding: 28px; color: #333; }
+        .detail-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; }
+        .label { color: #666; font-size: 14px; }
+        .value { font-weight: bold; font-size: 14px; }
+        .refund-box { background: #f0fff4; border: 1px solid #68d391; border-radius: 6px; padding: 16px; margin: 20px 0; }
+        .no-refund-box { background: #fff5f5; border: 1px solid #fc8181; border-radius: 6px; padding: 16px; margin: 20px 0; }
+        .footer { text-align: center; padding: 16px; font-size: 12px; color: #999; }
+        .btn { display: inline-block; background: #3182ce; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; margin-top: 16px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Booking Cancelled</h1>
+    </div>
+    <div class="body">
+        <p>Hi <strong th:text="${firstName}">User</strong>,</p>
+        <p>Your booking has been cancelled. Here are the details:</p>
+
+        <div class="detail-row">
+            <span class="label">Booking Code</span>
+            <span class="value" th:text="${bookingCode}"></span>
+        </div>
+        <div class="detail-row">
+            <span class="label">Route</span>
+            <span class="value" th:text="${from + ' → ' + to}"></span>
+        </div>
+        <div class="detail-row">
+            <span class="label">Bus</span>
+            <span class="value" th:text="${busName}"></span>
+        </div>
+        <div class="detail-row">
+            <span class="label">Cancelled By</span>
+            <span class="value" th:text="${cancelledBy}"></span>
+        </div>
+        <div class="detail-row">
+            <span class="label">Reason</span>
+            <span class="value" th:text="${reason}"></span>
+        </div>
+
+        <div class="refund-box" th:if="${refundAmount > 0}">
+            <p style="margin:0; font-weight: bold; color: #276749;">
+                ✅ Refund of ₹<span th:text="${refundAmount}"></span> will be processed to your original payment method.
+            </p>
+            <p style="margin: 6px 0 0; font-size: 13px; color: #555;">
+                Refund Status: <strong th:text="${refundStatus}"></strong>. Usually takes 5–7 business days.
+            </p>
+        </div>
+
+        <div class="no-refund-box" th:if="${refundAmount == 0}">
+            <p style="margin:0; font-weight: bold; color: #c53030;">
+                ❌ No refund applicable as per our cancellation policy.
+            </p>
+        </div>
+
+        <a th:href="${frontendUrl + '/my-bookings'}" class="btn">View My Bookings</a>
+    </div>
+    <div class="footer">
+        &copy; TripGo. If you have questions, contact our support team.
+    </div>
+</div>
+</body>
+</html>

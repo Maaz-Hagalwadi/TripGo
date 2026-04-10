@@ -31,6 +31,35 @@ public class EmailService {
     private String frontendUrl;
 
     @Async
+    public void sendCancellationEmail(com.tripgo.backend.model.entities.Booking booking,
+                                       java.math.BigDecimal refundAmount,
+                                       String reason,
+                                       com.tripgo.backend.model.enums.CancelledBy cancelledBy) {
+        String cancelledByLabel = switch (cancelledBy) {
+            case USER -> "You";
+            case OPERATOR -> "The operator";
+            case SYSTEM -> "System";
+        };
+        sendTemplate(
+                booking.getUser().getEmail(),
+                "Booking Cancelled - " + booking.getBookingCode() + " | TripGo",
+                "booking-cancellation",
+                java.util.Map.of(
+                        "firstName", booking.getUser().getFirstName(),
+                        "bookingCode", booking.getBookingCode(),
+                        "from", booking.getRouteSchedule().getRoute().getOrigin(),
+                        "to", booking.getRouteSchedule().getRoute().getDestination(),
+                        "busName", booking.getRouteSchedule().getBus().getName(),
+                        "cancelledBy", cancelledByLabel,
+                        "reason", reason,
+                        "refundAmount", refundAmount,
+                        "refundStatus", booking.getRefundStatus(),
+                        "frontendUrl", frontendUrl
+                )
+        );
+    }
+
+    @Async
     public void sendBookingConfirmation(User user, Map<String, Object> bookingDetails) {
         Map<String, Object> model = new java.util.HashMap<>(bookingDetails);
         model.put("firstName", user.getFirstName());

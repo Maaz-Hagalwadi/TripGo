@@ -18,8 +18,14 @@ const ProfileModal = ({ user, onClose, onNameUpdate }) => {
   const handleSave = async () => {
     try {
       setSaving(true);
-      await updateCurrentUser({ firstName, lastName });
-      await onNameUpdate?.();
+      const trimmedFirstName = firstName.trim();
+      const trimmedLastName = lastName.trim();
+      const response = await updateCurrentUser({ firstName: trimmedFirstName, lastName: trimmedLastName });
+      onNameUpdate?.({
+        firstName: response?.firstName || trimmedFirstName,
+        lastName: response?.lastName || trimmedLastName,
+        name: [response?.firstName || trimmedFirstName, response?.lastName || trimmedLastName].filter(Boolean).join(' '),
+      });
       toast.success('Name updated successfully!');
       setEditing(false);
     } catch (err) {
@@ -117,10 +123,12 @@ const OperatorHeader = ({
   searchPlaceholder = 'Search buses, routes, or bookings...',
   roleLabel = 'Fleet Manager',
   profileRoute = null,
+  showTitle = true,
+  showSearch = true,
   children
 }) => {
   const navigate = useNavigate();
-  const { user, logout, checkAuth } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -136,15 +144,17 @@ const OperatorHeader = ({
     <>
     <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-op-bg flex items-center justify-between px-4 lg:px-8 shrink-0">
       <div className="flex items-center gap-4 flex-1">
-        <h2 className="text-lg font-semibold capitalize">{title}</h2>
-        <div className="operator-search relative max-w-md w-full ml-4 hidden md:block">
-          <span className="material-symbols-outlined absolute left-3 top-[11px] text-slate-400 text-[18px]">search</span>
-          <input
-            className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-lg pl-10 py-2 text-sm focus:ring-2 focus:ring-primary outline-none"
-            placeholder={searchPlaceholder}
-            type="text"
-          />
-        </div>
+        {showTitle && title ? <h2 className="text-lg font-semibold capitalize">{title}</h2> : null}
+        {showSearch ? (
+          <div className="operator-search relative max-w-md w-full ml-4 hidden md:block">
+            <span className="material-symbols-outlined absolute left-3 top-[11px] text-slate-400 text-[18px]">search</span>
+            <input
+              className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-lg pl-10 py-2 text-sm focus:ring-2 focus:ring-primary outline-none"
+              placeholder={searchPlaceholder}
+              type="text"
+            />
+          </div>
+        ) : null}
         {children}
       </div>
 
@@ -238,7 +248,7 @@ const OperatorHeader = ({
         </div>
       </div>
     </header>
-    {showProfile && !profileRoute && <ProfileModal user={user} onClose={() => setShowProfile(false)} onNameUpdate={checkAuth} />}
+    {showProfile && !profileRoute && <ProfileModal user={user} onClose={() => setShowProfile(false)} onNameUpdate={updateUser} />}
     </>
   );
 };

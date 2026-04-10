@@ -1,4 +1,4 @@
-import { apiGet, apiPatch } from './apiClient';
+import { apiGet, apiPost } from './apiClient';
 
 const toQuery = (params = {}) => {
   const search = new URLSearchParams();
@@ -15,6 +15,6 @@ export const getOperatorBookings = async (status) => {
   return apiGet(`/operator/bookings${toQuery({ status })}`);
 };
 
-export const cancelOperatorBooking = async (bookingId) => {
-  return apiPatch(`/operator/bookings/${bookingId}/cancel`);
+export const cancelOperatorBooking = async (bookingId, cancelReason) => {
+  return apiPost(`/booking/${encodeURIComponent(bookingId)}/operator-cancel`, { cancelReason });
 };

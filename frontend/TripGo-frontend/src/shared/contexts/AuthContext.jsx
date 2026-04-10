@@ -95,8 +95,12 @@ export const AuthProvider = ({ children }) => {
     toast.success('Logged out successfully.');
   };
 
+  const updateUser = (updates) => {
+    setUser((prev) => (prev ? { ...prev, ...updates } : prev));
+  };
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, loading, login, logout, checkAuth, suspendedWhileLoggedIn, setSuspendedWhileLoggedIn }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, loading, login, logout, checkAuth, updateUser, suspendedWhileLoggedIn, setSuspendedWhileLoggedIn }}>
       {children}
     </AuthContext.Provider>
   );

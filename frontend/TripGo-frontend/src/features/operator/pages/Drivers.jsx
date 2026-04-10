@@ -55,6 +55,7 @@ const Drivers = () => {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingDriverId, setDeletingDriverId] = useState(null);
   const [deleteModalDriver, setDeleteModalDriver] = useState(null);
+  const [viewMode, setViewMode] = useState('grid');
   const today = new Date();
   const expiringSoon = drivers.filter((d) => {
     if (!d.licenseExpiry) return false;
@@ -243,7 +244,21 @@ const Drivers = () => {
       </div>
 
       <div className="bg-white dark:bg-op-card border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-        <h3 className="font-bold mb-3">Driver List</h3>
+        <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <h3 className="font-bold">Driver List</h3>
+          <div className="inline-flex rounded-2xl bg-slate-100 p-1 dark:bg-white/5">
+            {['grid', 'list'].map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setViewMode(mode)}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${viewMode === mode ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-white' : 'text-slate-500 dark:text-slate-300'}`}
+              >
+                {mode === 'grid' ? 'Grid' : 'List'}
+              </button>
+            ))}
+          </div>
+        </div>
         {loadingDrivers ? (
           <div className="flex items-center gap-2 text-sm text-slate-500">
             <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary inline-block"></span>
@@ -252,11 +267,11 @@ const Drivers = () => {
         ) : drivers.length === 0 ? (
           <p className="text-sm text-slate-400">No drivers added yet.</p>
         ) : (
-          <div className="space-y-2">
+          <div className={viewMode === 'grid' ? 'grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4' : 'space-y-2'}>
             {drivers.map((driver) => (
               <div
                 key={driver.id}
-                className={`rounded-lg px-3 py-2 text-sm flex items-center justify-between ${
+                className={`rounded-lg px-3 py-3 text-sm ${viewMode === 'grid' ? '' : 'flex items-center justify-between'} ${
                   isLicenseExpired(driver)
                     ? 'bg-red-50 dark:bg-red-950/25 ring-1 ring-red-200 dark:ring-red-900/50'
                     : 'bg-slate-50 dark:bg-slate-800'
@@ -312,37 +327,41 @@ const Drivers = () => {
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold">{getDriverName(driver)}</span>
-                      {driver.phone && <span className="text-slate-400">· {driver.phone}</span>}
-                      {driver.licenseNumber && <span className="text-slate-400">· {driver.licenseNumber}</span>}
-                      {isLicenseExpired(driver) && (
-                        <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-600 dark:text-red-400">
-                          Driver Expired License
+                    <div className={`flex ${viewMode === 'grid' ? 'h-full flex-col gap-4' : 'items-center justify-between w-full'}`}>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold">{getDriverName(driver)}</span>
+                        {driver.phone && <span className="text-slate-400">· {driver.phone}</span>}
+                        {driver.licenseNumber && <span className="text-slate-400">· {driver.licenseNumber}</span>}
+                        {isLicenseExpired(driver) && (
+                          <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold text-red-600 dark:text-red-400">
+                            Driver Expired License
+                          </span>
+                        )}
+                      </div>
+                      <div className={`${viewMode === 'grid' ? 'mt-auto flex items-center justify-between gap-3 border-t border-slate-200 pt-3 dark:border-slate-700' : 'flex items-center gap-3'}`}>
+                        <span className={`text-xs ${isLicenseExpired(driver) ? 'text-red-600 dark:text-red-400 font-medium' : 'text-slate-400'}`}>
+                          {driver.licenseExpiry
+                            ? isLicenseExpired(driver)
+                              ? `Expired ${new Date(driver.licenseExpiry).toLocaleDateString()}`
+                              : `Expires ${new Date(driver.licenseExpiry).toLocaleDateString()}`
+                            : ''}
                         </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`text-xs ${isLicenseExpired(driver) ? 'text-red-600 dark:text-red-400 font-medium' : 'text-slate-400'}`}>
-                        {driver.licenseExpiry
-                          ? isLicenseExpired(driver)
-                            ? `Expired ${new Date(driver.licenseExpiry).toLocaleDateString()}`
-                            : `Expires ${new Date(driver.licenseExpiry).toLocaleDateString()}`
-                          : ''}
-                      </span>
-                      <button
-                        onClick={() => startEditDriver(driver)}
-                        className="text-xs text-primary hover:underline"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => requestDeleteDriver(driver)}
-                        disabled={deletingDriverId === driver.id}
-                        className="text-xs text-red-500 hover:underline disabled:opacity-60"
-                      >
-                        {deletingDriverId === driver.id ? 'Deleting...' : 'Delete'}
-                      </button>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => startEditDriver(driver)}
+                            className="text-xs text-primary hover:underline"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => requestDeleteDriver(driver)}
+                            disabled={deletingDriverId === driver.id}
+                            className="text-xs text-red-500 hover:underline disabled:opacity-60"
+                          >
+                            {deletingDriverId === driver.id ? 'Deleting...' : 'Delete'}
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </>
                 )}

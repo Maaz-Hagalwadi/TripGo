@@ -6,6 +6,7 @@ import { useAuth } from '../../../shared/contexts/AuthContext';
 import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { ROUTES } from '../../../shared/constants/routes';
 import UserLayout from '../../../shared/components/UserLayout';
+import SearchBar from '../../../shared/components/ui/SearchBar';
 import {
   formatUtcTime,
   getAvailableSeatCount,
@@ -23,17 +24,6 @@ const DEPARTURE_SLOTS = [
 ];
 
 const AMENITY_OPTIONS = ['WiFi', 'USB Port', 'Meal', 'Blanket', 'AC'];
-const CITY_OPTIONS = [
-  'Mumbai',
-  'Pune',
-  'Goa',
-  'Madgao',
-  'Bengaluru',
-  'Hyderabad',
-  'Chennai',
-  'Delhi',
-  'Kochi',
-];
 
 const formatTime = (instant) => {
   return formatUtcTime(instant);
@@ -134,9 +124,19 @@ const getTripStatusMeta = (tripStatus, delayMinutes) => {
   };
 };
 
-const toYmd = (date) => date.toISOString().split('T')[0];
-const TODAY_YMD = toYmd(new Date());
-const TOMORROW_YMD = toYmd(new Date(Date.now() + 24 * 60 * 60 * 1000));
+const normalizeCityLabel = (value) => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const SEARCH_DRAFT_STORAGE_KEY = 'tripgo_search_draft';
+
+const InlineLoader = ({ label }) => (
+  <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/40 border-t-primary" />
+    <span>{label}</span>
+  </div>
+);
 
 const BusCard = ({ bus, searchParams }) => {
   const navigate = useNavigate();
@@ -246,14 +246,25 @@ const SearchResults = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const { isDark } = useTheme();
+  const storedSearchDraft = (() => {
+    try {
+      const raw = localStorage.getItem(SEARCH_DRAFT_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })();
 
   const [buses, setBuses] = useState([]);
-  const [loadingBuses, setLoadingBuses] = useState(Boolean(location.state?.from && location.state?.to && location.state?.date));
+  const [loadingBuses, setLoadingBuses] = useState(Boolean(
+    (location.state?.from && location.state?.to && location.state?.date)
+    || (storedSearchDraft?.from && storedSearchDraft?.to && storedSearchDraft?.date)
+  ));
   const [error, setError] = useState(null);
   const initialSearch = {
-    from: location.state?.from || '',
-    to: location.state?.to || '',
-    date: location.state?.date || new Date().toISOString().split('T')[0],
+    from: normalizeCityLabel(location.state?.from || storedSearchDraft?.from || ''),
+    to: normalizeCityLabel(location.state?.to || storedSearchDraft?.to || ''),
+    date: location.state?.date || storedSearchDraft?.date || new Date().toISOString().split('T')[0],
   };
   const [searchParams, setSearchParams] = useState(initialSearch);
   const [appliedSearch, setAppliedSearch] = useState(initialSearch);
@@ -379,91 +390,14 @@ const SearchResults = () => {
     [filteredBuses]
   );
 
-  const handleModifySearch = () => {
-    const trimmedSearch = {
-      from: searchParams.from.trim(),
-      to: searchParams.to.trim(),
-      date: searchParams.date,
-    };
-    if (trimmedSearch.from && trimmedSearch.to && trimmedSearch.date) {
-      setAppliedSearch(trimmedSearch);
-    }
-  };
-
-  const cityOptions = useMemo(
-    () => [...new Set([...CITY_OPTIONS, searchParams.from, searchParams.to, appliedSearch.from, appliedSearch.to].filter(Boolean))],
-    [searchParams.from, searchParams.to, appliedSearch.from, appliedSearch.to]
-  );
-
   const allMaxPrice = useMemo(() => {
     if (!buses.length) return 5000;
     return Math.ceil(Math.max(...buses.map(b => minFare(b.faresByType))) / 100) * 100;
   }, [buses]);
 
   return (
-    <UserLayout activeItem="search" title="Search Buses">
+    <UserLayout activeItem="search" title="Search Results" showHeaderSearch={false}>
       <div className={`overflow-visible rounded-[32px] ${isDark ? 'bg-deep-black text-slate-100' : 'bg-[linear-gradient(180deg,#f8fbff_0%,#eef4ff_100%)] text-slate-900'}`}>
-
-      <div className={`sticky top-0 z-40 py-5 backdrop-blur-xl ${isDark ? 'bg-charcoal/90' : 'bg-white/85 shadow-[0_12px_30px_rgba(15,23,42,0.06)]'}`}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-4 items-center">
-            <div className="relative">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 z-10 text-xl text-slate-400">location_on</span>
-              <input value={searchParams.from} onChange={e => setSearchParams(p => ({ ...p, from: e.target.value }))}
-                list="from-city-options"
-                className="w-full rounded-2xl bg-slate-100/90 px-10 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200/80 focus:ring-2 focus:ring-primary dark:bg-input-gray dark:text-white dark:ring-white/10"
-                placeholder="Departure City" type="text" />
-              <datalist id="from-city-options">
-                {cityOptions.map((city) => (
-                  <option key={`from-${city}`} value={city} />
-                ))}
-              </datalist>
-            </div>
-            <div className="relative">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 z-10 text-xl text-slate-400">directions_bus</span>
-              <input value={searchParams.to} onChange={e => setSearchParams(p => ({ ...p, to: e.target.value }))}
-                list="to-city-options"
-                className="w-full rounded-2xl bg-slate-100/90 px-10 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200/80 focus:ring-2 focus:ring-primary dark:bg-input-gray dark:text-white dark:ring-white/10"
-                placeholder="Destination City" type="text" />
-              <datalist id="to-city-options">
-                {cityOptions.map((city) => (
-                  <option key={`to-${city}`} value={city} />
-                ))}
-              </datalist>
-            </div>
-            <div className="relative">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 z-10 text-xl text-slate-400">calendar_today</span>
-              <input value={searchParams.date} onChange={e => setSearchParams(p => ({ ...p, date: e.target.value }))}
-                className="w-full rounded-2xl bg-slate-100/90 px-10 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200/80 focus:ring-2 focus:ring-primary dark:bg-input-gray dark:text-white dark:ring-white/10"
-                type="date" />
-            </div>
-            <button onClick={handleModifySearch}
-              className="flex h-[48px] w-full items-center justify-center gap-2 rounded-2xl bg-primary font-bold text-black transition-all hover:bg-primary/90">
-              <span className="material-symbols-outlined text-lg">edit</span> Modify
-            </button>
-          </div>
-          <div className="mt-4 flex gap-2">
-            <button
-              onClick={() => {
-                setSearchParams((p) => ({ ...p, date: TODAY_YMD }));
-                setAppliedSearch((p) => ({ ...p, date: TODAY_YMD }));
-              }}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${searchParams.date === TODAY_YMD ? 'bg-primary/10 text-primary ring-1 ring-primary/30' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10'}`}
-            >
-              Today
-            </button>
-            <button
-              onClick={() => {
-                setSearchParams((p) => ({ ...p, date: TOMORROW_YMD }));
-                setAppliedSearch((p) => ({ ...p, date: TOMORROW_YMD }));
-              }}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${searchParams.date === TOMORROW_YMD ? 'bg-primary/10 text-primary ring-1 ring-primary/30' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10'}`}
-            >
-              Tomorrow
-            </button>
-          </div>
-        </div>
-      </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col gap-8 lg:flex-row">
@@ -537,6 +471,18 @@ const SearchResults = () => {
           </aside>
 
           <div className="flex-1 space-y-4">
+            <div className="rounded-[28px] bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-charcoal dark:ring-white/5">
+              <SearchBar
+                showQuickDates={false}
+                initialValues={appliedSearch}
+                submitLabel="Modify"
+                submitIcon="edit"
+                onSubmit={(nextSearch) => {
+                  setSearchParams(nextSearch);
+                  setAppliedSearch(nextSearch);
+                }}
+              />
+            </div>
             <div className="rounded-[28px] bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-charcoal dark:ring-white/5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
@@ -562,10 +508,7 @@ const SearchResults = () => {
 
             {loadingBuses && (
               <div className="flex items-center justify-center py-20">
-                <div className="text-center">
-                  <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                  <p className="text-slate-400">Searching for buses...</p>
-                </div>
+                <InlineLoader label="Searching for buses..." />
               </div>
             )}
 

@@ -22,6 +22,11 @@ import {
   lockScheduleSeats,
 } from '../../../api/bookingService';
 
+const CURRENT_BOOKING_STORAGE_KEY = 'tripgo_current_booking_state';
+const BOOKING_DRAFT_PREFIX = 'tripgo_booking_draft_';
+const SAVED_TRAVELERS_KEY = 'tripgo_saved_travelers';
+const SAVED_CONTACT_KEY = 'tripgo_saved_contact';
+const RECENT_TRAVELERS_LIMIT = 6;
 const seatComparator = (a, b) => String(a.seatNumber || '').localeCompare(String(b.seatNumber || ''), undefined, { numeric: true, sensitivity: 'base' });
 const SEATER_COL_MAP = { A: 0, B: 1, C: 2, D: 3 };
 
@@ -225,6 +230,71 @@ const SUBTLE_PANEL_CLASS = 'rounded-2xl bg-slate-50 ring-1 ring-slate-200/70 dar
 const SOFT_BUTTON_CLASS = 'rounded-xl bg-slate-100 px-4 py-2 text-slate-700 hover:bg-slate-200 dark:bg-white/[0.05] dark:text-slate-200 dark:hover:bg-white/[0.09]';
 const createEmptyPassenger = (seatNumber = '') => ({ seatNumber, name: '', age: '', gender: '', phone: '', email: '' });
 
+const readStorage = (key, storage = localStorage) => {
+  try {
+    const raw = storage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const writeStorage = (key, value, storage = localStorage) => {
+  try {
+    storage.setItem(key, JSON.stringify(value));
+  } catch {
+    // ignore storage errors
+  }
+};
+
+const removeStorage = (key, storage = localStorage) => {
+  try {
+    storage.removeItem(key);
+  } catch {
+    // ignore storage errors
+  }
+};
+
+const normalizeTraveler = (traveler = {}) => ({
+  seatNumber: traveler?.seatNumber || '',
+  name: traveler?.name || [traveler?.firstName, traveler?.lastName].filter(Boolean).join(' '),
+  age: traveler?.age ?? '',
+  gender: traveler?.gender || '',
+  phone: traveler?.phone || '',
+  email: traveler?.email || '',
+});
+
+const getTravelerLabel = (traveler = {}) => {
+  const fullName = normalizeTraveler(traveler).name.trim();
+  if (!fullName) return 'Saved traveler';
+  return fullName;
+};
+
+const dedupeTravelers = (travelers = []) => {
+  const unique = new Map();
+
+  travelers.forEach((traveler) => {
+    const normalized = normalizeTraveler(traveler);
+    const key = [
+      normalized.name.trim().toLowerCase(),
+      normalized.phone.trim(),
+      normalized.email.trim().toLowerCase(),
+    ].join('|');
+
+    if (!normalized.name.trim() || !key.replace(/\|/g, '')) return;
+    if (!unique.has(key)) unique.set(key, normalized);
+  });
+
+  return [...unique.values()].slice(0, RECENT_TRAVELERS_LIMIT);
+};
+
+const InlineLoader = ({ label }) => (
+  <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/40 border-t-primary" />
+    <span>{label}</span>
+  </div>
+);
+
 const DetailCard = ({ icon, title, subtitle, children, className = '' }) => (
   <div className={`rounded-[30px] bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,rgba(12,12,12,0.96)_0%,rgba(6,6,6,0.98)_100%)] dark:shadow-[0_30px_70px_rgba(0,0,0,0.45)] dark:ring-white/10 ${className}`}>
     <div className="mb-4 flex items-start gap-3">
@@ -243,28 +313,36 @@ const DetailCard = ({ icon, title, subtitle, children, className = '' }) => (
 const Booking = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { bus, selectedType, selectedFare, searchParams } = location.state || {};
+  const persistedBookingState = location.state?.bus ? null : readStorage(CURRENT_BOOKING_STORAGE_KEY);
+  const bookingState = location.state?.bus ? location.state : (persistedBookingState || {});
+  const { bus, selectedType, selectedFare, searchParams } = bookingState;
   const scheduleId = bus?.scheduleId || bus?.id;
+  const draftKey = scheduleId ? `${BOOKING_DRAFT_PREFIX}${scheduleId}` : '';
+  const savedDraft = draftKey ? readStorage(draftKey) : null;
+  const savedTravelers = readStorage(SAVED_TRAVELERS_KEY, localStorage) || [];
+  const savedLockExpiresAt = Number(savedDraft?.lockExpiresAt || 0);
+  const hasActiveSavedLock = savedLockExpiresAt > Date.now();
 
-  const [step, setStep] = useState('seats');
-  const [selectedSeats, setSelectedSeats] = useState([]);
+  const [step, setStep] = useState(hasActiveSavedLock && savedDraft?.step === 'details' ? 'details' : 'seats');
+  const [selectedSeats, setSelectedSeats] = useState(Array.isArray(savedDraft?.selectedSeats) ? savedDraft.selectedSeats : []);
   const [seatsResponse, setSeatsResponse] = useState(null);
   const [loadingSeats, setLoadingSeats] = useState(false);
   const [loadingSeatsError, setLoadingSeatsError] = useState('');
-  const [lockInfo, setLockInfo] = useState(null);
+  const [lockInfo, setLockInfo] = useState(hasActiveSavedLock ? (savedDraft?.lockInfo || null) : null);
   const [lockingSeats, setLockingSeats] = useState(false);
-  const [lockExpiresAt, setLockExpiresAt] = useState(null);
-  const [lockSecondsLeft, setLockSecondsLeft] = useState(0);
+  const [lockExpiresAt, setLockExpiresAt] = useState(hasActiveSavedLock ? savedLockExpiresAt : null);
+  const [lockSecondsLeft, setLockSecondsLeft] = useState(hasActiveSavedLock ? Math.max(0, Math.floor((savedLockExpiresAt - Date.now()) / 1000)) : 0);
   const [points, setPoints] = useState({ boardingPoints: [], droppingPoints: [] });
   const [loadingPoints, setLoadingPoints] = useState(false);
-  const [selection, setSelection] = useState({ boardingPointId: '', droppingPointId: '' });
-  const [contact, setContact] = useState({ countryCode: '+91', phone: '', email: '', stateOfResidence: '', whatsappOptIn: false });
+  const [selection, setSelection] = useState(savedDraft?.selection || { boardingPointId: '', droppingPointId: '' });
+  const [contact, setContact] = useState(savedDraft?.contact || { countryCode: '+91', phone: '', email: '', stateOfResidence: '', whatsappOptIn: false });
   const [passengers, setPassengers] = useState([]);
   const [routeInfo, setRouteInfo] = useState(null);
   const [policiesInfo, setPoliciesInfo] = useState(null);
   const [featuresInfo, setFeaturesInfo] = useState(null);
   const [ratingSummary, setRatingSummary] = useState(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
+  const recentTravelers = useMemo(() => dedupeTravelers(savedTravelers), [savedTravelers]);
 
   const refreshSeats = async () => {
     if (!scheduleId) return;
@@ -278,6 +356,25 @@ const Booking = () => {
       setLoadingSeats(false);
     }
   };
+
+  useEffect(() => {
+    if (!bus) return;
+    writeStorage(CURRENT_BOOKING_STORAGE_KEY, bookingState);
+  }, [bookingState, bus]);
+
+  useEffect(() => {
+    if (!draftKey || !bus) return;
+    writeStorage(draftKey, {
+      step,
+      selectedSeats,
+      selection,
+      contact,
+      passengers,
+      lockInfo,
+      lockExpiresAt,
+      updatedAt: new Date().toISOString(),
+    });
+  }, [draftKey, bus, step, selectedSeats, selection, contact, passengers, lockInfo, lockExpiresAt]);
 
   useEffect(() => {
     if (!scheduleId) return;
@@ -306,19 +403,34 @@ const Booking = () => {
     const tick = () => {
       const left = Math.max(0, Math.floor((lockExpiresAt - Date.now()) / 1000));
       setLockSecondsLeft(left);
-      if (left <= 0) setStep('seats');
+      if (left <= 0) {
+        setStep('seats');
+        setLockInfo(null);
+        setLockExpiresAt(null);
+        if (draftKey) removeStorage(draftKey);
+      }
     };
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
-  }, [lockExpiresAt]);
+  }, [draftKey, lockExpiresAt]);
 
   useEffect(() => {
     setPassengers((prev) => {
+      const draftPassengers = Array.isArray(savedDraft?.passengers) ? savedDraft.passengers : [];
       const bySeat = new Map(prev.map((item) => [item.seatNumber, item]));
-      return selectedSeats.map((seatNumber) => bySeat.get(seatNumber) || createEmptyPassenger(seatNumber));
+      const draftBySeat = new Map(draftPassengers.map((item) => [item.seatNumber, normalizeTraveler(item)]));
+      return selectedSeats.map((seatNumber, index) => {
+        const existing = bySeat.get(seatNumber);
+        if (existing) return existing;
+
+        const fromDraft = draftBySeat.get(seatNumber);
+        if (fromDraft) return { ...createEmptyPassenger(seatNumber), ...fromDraft, seatNumber };
+
+        return createEmptyPassenger(seatNumber);
+      });
     });
-  }, [selectedSeats]);
+  }, [selectedSeats, savedDraft?.passengers]);
 
   useEffect(() => {
     if (!scheduleId) return;
@@ -432,6 +544,27 @@ const Booking = () => {
     )));
   };
 
+  const applyTravelerToSeat = (seatNumber, traveler) => {
+    const normalized = normalizeTraveler(traveler);
+    setPassengers((prev) => prev.map((item) => (
+      item.seatNumber === seatNumber
+        ? {
+            ...item,
+            ...normalized,
+            seatNumber,
+          }
+        : item
+    )));
+  };
+
+  const resetTravelerForSeat = (seatNumber) => {
+    setPassengers((prev) => prev.map((item) => (
+      item.seatNumber === seatNumber
+        ? createEmptyPassenger(seatNumber)
+        : item
+    )));
+  };
+
   if (!bus) {
     return (
       <UserLayout activeItem="search" title="Select Seat">
@@ -444,7 +577,7 @@ const Booking = () => {
   }
 
   return (
-    <UserLayout activeItem="search" title="Booking Flow">
+    <UserLayout activeItem="search" title="Booking Details" showHeaderSearch={false}>
       <div className="space-y-6 bg-[linear-gradient(180deg,#f7fbff_0%,#eef4ff_100%)] p-4 text-slate-900 dark:bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.14),transparent_0%,transparent_32%),linear-gradient(180deg,#040404_0%,#0b0b0b_100%)] dark:text-slate-100 md:rounded-[32px] md:p-6">
         <div className="grid gap-4 xl:grid-cols-[1.65fr_0.9fr]">
           <div className="rounded-[30px] bg-[linear-gradient(135deg,#ffffff,#f4f8ff)] p-5 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(135deg,rgba(9,9,9,0.96),rgba(17,17,17,0.92))] dark:shadow-[0_30px_70px_rgba(0,0,0,0.45)] dark:ring-white/10">
@@ -463,7 +596,7 @@ const Booking = () => {
               <div className="rounded-3xl bg-slate-100 px-5 py-4 text-right dark:bg-white/[0.04] dark:ring-1 dark:ring-white/10">
                 <p className="text-xs uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Fare</p>
                 <p className="mt-1 text-3xl font-black text-primary">₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}</p>
-                {!!selectedSeats.length ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">{selectedSeats.length} seat{selectedSeats.length > 1 ? 's' : ''} selected</p> : null}
+                {selectedSeats.length ? <p className="mt-1 text-xs text-slate-500 dark:text-slate-300">{selectedSeats.length} seat{selectedSeats.length > 1 ? 's' : ''} selected</p> : null}
               </div>
             </div>
 
@@ -480,7 +613,7 @@ const Booking = () => {
               ))}
             </div>
 
-            {loadingMeta ? <p className="mt-3 text-[11px] text-slate-500 dark:text-slate-400">Updating route and policy details...</p> : null}
+            {loadingMeta ? <div className="mt-3"><InlineLoader label="Refreshing trip details..." /></div> : null}
           </div>
 
           <div className="rounded-[30px] bg-[linear-gradient(180deg,#eaf7ff,rgba(255,255,255,0.9))] p-5 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-sky-100 dark:bg-[linear-gradient(180deg,rgba(12,18,30,0.95)_0%,rgba(7,7,7,0.98)_100%)] dark:shadow-[0_30px_70px_rgba(0,0,0,0.45)] dark:ring-sky-500/20">
@@ -493,8 +626,8 @@ const Booking = () => {
             </div>
             <p className="mt-4 text-sm leading-6 text-slate-600 dark:text-slate-300">
               {lockInfo && lockSecondsLeft > 0
-                ? <>Make payment within <span className="font-black text-slate-900 dark:text-white">{formatCountdown(lockSecondsLeft)}</span> or the seat lock will expire.</>
-                : 'Select your seats and lock them to start the payment countdown.'}
+                ? <>Complete payment in <span className="font-black text-slate-900 dark:text-white">{formatCountdown(lockSecondsLeft)}</span> to keep these seats reserved for you.</>
+                : 'Choose your seats to reserve them briefly before payment.'}
             </p>
             <div className="mt-5 rounded-2xl bg-white/80 p-4 ring-1 ring-slate-200/70 dark:bg-white/[0.04] dark:ring-white/10">
               <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
@@ -529,7 +662,7 @@ const Booking = () => {
             </div>
             {loadingSeatsError ? <p className="mb-3 text-sm text-red-500">{loadingSeatsError}</p> : null}
             {loadingSeats ? (
-              <p className="text-sm text-slate-600 dark:text-slate-300">Loading seats...</p>
+              <InlineLoader label="Loading seat layout..." />
             ) : seats.length === 0 ? (
               <p className="text-sm text-slate-600 dark:text-slate-300">Seat layout is not available for this bus yet.</p>
             ) : (
@@ -616,6 +749,19 @@ const Booking = () => {
           <div className="grid gap-6 xl:grid-cols-[1.5fr_0.85fr]">
             <div className="space-y-6">
               <DetailCard icon="contact_mail" title="Passenger & contact details" subtitle="This is the same info used for tickets, GST details, and trip updates.">
+                {recentTravelers.length > 0 ? (
+                  <div className="mb-5 rounded-2xl bg-emerald-50 px-4 py-4 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:ring-emerald-500/20">
+                    <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-200">Saved travelers available</p>
+                    <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300">Pick a saved traveler per seat, or leave it on new traveler and enter fresh details.</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {recentTravelers.map((traveler, index) => (
+                        <span key={`${getTravelerLabel(traveler)}-${index}`} className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200 dark:bg-black/20 dark:text-emerald-200 dark:ring-emerald-500/20">
+                          {getTravelerLabel(traveler)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
                     <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Country Code</label>
@@ -658,6 +804,35 @@ const Booking = () => {
                         <p className="text-sm font-bold text-slate-900 dark:text-white">Passenger {index + 1}</p>
                         <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">Seat {passenger.seatNumber || '--'}</span>
                       </div>
+                      {recentTravelers.length > 0 ? (
+                        <div className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]">
+                          <div>
+                            <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Choose saved traveler</label>
+                            <select
+                              value={recentTravelers.findIndex((traveler) => normalizeTraveler(traveler).name === passenger.name && normalizeTraveler(traveler).phone === passenger.phone && normalizeTraveler(traveler).email === passenger.email)}
+                              onChange={(e) => {
+                                const selectedIndex = Number(e.target.value);
+                                if (selectedIndex < 0) {
+                                  resetTravelerForSeat(passenger.seatNumber);
+                                  return;
+                                }
+                                applyTravelerToSeat(passenger.seatNumber, recentTravelers[selectedIndex]);
+                              }}
+                              className={INPUT_SHELL_CLASS}
+                            >
+                              <option value={-1}>Enter new traveler</option>
+                              {recentTravelers.map((traveler, travelerIndex) => (
+                                <option key={`${getTravelerLabel(traveler)}-${travelerIndex}`} value={travelerIndex}>
+                                  {getTravelerLabel(traveler)}{traveler?.phone ? ` · ${traveler.phone}` : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <button type="button" onClick={() => resetTravelerForSeat(passenger.seatNumber)} className="mt-6 rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-white/[0.05] dark:text-slate-200 dark:hover:bg-white/[0.09]">
+                            Clear
+                          </button>
+                        </div>
+                      ) : null}
                       <div className="grid gap-4 md:grid-cols-2">
                         <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Passenger Name *</label><input value={passenger.name} onChange={(e) => updatePassenger(passenger.seatNumber, 'name', e.target.value)} placeholder="Enter passenger name" className={INPUT_SHELL_CLASS} /></div>
                         <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Age *</label><input type="number" min="1" value={passenger.age} onChange={(e) => updatePassenger(passenger.seatNumber, 'age', e.target.value)} placeholder="Enter age" className={INPUT_SHELL_CLASS} /></div>
@@ -672,7 +847,7 @@ const Booking = () => {
 
               <DetailCard icon="alt_route" title="Boarding & dropping" subtitle="Pickup and drop points fetched for this schedule.">
                 {loadingPoints ? (
-                  <p className="text-sm text-slate-600 dark:text-slate-300">Loading boarding/dropping points...</p>
+                  <InlineLoader label="Loading boarding and dropping points..." />
                 ) : (
                   <>
                     <div className="grid gap-4 md:grid-cols-2">
@@ -697,7 +872,7 @@ const Booking = () => {
                   <div className="rounded-2xl bg-primary/10 px-4 py-4 dark:bg-primary/12 dark:ring-1 dark:ring-primary/20">
                     <p className="text-xs uppercase tracking-[0.2em] text-primary/90">Payment timer</p>
                     <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">{lockSecondsLeft > 0 ? formatCountdown(lockSecondsLeft) : 'Expired'}</p>
-                    <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Make payment within the timer window or the seat lock will expire.</p>
+                    <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Finish payment before the timer ends to keep these seats reserved.</p>
                   </div>
                 </div>
                 <div className="mt-5 flex gap-3">
@@ -715,7 +890,16 @@ const Booking = () => {
                       if (lockSecondsLeft <= 0) return toast.error('Seat lock expired. Please select and lock seats again.');
                       if (boardingPoints.length > 0 && !selection.boardingPointId) return toast.error('Please select a boarding point');
                       if (droppingPoints.length > 0 && !selection.droppingPointId) return toast.error('Please select a dropping point');
-                      navigate(ROUTES.PAYMENT, { state: { bus, scheduleId, selectedSeats, selectedFare, selectedType, searchParams, contact, passengers, selection, lockSecondsLeft, lockToken: lockInfo?.lockToken || '', lockInfo } });
+                      writeStorage(SAVED_CONTACT_KEY, contact, localStorage);
+                      writeStorage(
+                        SAVED_TRAVELERS_KEY,
+                        dedupeTravelers([
+                          ...passengers.map((passenger) => normalizeTraveler(passenger)),
+                          ...recentTravelers,
+                        ]),
+                        localStorage
+                      );
+                      navigate(ROUTES.PAYMENT, { state: { bus, scheduleId, selectedSeats, selectedFare, selectedType, searchParams, contact, passengers, selection, lockSecondsLeft, lockExpiresAt, lockToken: lockInfo?.lockToken || '', lockInfo } });
                     }}
                     className="flex-1 rounded-xl bg-primary px-4 py-2 font-semibold text-black hover:bg-primary/90"
                   >
