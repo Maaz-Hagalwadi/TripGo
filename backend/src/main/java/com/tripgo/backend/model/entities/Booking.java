@@ -1,6 +1,7 @@
 package com.tripgo.backend.model.entities;
 
 import com.tripgo.backend.model.enums.BookingStatus;
+import com.tripgo.backend.model.enums.CancelledBy;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -53,6 +54,25 @@ public class Booking {
 
     @Column(name = "booking_code", unique = true)
     private String bookingCode;
+
+    @Column(name = "travel_date")
+    private java.time.LocalDate travelDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cancelled_by")
+    private CancelledBy cancelledBy;
+
+    @Column(name = "cancel_reason")
+    private String cancelReason;
+
+    @Column(name = "cancelled_at")
+    private Instant cancelledAt;
+
+    @Column(name = "refund_amount")
+    private BigDecimal refundAmount;
+
+    @Column(name = "refund_status")
+    private String refundStatus; // PENDING, PROCESSED, NA
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

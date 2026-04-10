@@ -34,7 +34,7 @@ public class Ticket {
     private String pdfUrl;
 
     // QR stored as bytes
-    @Lob
+    @Column(name = "qr_code", columnDefinition = "bytea")
     private byte[] qrCode;
 
     @Enumerated(EnumType.STRING)

@@ -2,22 +2,78 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCities } from '../../../api/routeService';
 
-const SearchBar = ({ showQuickDates = true }) => {
+const SEARCH_DRAFT_STORAGE_KEY = 'tripgo_search_draft';
+const toCityKey = (value) => String(value || '').trim().toLowerCase();
+
+const toDisplayCityName = (value) => String(value || '')
+  .trim()
+  .toLowerCase()
+  .replace(/\b\w/g, (char) => char.toUpperCase());
+
+const normalizeCityOptions = (list) => {
+  const unique = new Map();
+
+  list.forEach((entry) => {
+    const rawName = typeof entry === 'string' ? entry : entry?.name;
+    const normalizedName = String(rawName || '').trim();
+    const key = toCityKey(normalizedName);
+    if (!key) return;
+
+    const nextOption = {
+      value: normalizedName,
+      label: toDisplayCityName(normalizedName),
+    };
+
+    if (!unique.has(key)) {
+      unique.set(key, nextOption);
+      return;
+    }
+
+    const existing = unique.get(key);
+    const shouldReplace = existing.label === existing.value && nextOption.label !== nextOption.value;
+    if (shouldReplace) unique.set(key, nextOption);
+  });
+
+  return [...unique.values()];
+};
+
+const SearchBar = ({
+  showQuickDates = true,
+  persistDraft = true,
+  initialValues = null,
+  submitLabel = 'Search',
+  submitIcon = 'search',
+  onSubmit = null,
+}) => {
   const navigate = useNavigate();
   const today = new Date().toISOString().split('T')[0];
   const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const storedDraft = (() => {
+    if (!persistDraft) return null;
+    try {
+      const raw = localStorage.getItem(SEARCH_DRAFT_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  })();
   const [isMobile, setIsMobile] = useState(false);
   const [cities, setCities] = useState([]);
+  const resolvedInitialValues = {
+    from: initialValues?.from || storedDraft?.from || '',
+    to: initialValues?.to || storedDraft?.to || '',
+    date: initialValues?.date || storedDraft?.date || today,
+  };
   const [formData, setFormData] = useState({
-    from: '',
-    to: '',
-    date: today
+    from: resolvedInitialValues.from,
+    to: resolvedInitialValues.to,
+    date: resolvedInitialValues.date,
   });
   const [errors, setErrors] = useState({});
   const [showFromDropdown, setShowFromDropdown] = useState(false);
   const [showToDropdown, setShowToDropdown] = useState(false);
-  const [fromSearch, setFromSearch] = useState('');
-  const [toSearch, setToSearch] = useState('');
+  const [fromSearch, setFromSearch] = useState(resolvedInitialValues.from ? toDisplayCityName(resolvedInitialValues.from) : '');
+  const [toSearch, setToSearch] = useState(resolvedInitialValues.to ? toDisplayCityName(resolvedInitialValues.to) : '');
   const fromRef = useRef(null);
   const toRef = useRef(null);
   
@@ -35,10 +91,29 @@ const SearchBar = ({ showQuickDates = true }) => {
   useEffect(() => {
     const fetchCities = async () => {
       const data = await getCities();
-      setCities(data);
+      setCities(normalizeCityOptions(Array.isArray(data) ? data : []));
     };
     fetchCities();
   }, []);
+
+  useEffect(() => {
+    setFormData({
+      from: initialValues?.from || '',
+      to: initialValues?.to || '',
+      date: initialValues?.date || today,
+    });
+    setFromSearch(initialValues?.from ? toDisplayCityName(initialValues.from) : '');
+    setToSearch(initialValues?.to ? toDisplayCityName(initialValues.to) : '');
+  }, [initialValues?.date, initialValues?.from, initialValues?.to, today]);
+
+  useEffect(() => {
+    if (!persistDraft) return;
+    try {
+      localStorage.setItem(SEARCH_DRAFT_STORAGE_KEY, JSON.stringify(formData));
+    } catch {
+      // ignore storage errors
+    }
+  }, [formData, persistDraft]);
   
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -58,26 +133,26 @@ const SearchBar = ({ showQuickDates = true }) => {
     document.getElementById('dateInput').showPicker();
   };
 
-  const filteredFromCities = cities.filter(city => 
-    city.toLowerCase().includes(fromSearch.toLowerCase())
+  const filteredFromCities = cities.filter((city) =>
+    city.label.toLowerCase().includes(fromSearch.toLowerCase())
   );
   
-  const filteredToCities = cities.filter(city => 
-    city.toLowerCase().includes(toSearch.toLowerCase())
+  const filteredToCities = cities.filter((city) =>
+    city.label.toLowerCase().includes(toSearch.toLowerCase())
   );
   
-  const handleFromSelect = (cityName) => {
-    setFormData(prev => ({ ...prev, from: cityName }));
-    setFromSearch(cityName);
+  const handleFromSelect = (cityOption) => {
+    setFormData(prev => ({ ...prev, from: cityOption.value }));
+    setFromSearch(cityOption.label);
     setShowFromDropdown(false);
     if (errors.from) {
       setErrors(prev => ({ ...prev, from: '' }));
     }
   };
   
-  const handleToSelect = (cityName) => {
-    setFormData(prev => ({ ...prev, to: cityName }));
-    setToSearch(cityName);
+  const handleToSelect = (cityOption) => {
+    setFormData(prev => ({ ...prev, to: cityOption.value }));
+    setToSearch(cityOption.label);
     setShowToDropdown(false);
     if (errors.to) {
       setErrors(prev => ({ ...prev, to: '' }));
@@ -115,15 +190,26 @@ const SearchBar = ({ showQuickDates = true }) => {
     return Object.keys(newErrors).length === 0;
   };
 
+  const getCanonicalCity = (value) => {
+    const key = toCityKey(value);
+    if (!key) return '';
+    return cities.find((city) => toCityKey(city.value) === key)?.value || value.trim();
+  };
+
   const handleSearch = () => {
     if (validateForm()) {
-      navigate('/search-results', { 
-        state: { 
-          from: formData.from.trim(),
-          to: formData.to.trim(),
-          date: formData.date
-        } 
-      });
+      const canonicalFrom = getCanonicalCity(formData.from);
+      const canonicalTo = getCanonicalCity(formData.to);
+      const payload = {
+        from: canonicalFrom,
+        to: canonicalTo,
+        date: formData.date,
+      };
+      if (onSubmit) {
+        onSubmit(payload);
+        return;
+      }
+      navigate('/search-results', { state: payload });
     }
   };
 
@@ -154,12 +240,12 @@ const SearchBar = ({ showQuickDates = true }) => {
                 {filteredFromCities.length > 0 ? (
                   filteredFromCities.map((city) => (
                     <div
-                      key={city}
+                      key={city.value.toLowerCase()}
                       onClick={() => handleFromSelect(city)}
                       className="px-4 py-3 hover:bg-primary/10 cursor-pointer text-white border-b border-white/5 last:border-0"
                     >
                       <span className="material-symbols-outlined text-sm text-slate-400 mr-2 align-middle">location_on</span>
-                      {city}
+                      {city.label}
                     </div>
                   ))
                 ) : fromSearch.length > 0 ? (
@@ -203,12 +289,12 @@ const SearchBar = ({ showQuickDates = true }) => {
                 {filteredToCities.length > 0 ? (
                   filteredToCities.map((city) => (
                     <div
-                      key={city}
+                      key={city.value.toLowerCase()}
                       onClick={() => handleToSelect(city)}
                       className="px-4 py-3 hover:bg-primary/10 cursor-pointer text-white border-b border-white/5 last:border-0"
                     >
                       <span className="material-symbols-outlined text-sm text-slate-400 mr-2 align-middle">location_on</span>
-                      {city}
+                      {city.label}
                     </div>
                   ))
                 ) : toSearch.length > 0 ? (
@@ -275,8 +361,8 @@ const SearchBar = ({ showQuickDates = true }) => {
             onClick={handleSearch}
             className="w-full bg-primary hover:bg-primary/90 text-black h-[60px] rounded-xl font-extrabold flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(0,212,255,0.3)] transform hover:scale-[1.02] whitespace-nowrap"
           >
-            <span className="material-symbols-outlined">search</span>
-            Search
+            <span className="material-symbols-outlined">{submitIcon}</span>
+            {submitLabel}
           </button>
         </div>
       </div>

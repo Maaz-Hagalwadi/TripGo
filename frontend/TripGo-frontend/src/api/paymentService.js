@@ -19,3 +19,9 @@ export const createPaymentIntent = async (payload) => {
   }
   throw lastError;
 };
+
+export const confirmBookingPayment = async (bookingId, paymentIntentId) => {
+  return apiPost(
+    `/payments/confirm-booking/${encodeURIComponent(bookingId)}?paymentIntentId=${encodeURIComponent(paymentIntentId)}`
+  );
+};

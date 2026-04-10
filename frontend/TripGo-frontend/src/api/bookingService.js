@@ -16,6 +16,10 @@ export const getMyBookings = async () => {
   return apiGet('/booking/my-bookings');
 };
 
+export const cancelMyBooking = async (bookingId, cancelReason) => {
+  return apiPost(`/booking/${encodeURIComponent(bookingId)}/cancel`, { cancelReason });
+};
+
 export const getSchedulePointsForBooking = async (scheduleId) => {
   try {
     const data = await apiGet(`/booking/schedules/${encodeURIComponent(scheduleId)}/points`);

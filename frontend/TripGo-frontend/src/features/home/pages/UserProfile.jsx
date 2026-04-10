@@ -25,6 +25,12 @@ const formatTripDate = (value) => {
   });
 };
 
+const getTripTimestamp = (trip) => {
+  const value = trip?.travelDate || trip?.departureTime || trip?.completedAt || trip?.createdAt;
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
 const toDisplayBookingId = (trip) => {
   const raw = String(trip?.bookingCode || trip?.publicBookingId || trip?.bookingNumber || trip?.pnr || trip?.bookingId || trip?.id || '').trim();
   if (!raw) return '--';
@@ -64,6 +70,7 @@ const UserProfile = () => {
   const [loadingTrips, setLoadingTrips] = useState(false);
   const [ratingDrafts, setRatingDrafts] = useState({});
   const [submittingRatingFor, setSubmittingRatingFor] = useState('');
+  const [viewMode, setViewMode] = useState('grid');
 
   useEffect(() => {
     if (loading) return;
@@ -81,7 +88,13 @@ const UserProfile = () => {
       try {
         const data = await getMyCompletedTrips();
         const list = Array.isArray(data) ? data : Array.isArray(data?.trips) ? data.trips : [];
-        setCompletedTrips(list);
+        const sortedTrips = [...list].sort((a, b) => {
+          const aPending = canRateTrip(a) ? 1 : 0;
+          const bPending = canRateTrip(b) ? 1 : 0;
+          if (aPending !== bPending) return bPending - aPending;
+          return getTripTimestamp(b) - getTripTimestamp(a);
+        });
+        setCompletedTrips(sortedTrips);
       } catch (e) {
         toast.error(e.message || 'Failed to load completed trips');
       } finally {
@@ -135,19 +148,34 @@ const UserProfile = () => {
       <div className="space-y-6">
         <div className="bg-white dark:bg-op-card border border-slate-200 dark:border-slate-800 rounded-xl p-5">
           <h3 className="text-lg font-bold mb-1">Rate Completed Trips</h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Profile and account controls were moved to Settings. This page is now focused on ratings only.</p>
         </div>
 
         <div className="bg-white dark:bg-op-card border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-          <h3 className="text-lg font-bold mb-1">Completed Trips</h3>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Ratings are available only after trip completion.</p>
+          <div className="mb-4 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <h3 className="text-lg font-bold mb-1">Completed Trips</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400">Ratings are available only after trip completion.</p>
+            </div>
+            <div className="inline-flex rounded-2xl bg-slate-100 p-1 dark:bg-white/5">
+              {['grid', 'list'].map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setViewMode(mode)}
+                  className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${viewMode === mode ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-white' : 'text-slate-500 dark:text-slate-300'}`}
+                >
+                  {mode === 'grid' ? 'Grid' : 'List'}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {loadingTrips ? (
             <p className="text-sm text-slate-500 dark:text-slate-400">Loading completed trips...</p>
           ) : completedTrips.length === 0 ? (
             <p className="text-sm text-slate-500 dark:text-slate-400">No completed trips found yet.</p>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            <div className={viewMode === 'grid' ? 'grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4' : 'space-y-4'}>
               {completedTrips.map((trip, index) => {
                 const scheduleId = getTripScheduleId(trip) || `trip-${index}`;
                 const rated = Boolean(trip?.alreadyRated || trip?.ratingSubmitted);

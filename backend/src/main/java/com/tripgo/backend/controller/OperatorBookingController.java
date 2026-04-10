@@ -37,8 +37,12 @@ public class OperatorBookingController {
         Operator operator = getOperator(auth);
 
         List<Booking> bookings = (status != null)
-                ? bookingRepository.findByOperatorAndStatus(operator, BookingStatus.valueOf(status))
-                : bookingRepository.findByOperator(operator);
+                ? safeParseStatus(status).map(s -> bookingRepository.findByOperatorAndStatus(operator, s))
+                        .orElse(List.of())
+                : bookingRepository.findByOperator(operator).stream()
+                        .filter(b -> b.getStatus() != BookingStatus.PENDING
+                                  && b.getStatus() != BookingStatus.FAILED)
+                        .toList();
 
         return ResponseEntity.ok(bookings.stream().map(this::toBookingResponse).toList());
     }
@@ -60,7 +64,8 @@ public class OperatorBookingController {
         }
 
         List<Booking> bookings = (status != null)
-                ? bookingRepository.findByRouteScheduleAndStatus(schedule, BookingStatus.valueOf(status))
+                ? safeParseStatus(status).map(s -> bookingRepository.findByRouteScheduleAndStatus(schedule, s))
+                        .orElse(List.of())
                 : bookingRepository.findByRouteSchedule(schedule);
 
         return ResponseEntity.ok(bookings.stream().map(this::toBookingResponse).toList());
@@ -141,6 +146,10 @@ public class OperatorBookingController {
         result.put("gstAmount", booking.getGstAmount() != null ? booking.getGstAmount() : 0);
         result.put("payableAmount", booking.getPayableAmount());
         result.put("bookedAt", booking.getCreatedAt());
+        result.put("cancelledBy", booking.getCancelledBy());
+        result.put("cancelReason", booking.getCancelReason());
+        result.put("refundAmount", booking.getRefundAmount());
+        result.put("refundStatus", booking.getRefundStatus());
         result.put("schedule", Map.of(
                 "id", booking.getRouteSchedule().getId(),
                 "from", booking.getRouteSchedule().getRoute().getOrigin(),
@@ -149,6 +158,14 @@ public class OperatorBookingController {
         ));
         result.put("seats", seatDetails);
         return result;
+    }
+
+    private java.util.Optional<BookingStatus> safeParseStatus(String status) {
+        try {
+            return java.util.Optional.of(BookingStatus.valueOf(status.toUpperCase()));
+        } catch (IllegalArgumentException e) {
+            return java.util.Optional.empty();
+        }
     }
 
     private Operator getOperator(Authentication auth) {

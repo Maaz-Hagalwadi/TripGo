@@ -11,7 +11,7 @@ const MOBILE_NAV = [
   { id: 'ratings', icon: 'star', label: 'Ratings', route: ROUTES.USER_PROFILE },
 ];
 
-const UserLayout = ({ activeItem = 'dashboard', title = 'Dashboard', children }) => {
+const UserLayout = ({ activeItem = 'dashboard', title = 'Dashboard', showHeaderTitle = true, showHeaderSearch = true, children }) => {
   const navigate = useNavigate();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -28,6 +28,8 @@ const UserLayout = ({ activeItem = 'dashboard', title = 'Dashboard', children })
       <main className={`operator-main flex-1 flex flex-col min-w-0 overflow-visible transition-all ml-0 ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         <OperatorHeader
           title={title}
+          showTitle={showHeaderTitle}
+          showSearch={showHeaderSearch}
           searchPlaceholder="Search routes, cities, or bookings..."
           roleLabel="Traveler"
         />

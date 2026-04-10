@@ -50,7 +50,11 @@ public class SearchController {
         );
         
         return schedules.stream()
-                .filter(schedule -> !"COMPLETED".equals(schedule.getTripStatus()))
+                .filter(schedule -> {
+                    // For recurring schedules, only hide COMPLETED if searching today or past
+                    if (schedule.getFrequency() != null) return true;
+                    return !"COMPLETED".equals(schedule.getTripStatus());
+                })
                 .map(schedule -> {
                     Instant adjustedDeparture = adjustToDate(schedule.getDepartureTime(), date);
                     Instant adjustedArrival = adjustToDate(schedule.getArrivalTime(), date);
