@@ -5,12 +5,15 @@ import { useAuth } from '../shared/contexts/AuthContext';
 import { ROUTES } from '../shared/constants/routes';
 import AdminLayout from '../shared/components/AdminLayout';
 import PaginationControls from '../shared/components/ui/PaginationControls';
+import CenterScreenLoader from '../shared/components/ui/CenterScreenLoader';
 import {
   getOperators, approveOperator, rejectOperator, suspendOperator,
   getBuses, approveBus, getUsers
 } from '../api/adminService';
 
 const GRID_PAGE_SIZE = 9;
+const OPERATOR_STATUS_FILTERS = ['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'SUSPENDED'];
+const BUS_STATUS_FILTERS = ['ALL', 'ACTIVE', 'INACTIVE'];
 
 const StatusBadge = ({ status }) => {
   const colors = {
@@ -67,6 +70,9 @@ const AdminDashboard = () => {
   const { user, loading } = useAuth();
 
   const activeItem = searchParams.get('tab') || 'overview';
+  const requestedStatus = String(searchParams.get('status') || '').toUpperCase();
+  const requestedOperatorId = String(searchParams.get('operatorId') || '').trim();
+  const requestedBusId = String(searchParams.get('busId') || '').trim();
 
   const [operators, setOperators] = useState([]);
   const [buses, setBuses] = useState([]);
@@ -75,6 +81,7 @@ const AdminDashboard = () => {
   const [error, setError] = useState(null);
   const [modal, setModal] = useState(null);
   const [actionLoadingId, setActionLoadingId] = useState(null);
+  const [actionLoadingLabel, setActionLoadingLabel] = useState('');
   const [operatorFilter, setOperatorFilter] = useState('ALL');
   const [busFilter, setBusFilter] = useState('ALL');
   const [showAllPendingBuses, setShowAllPendingBuses] = useState(false);
@@ -103,6 +110,15 @@ const AdminDashboard = () => {
       navigate(ROUTES.HOME);
     }
   }, [user, loading, navigate]);
+
+  useEffect(() => {
+    if (activeItem === 'operators' && OPERATOR_STATUS_FILTERS.includes(requestedStatus)) {
+      setOperatorFilter(requestedStatus);
+    }
+    if (activeItem === 'buses' && BUS_STATUS_FILTERS.includes(requestedStatus)) {
+      setBusFilter(requestedStatus);
+    }
+  }, [activeItem, requestedStatus]);
 
   useEffect(() => {
     if (!user || user.role !== 'ADMIN') return;
@@ -141,19 +157,29 @@ const AdminDashboard = () => {
   const inactiveBuses = useMemo(() => buses.filter((b) => !b.active && !dismissedBusIds.includes(b.id)).reverse(), [buses, dismissedBusIds]);
   const allInactiveBuses = useMemo(() => buses.filter((b) => !b.active), [buses]);
 
-  const paginatedOperators = useMemo(() => paginate(operators, operatorPage), [operatorPage, operators]);
-  const paginatedBuses = useMemo(() => paginate(buses, busPage), [busPage, buses]);
+  const visibleOperators = useMemo(() => {
+    if (!requestedOperatorId || activeItem !== 'operators') return operators;
+    return operators.filter((operator) => String(operator.id) === requestedOperatorId);
+  }, [activeItem, operators, requestedOperatorId]);
+
+  const visibleBuses = useMemo(() => {
+    if (!requestedBusId || activeItem !== 'buses') return buses;
+    return buses.filter((bus) => String(bus.id) === requestedBusId);
+  }, [activeItem, buses, requestedBusId]);
+
+  const paginatedOperators = useMemo(() => paginate(visibleOperators, operatorPage), [operatorPage, visibleOperators]);
+  const paginatedBuses = useMemo(() => paginate(visibleBuses, busPage), [busPage, visibleBuses]);
   const paginatedUsers = useMemo(() => paginate(users, userPage), [userPage, users]);
 
   useEffect(() => {
-    const maxPage = Math.max(Math.ceil(operators.length / GRID_PAGE_SIZE) - 1, 0);
+    const maxPage = Math.max(Math.ceil(visibleOperators.length / GRID_PAGE_SIZE) - 1, 0);
     if (operatorPage > maxPage) setOperatorPage(maxPage);
-  }, [operatorPage, operators.length]);
+  }, [operatorPage, visibleOperators.length]);
 
   useEffect(() => {
-    const maxPage = Math.max(Math.ceil(buses.length / GRID_PAGE_SIZE) - 1, 0);
+    const maxPage = Math.max(Math.ceil(visibleBuses.length / GRID_PAGE_SIZE) - 1, 0);
     if (busPage > maxPage) setBusPage(maxPage);
-  }, [busPage, buses.length]);
+  }, [busPage, visibleBuses.length]);
 
   useEffect(() => {
     const maxPage = Math.max(Math.ceil(users.length / GRID_PAGE_SIZE) - 1, 0);
@@ -176,12 +202,13 @@ const AdminDashboard = () => {
     }
   };
 
-  const confirm = (message, action, busIdToRemove = null, actionId = null, successMsg = null) => {
+  const confirm = (message, action, busIdToRemove = null, actionId = null, successMsg = null, loadingLabel = 'Processing your request...') => {
     setModal({
       message,
       onConfirm: async () => {
         setModal(null);
         setActionLoadingId(actionId);
+        setActionLoadingLabel(loadingLabel);
         try {
           await action();
           toast.success(successMsg || 'Action completed successfully.');
@@ -198,6 +225,7 @@ const AdminDashboard = () => {
           toast.error(err.message || 'Action failed');
         } finally {
           setActionLoadingId(null);
+          setActionLoadingLabel('');
         }
       }
     });
@@ -221,6 +249,12 @@ const AdminDashboard = () => {
             <span className="material-symbols-outlined animate-spin text-5xl text-primary">progress_activity</span>
           </div>
         )}
+        {actionLoadingId ? (
+          <CenterScreenLoader
+            label={actionLoadingLabel || 'Processing your request...'}
+            description="Please wait while we update the admin dashboard."
+          />
+        ) : null}
 
         {activeItem === 'overview' && (
           <>
@@ -309,11 +343,11 @@ const AdminDashboard = () => {
                               <p className="text-xs text-slate-400">{op.contactEmail}</p>
                             </div>
                             <div className="flex gap-2">
-                              <button onClick={() => confirm(`Approve "${op.name}"?`, () => approveOperator(op.id), null, `approve-op-${op.id}`, `Operator "${op.name}" has been approved.`)} disabled={actionLoadingId === `approve-op-${op.id}`} className="flex items-center gap-1 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-1.5 text-xs font-bold text-green-500 transition-all disabled:opacity-60 hover:bg-green-500/20">
-                                {actionLoadingId === `approve-op-${op.id}` ? <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> : 'Approve'}
+                              <button onClick={() => confirm(`Approve "${op.name}"?`, () => approveOperator(op.id), null, `approve-op-${op.id}`, `Operator "${op.name}" has been approved.`, `Approving operator ${op.name}...`)} disabled={Boolean(actionLoadingId)} className="flex items-center gap-1 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-1.5 text-xs font-bold text-green-500 transition-all disabled:opacity-60 hover:bg-green-500/20">
+                                Approve
                               </button>
-                              <button onClick={() => confirm(`Reject "${op.name}"?`, () => rejectOperator(op.id), null, `reject-op-${op.id}`, `Operator "${op.name}" has been rejected.`)} disabled={actionLoadingId === `reject-op-${op.id}`} className="flex items-center gap-1 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-500 transition-all disabled:opacity-60 hover:bg-red-500/20">
-                                {actionLoadingId === `reject-op-${op.id}` ? <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> : 'Reject'}
+                              <button onClick={() => confirm(`Reject "${op.name}"?`, () => rejectOperator(op.id), null, `reject-op-${op.id}`, `Operator "${op.name}" has been rejected.`, `Rejecting operator ${op.name}...`)} disabled={Boolean(actionLoadingId)} className="flex items-center gap-1 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-500 transition-all disabled:opacity-60 hover:bg-red-500/20">
+                                Reject
                               </button>
                             </div>
                           </div>
@@ -353,8 +387,8 @@ const AdminDashboard = () => {
                               <p className="text-xs text-slate-400">{bus.busType} · {bus.totalSeats} seats · {bus.vehicleNumber || 'No plate'}</p>
                             </div>
                             <div className="flex gap-2">
-                              <button onClick={() => confirm(`Approve bus "${bus.name}"?`, () => approveBus(bus.id), bus.id, `approve-bus-${bus.id}`, `Bus "${bus.name}" has been approved.`)} disabled={actionLoadingId === `approve-bus-${bus.id}`} className="flex items-center gap-1 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-1.5 text-xs font-bold text-green-500 transition-all disabled:opacity-60 hover:bg-green-500/20">
-                                {actionLoadingId === `approve-bus-${bus.id}` ? <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> : 'Approve'}
+                              <button onClick={() => confirm(`Approve bus "${bus.name}"?`, () => approveBus(bus.id), bus.id, `approve-bus-${bus.id}`, `Bus "${bus.name}" has been approved.`, `Approving bus ${bus.name}...`)} disabled={Boolean(actionLoadingId)} className="flex items-center gap-1 rounded-lg border border-green-500/20 bg-green-500/10 px-3 py-1.5 text-xs font-bold text-green-500 transition-all disabled:opacity-60 hover:bg-green-500/20">
+                                Approve
                               </button>
                               <button
                                 onClick={() => {
@@ -429,14 +463,22 @@ const AdminDashboard = () => {
               </div>
             </div>
 
+            {requestedOperatorId ? (
+              <div className="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-slate-700 dark:text-slate-200">
+                Showing operator notification context for <span className="font-bold">{requestedOperatorId}</span>
+              </div>
+            ) : null}
+
             {error && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-500">{error}</div>}
 
             {dataLoading ? (
               <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-op-card">
                 {[1, 2, 3, 4].map((i) => <div key={i} className="h-24 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800" />)}
               </div>
-            ) : operators.length === 0 ? (
-              <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-slate-400 dark:border-slate-800 dark:bg-op-card">No operators found</div>
+            ) : visibleOperators.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-slate-400 dark:border-slate-800 dark:bg-op-card">
+                {requestedOperatorId ? 'No matching operator found' : 'No operators found'}
+              </div>
             ) : (
               <>
                 <div className={operatorViewMode === 'grid' ? 'grid gap-4 xl:grid-cols-3' : 'space-y-3'}>
@@ -457,22 +499,22 @@ const AdminDashboard = () => {
                         <div className={`flex flex-wrap gap-2 ${operatorViewMode === 'grid' ? 'mt-auto border-t border-slate-200 pt-4 dark:border-slate-800' : 'lg:min-w-[240px] lg:justify-end'}`}>
                           {op.status === 'PENDING' && (
                             <>
-                              <button onClick={() => confirm(`Approve "${op.name}"?`, () => approveOperator(op.id), null, `approve-op-${op.id}`, `Operator "${op.name}" has been approved.`)} disabled={actionLoadingId === `approve-op-${op.id}`} className="rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-2 text-sm font-bold text-green-500 hover:bg-green-500/20 disabled:opacity-60">
-                                {actionLoadingId === `approve-op-${op.id}` ? 'Updating...' : 'Approve'}
+                              <button onClick={() => confirm(`Approve "${op.name}"?`, () => approveOperator(op.id), null, `approve-op-${op.id}`, `Operator "${op.name}" has been approved.`, `Approving operator ${op.name}...`)} disabled={Boolean(actionLoadingId)} className="rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-2 text-sm font-bold text-green-500 hover:bg-green-500/20 disabled:opacity-60">
+                                Approve
                               </button>
-                              <button onClick={() => confirm(`Reject "${op.name}"?`, () => rejectOperator(op.id), null, `reject-op-${op.id}`, `Operator "${op.name}" has been rejected.`)} disabled={actionLoadingId === `reject-op-${op.id}`} className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm font-bold text-red-500 hover:bg-red-500/20 disabled:opacity-60">
-                                {actionLoadingId === `reject-op-${op.id}` ? 'Updating...' : 'Reject'}
+                              <button onClick={() => confirm(`Reject "${op.name}"?`, () => rejectOperator(op.id), null, `reject-op-${op.id}`, `Operator "${op.name}" has been rejected.`, `Rejecting operator ${op.name}...`)} disabled={Boolean(actionLoadingId)} className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm font-bold text-red-500 hover:bg-red-500/20 disabled:opacity-60">
+                                Reject
                               </button>
                             </>
                           )}
                           {op.status === 'APPROVED' && (
-                            <button onClick={() => confirm(`Suspend "${op.name}"?`, () => suspendOperator(op.id), null, `suspend-op-${op.id}`, `Operator "${op.name}" has been suspended.`)} disabled={actionLoadingId === `suspend-op-${op.id}`} className="rounded-xl border border-orange-500/20 bg-orange-500/10 px-4 py-2 text-sm font-bold text-orange-500 hover:bg-orange-500/20 disabled:opacity-60">
-                              {actionLoadingId === `suspend-op-${op.id}` ? 'Updating...' : 'Suspend'}
+                            <button onClick={() => confirm(`Suspend "${op.name}"?`, () => suspendOperator(op.id), null, `suspend-op-${op.id}`, `Operator "${op.name}" has been suspended.`, `Suspending operator ${op.name}...`)} disabled={Boolean(actionLoadingId)} className="rounded-xl border border-orange-500/20 bg-orange-500/10 px-4 py-2 text-sm font-bold text-orange-500 hover:bg-orange-500/20 disabled:opacity-60">
+                              Suspend
                             </button>
                           )}
                           {(op.status === 'REJECTED' || op.status === 'SUSPENDED') && (
-                            <button onClick={() => confirm(`Re-approve "${op.name}"?`, () => approveOperator(op.id), null, `reapprove-op-${op.id}`, `Operator "${op.name}" has been re-approved.`)} disabled={actionLoadingId === `reapprove-op-${op.id}`} className="rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-2 text-sm font-bold text-green-500 hover:bg-green-500/20 disabled:opacity-60">
-                              {actionLoadingId === `reapprove-op-${op.id}` ? 'Updating...' : 'Re-approve'}
+                            <button onClick={() => confirm(`Re-approve "${op.name}"?`, () => approveOperator(op.id), null, `reapprove-op-${op.id}`, `Operator "${op.name}" has been re-approved.`, `Re-approving operator ${op.name}...`)} disabled={Boolean(actionLoadingId)} className="rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-2 text-sm font-bold text-green-500 hover:bg-green-500/20 disabled:opacity-60">
+                              Re-approve
                             </button>
                           )}
                         </div>
@@ -480,7 +522,7 @@ const AdminDashboard = () => {
                     </div>
                   ))}
                 </div>
-                <PaginationControls page={operatorPage} pageSize={GRID_PAGE_SIZE} totalItems={operators.length} onPageChange={setOperatorPage} itemLabel="operators" />
+                <PaginationControls page={operatorPage} pageSize={GRID_PAGE_SIZE} totalItems={visibleOperators.length} onPageChange={setOperatorPage} itemLabel="operators" />
               </>
             )}
           </div>
@@ -504,14 +546,22 @@ const AdminDashboard = () => {
               </div>
             </div>
 
+            {requestedBusId ? (
+              <div className="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-slate-700 dark:text-slate-200">
+                Showing bus notification context for <span className="font-bold">{requestedBusId}</span>
+              </div>
+            ) : null}
+
             {error && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-500">{error}</div>}
 
             {dataLoading ? (
               <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-op-card">
                 {[1, 2, 3, 4].map((i) => <div key={i} className="h-24 animate-pulse rounded-lg bg-slate-100 dark:bg-slate-800" />)}
               </div>
-            ) : buses.length === 0 ? (
-              <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-slate-400 dark:border-slate-800 dark:bg-op-card">No buses found</div>
+            ) : visibleBuses.length === 0 ? (
+              <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-slate-400 dark:border-slate-800 dark:bg-op-card">
+                {requestedBusId ? 'No matching bus found' : 'No buses found'}
+              </div>
             ) : (
               <>
                 <div className={busViewMode === 'grid' ? 'grid gap-4 xl:grid-cols-3' : 'space-y-3'}>
@@ -532,8 +582,8 @@ const AdminDashboard = () => {
                         </div>
                         <div className={`flex flex-wrap gap-2 ${busViewMode === 'grid' ? 'mt-auto border-t border-slate-200 pt-4 dark:border-slate-800' : 'lg:min-w-[220px] lg:justify-end'}`}>
                           {!bus.active ? (
-                            <button onClick={() => confirm(`Approve bus "${bus.name}"?`, () => approveBus(bus.id), bus.id, `approve-bus-${bus.id}`, `Bus "${bus.name}" has been approved.`)} disabled={actionLoadingId === `approve-bus-${bus.id}`} className="rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-2 text-sm font-bold text-green-500 hover:bg-green-500/20 disabled:opacity-60">
-                              {actionLoadingId === `approve-bus-${bus.id}` ? 'Updating...' : 'Approve'}
+                            <button onClick={() => confirm(`Approve bus "${bus.name}"?`, () => approveBus(bus.id), bus.id, `approve-bus-${bus.id}`, `Bus "${bus.name}" has been approved.`, `Approving bus ${bus.name}...`)} disabled={Boolean(actionLoadingId)} className="rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-2 text-sm font-bold text-green-500 hover:bg-green-500/20 disabled:opacity-60">
+                              Approve
                             </button>
                           ) : (
                             <span className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300">Approved</span>
@@ -543,7 +593,7 @@ const AdminDashboard = () => {
                     </div>
                   ))}
                 </div>
-                <PaginationControls page={busPage} pageSize={GRID_PAGE_SIZE} totalItems={buses.length} onPageChange={setBusPage} itemLabel="buses" />
+                <PaginationControls page={busPage} pageSize={GRID_PAGE_SIZE} totalItems={visibleBuses.length} onPageChange={setBusPage} itemLabel="buses" />
               </>
             )}
           </div>

@@ -7,6 +7,7 @@ import { getAmenities } from '../../../api/amenityService';
 import { useBusWizard } from '../context/BusWizardContext';
 import { toast } from 'sonner';
 import { ROUTES } from '../../../shared/constants/routes';
+import CenterScreenLoader from '../../../shared/components/ui/CenterScreenLoader';
 import './OperatorDashboard.css';
 
 const BusReview = () => {
@@ -77,6 +78,12 @@ const BusReview = () => {
 
   return (
     <OperatorLayout activeItem="add-bus" title="Review & Submit">
+      {isSubmitting ? (
+        <CenterScreenLoader
+          label="Processing your bus submission..."
+          description="Please wait while we create the bus and prepare the seat layout."
+        />
+      ) : null}
       <div className="max-w-2xl mx-auto">
 
         {/* Progress */}
@@ -167,9 +174,8 @@ const BusReview = () => {
           </button>
           <button onClick={handleSubmit} disabled={isSubmitting}
             className="flex-2 px-8 py-3 rounded-xl bg-primary hover:bg-primary/90 text-black font-extrabold flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20 disabled:opacity-50">
-            {isSubmitting
-              ? <><span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> Submitting...</>
-              : <><span className="material-symbols-outlined text-sm">check_circle</span> Confirm & Submit</>}
+            <span className="material-symbols-outlined text-sm">check_circle</span>
+            Confirm & Submit
           </button>
         </div>
 

@@ -151,7 +151,7 @@ public class AuthController {
                         "OPERATOR_PENDING",
                         "New Operator Pending Approval 📄",
                         "Operator '" + user.getOperator().getName() + "' has verified their email and is awaiting approval.",
-                        "/admin/operators"
+                        "/admin/dashboard?tab=operators&status=PENDING&operatorId=" + user.getOperator().getId()
                 );
             }
 

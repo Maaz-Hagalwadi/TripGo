@@ -7,6 +7,7 @@ import { getDrivers, assignDriverToSchedule } from '../../../api/operatorDriverS
 import { getBuses } from '../../../api/busService';
 import { toast } from 'sonner';
 import { ROUTES } from '../../../shared/constants/routes';
+import CenterScreenLoader from '../../../shared/components/ui/CenterScreenLoader';
 import './OperatorDashboard.css';
 
 const isNumericValue = (value) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
@@ -46,6 +47,7 @@ const Schedules = () => {
   const [drivers, setDrivers] = useState([]);
   const [buses, setBuses] = useState([]);
   const [assigningDriver, setAssigningDriver] = useState({});
+  const [blockingLoader, setBlockingLoader] = useState(null);
   const [driverAssignModal, setDriverAssignModal] = useState({
     routeId: null,
     scheduleId: null,
@@ -109,6 +111,15 @@ const Schedules = () => {
       setBuses(Array.isArray(data) ? data.filter((bus) => bus?.active) : []);
     } catch {
       setBuses([]);
+    }
+  };
+
+  const runBlockingAction = async (label, action) => {
+    setBlockingLoader(label);
+    try {
+      return await action();
+    } finally {
+      setBlockingLoader(null);
     }
   };
 
@@ -185,7 +196,7 @@ const Schedules = () => {
     const form = pointForm[scheduleId] || {};
     if (!form.name || !form.type) return toast.error('Name and type are required');
     try {
-      const newPoint = await addPoint(scheduleId, form);
+      const newPoint = await runBlockingAction('Saving your boarding point...', () => addPoint(scheduleId, form));
       setPoints(prev => ({ ...prev, [scheduleId]: [...(prev[scheduleId] || []), newPoint] }));
       setPointForm(prev => ({ ...prev, [scheduleId]: {} }));
       toast.success('Point added');
@@ -194,7 +205,7 @@ const Schedules = () => {
 
   const handleDeletePoint = async (scheduleId, pointId) => {
     try {
-      await deletePoint(scheduleId, pointId);
+      await runBlockingAction('Removing this boarding point...', () => deletePoint(scheduleId, pointId));
       setPoints(prev => ({ ...prev, [scheduleId]: prev[scheduleId].filter(p => p.id !== pointId) }));
       toast.success('Point deleted');
     } catch (e) { toast.error(e.message); }
@@ -229,7 +240,7 @@ const Schedules = () => {
         landmark: edit.landmark || '',
         arrivalTime: edit.arrivalTime || null
       };
-      const updated = await updatePoint(scheduleId, pointId, payload);
+      const updated = await runBlockingAction('Saving your boarding point...', () => updatePoint(scheduleId, pointId, payload));
       setPoints(prev => ({
         ...prev,
         [scheduleId]: (prev[scheduleId] || []).map(p => (p.id === pointId ? { ...p, ...updated } : p))
@@ -335,13 +346,13 @@ const Schedules = () => {
       return toast.error('Fare for this segment and seat type already exists');
     }
     try {
-      const created = await addFare(routeId, {
+      const created = await runBlockingAction('Saving your fares...', () => addFare(routeId, {
         segmentId: form.segmentId,
         seatType: normalizeSeatType(form.seatType),
         baseFare: parseFloat(form.baseFare),
         gstPercent: 5,
         busId: form.busId || null,
-      });
+      }));
       const linkedBus = getRouteBusById(routeId, form.busId);
       const linkedSegment = getRouteSegmentById(routeId, form.segmentId);
       setFares(prev => ({
@@ -371,7 +382,7 @@ const Schedules = () => {
 
   const handleDeleteFare = async (routeId, fareId) => {
     try {
-      await deleteFare(routeId, fareId);
+      await runBlockingAction('Removing this fare...', () => deleteFare(routeId, fareId));
       setFares(prev => ({ ...prev, [routeId]: prev[routeId].filter(f => f.id !== fareId) }));
       toast.success('Fare deleted');
     } catch (e) { toast.error(e.message); }
@@ -397,13 +408,13 @@ const Schedules = () => {
 
     try {
       const fareSegment = getFareSegmentKeys(fare);
-      await updateFare(routeId, fare.id, {
+      await runBlockingAction('Saving your fares...', () => updateFare(routeId, fare.id, {
         segmentId: fareSegment.idKey,
         seatType: fare.seatType,
         baseFare: nextBaseFare,
         gstPercent: fare.gstPercent ?? 5,
         busId: fare?.busId || fare?.bus?.id || null
-      });
+      }));
       setFares(prev => ({
         ...prev,
         [routeId]: (prev[routeId] || []).map((item) => (
@@ -427,20 +438,22 @@ const Schedules = () => {
   };
 
   const openManageFares = async (routeId) => {
-    await fetchSegments(routeId);
-    await fetchSchedules(routeId);
-    await fetchFares(routeId);
+    await runBlockingAction('Loading fare details...', async () => {
+      await fetchSegments(routeId);
+      await fetchSchedules(routeId);
+      await fetchFares(routeId);
+    });
     setFareModalRouteId(routeId);
   };
 
   const openManagePoints = async (routeId) => {
-    const routeSchedules = await fetchSchedules(routeId);
+    const routeSchedules = await runBlockingAction('Loading boarding and dropping points...', () => fetchSchedules(routeId));
     const firstSchedule = (routeSchedules || [])[0];
     if (!firstSchedule?.id) {
       toast.error('No schedules found for this route yet');
       return;
     }
-    await fetchPoints(firstSchedule.id);
+    await runBlockingAction('Loading boarding and dropping points...', () => fetchPoints(firstSchedule.id));
     setPointModal({ routeId, scheduleId: firstSchedule.id });
   };
 
@@ -448,11 +461,11 @@ const Schedules = () => {
     const { scheduleId, routeId, type } = deleteModal;
     try {
       if (type === 'schedule') {
-        await deleteSchedule(scheduleId);
+        await runBlockingAction('Deleting this schedule...', () => deleteSchedule(scheduleId));
         setSchedules(prev => ({ ...prev, [routeId]: prev[routeId].filter(s => s.id !== scheduleId) }));
         toast.success('Schedule deleted.');
       } else {
-        await deleteRoute(routeId);
+        await runBlockingAction('Deleting this route...', () => deleteRoute(routeId));
         setRoutes(prev => prev.filter(r => r.id !== routeId));
         setExpandedRoute(null);
         toast.success('Route deleted.');
@@ -476,13 +489,13 @@ const Schedules = () => {
 
   const handleStartTrip = async (routeId, scheduleId) => {
     try {
-      const res = await startTrip(scheduleId);
+      const res = await runBlockingAction('Starting this trip...', () => startTrip(scheduleId));
       updateScheduleState(routeId, scheduleId, {
         tripStatus: res?.tripStatus || res?.status || 'STARTED',
         status: res?.status || res?.tripStatus || 'STARTED',
         actualDepartureTime: res?.actualDepartureTime || res?.startedAt || new Date().toISOString()
       });
-      await fetchSchedules(routeId, true);
+      await runBlockingAction('Refreshing trip details...', () => fetchSchedules(routeId, true));
       toast.success('Trip started');
     } catch (e) {
       toast.error(e.message || 'Failed to start trip');
@@ -491,13 +504,13 @@ const Schedules = () => {
 
   const handleCompleteTrip = async (routeId, scheduleId) => {
     try {
-      const res = await completeTrip(scheduleId);
+      const res = await runBlockingAction('Completing this trip...', () => completeTrip(scheduleId));
       updateScheduleState(routeId, scheduleId, {
         tripStatus: res?.tripStatus || res?.status || 'COMPLETED',
         status: res?.status || res?.tripStatus || 'COMPLETED',
         actualArrivalTime: res?.actualArrivalTime || res?.completedAt || new Date().toISOString()
       });
-      await fetchSchedules(routeId, true);
+      await runBlockingAction('Refreshing trip details...', () => fetchSchedules(routeId, true));
       toast.success('Trip completed');
     } catch (e) {
       toast.error(e.message || 'Failed to complete trip');
@@ -512,14 +525,14 @@ const Schedules = () => {
       return;
     }
     try {
-      const res = await markDelay(scheduleId, mins, delayReason || '');
+      const res = await runBlockingAction('Saving trip delay...', () => markDelay(scheduleId, mins, delayReason || ''));
       updateScheduleState(routeId, scheduleId, {
         tripStatus: res?.tripStatus || res?.status || 'DELAYED',
         status: res?.status || res?.tripStatus || 'DELAYED',
         delayMinutes: res?.delayMinutes ?? res?.currentDelayMinutes ?? mins,
         delayReason: res?.delayReason ?? res?.currentDelayReason ?? (delayReason || '')
       });
-      await fetchSchedules(routeId, true);
+      await runBlockingAction('Refreshing trip details...', () => fetchSchedules(routeId, true));
       setDelayModal({ routeId: null, scheduleId: null, delayMinutes: '', delayReason: '' });
       toast.success('Delay marked');
     } catch (e) {
@@ -579,11 +592,10 @@ const Schedules = () => {
       toast.error('Expired drivers cannot be assigned to a bus.');
       return;
     }
-    const loadingToastId = toast.loading('Assigning driver...');
     try {
       setAssigningDriver(prev => ({ ...prev, [scheduleId]: true }));
       const assigned = assignedDriver;
-      const response = await assignDriverToSchedule(scheduleId, driverId);
+      const response = await runBlockingAction('Assigning driver...', () => assignDriverToSchedule(scheduleId, driverId));
       updateScheduleState(routeId, scheduleId, {
         driver: response?.driver || assigned || { id: driverId },
         assignedDriver: response?.driver || assigned || { id: driverId },
@@ -593,11 +605,11 @@ const Schedules = () => {
         assignedDriverName: response?.driverName || getDriverName(assigned),
         busId: response?.busId || undefined
       });
-      await fetchSchedules(routeId, true);
+      await runBlockingAction('Refreshing trip details...', () => fetchSchedules(routeId, true));
       setDriverAssignModal({ routeId: null, scheduleId: null, selectedDriverId: '' });
-      toast.success('Driver assigned successfully', { id: loadingToastId });
+      toast.success('Driver assigned successfully');
     } catch (e) {
-      toast.error(e.message || 'Failed to assign driver', { id: loadingToastId });
+      toast.error(e.message || 'Failed to assign driver');
     } finally {
       setAssigningDriver(prev => ({ ...prev, [scheduleId]: false }));
     }
@@ -670,22 +682,21 @@ const Schedules = () => {
       return;
     }
 
-    const loadingToast = toast.loading('Updating schedule...');
     try {
-      const updated = await updateSchedule(scheduleId, {
+      const updated = await runBlockingAction('Saving your schedule...', () => updateSchedule(scheduleId, {
         busId,
         departureTime: dep.toISOString(),
         arrivalTime: arr.toISOString(),
         frequency
-      });
+      }));
       updateScheduleState(routeId, scheduleId, {
         ...updated,
         bus: updated?.bus || buses.find((b) => String(b.id) === String(busId))
       });
-      toast.success('Schedule updated successfully', { id: loadingToast });
+      toast.success('Schedule updated successfully');
       closeEditScheduleModal();
     } catch (e) {
-      toast.error(e.message || 'Failed to update schedule', { id: loadingToast });
+      toast.error(e.message || 'Failed to update schedule');
     }
   };
 
@@ -706,24 +717,29 @@ const Schedules = () => {
       return;
     }
 
-    const loadingToast = toast.loading('Creating schedule...');
     try {
-      await createSchedule(routeId, {
+      await runBlockingAction('Creating your schedule...', () => createSchedule(routeId, {
         busId,
         departureTime: dep.toISOString(),
         arrivalTime: arr.toISOString(),
         frequency
-      });
-      await fetchSchedules(routeId, true);
-      toast.success('Schedule added successfully', { id: loadingToast });
+      }));
+      await runBlockingAction('Refreshing schedules...', () => fetchSchedules(routeId, true));
+      toast.success('Schedule added successfully');
       closeAddScheduleModal();
     } catch (e) {
-      toast.error(e.message || 'Failed to create schedule', { id: loadingToast });
+      toast.error(e.message || 'Failed to create schedule');
     }
   };
 
   return (
     <>
+      {blockingLoader ? (
+        <CenterScreenLoader
+          label={blockingLoader}
+          description="Please wait while we update your route and schedule details."
+        />
+      ) : null}
       <OperatorLayout
         activeItem="schedules"
         title="Routes & Schedules"
@@ -780,22 +796,25 @@ const Schedules = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); openAddScheduleModal(route.id); }}
-                        className="px-2.5 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                      >
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openAddScheduleModal(route.id); }}
+                          disabled={Boolean(blockingLoader)}
+                          className="px-2.5 py-1 text-xs rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
+                        >
                         Add Schedule
                       </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); openManageFares(route.id); }}
-                        className="px-2.5 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                      >
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openManageFares(route.id); }}
+                          disabled={Boolean(blockingLoader)}
+                          className="px-2.5 py-1 text-xs rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
+                        >
                         Manage Fares
                       </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); openManagePoints(route.id); }}
-                        className="px-2.5 py-1 text-xs rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-                      >
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openManagePoints(route.id); }}
+                          disabled={Boolean(blockingLoader)}
+                          className="px-2.5 py-1 text-xs rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
+                        >
                         Manage Points
                       </button>
                       <button
@@ -1041,13 +1060,13 @@ const Schedules = () => {
                           <div className="flex items-center gap-2">
                             {isEditing ? (
                               <>
-                                <button onClick={() => saveEditFare(routeId, f)} className="text-green-600 hover:text-green-700 font-semibold">Save</button>
+                                <button onClick={() => saveEditFare(routeId, f)} disabled={Boolean(blockingLoader)} className="text-green-600 hover:text-green-700 font-semibold disabled:opacity-50">Save</button>
                                 <button onClick={() => cancelEditFare(routeId)} className="text-slate-500 hover:text-slate-700 font-semibold">Cancel</button>
                               </>
                             ) : (
                               <button onClick={() => startEditFare(routeId, f)} className="text-primary hover:text-primary/80 font-semibold">Edit</button>
                             )}
-                            <button onClick={() => handleDeleteFare(routeId, f.id)} className="text-red-400 hover:text-red-600">
+                            <button onClick={() => handleDeleteFare(routeId, f.id)} disabled={Boolean(blockingLoader)} className="text-red-400 hover:text-red-600 disabled:opacity-50">
                               <span className="material-symbols-outlined text-sm">delete</span>
                             </button>
                           </div>
@@ -1138,7 +1157,8 @@ const Schedules = () => {
                 </div>
                 <button
                   onClick={() => handleAddFare(routeId)}
-                  className="col-span-2 px-3 py-1.5 bg-primary text-black text-xs font-bold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-1"
+                  disabled={Boolean(blockingLoader)}
+                  className="col-span-2 flex items-center justify-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-black transition-colors hover:bg-primary/90 disabled:opacity-60"
                 >
                   <span className="material-symbols-outlined text-sm">add</span>
                   Add Fare
@@ -1229,7 +1249,7 @@ const Schedules = () => {
                           className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary"
                         />
                         <div className="flex items-center gap-3">
-                          <button onClick={() => saveEditPoint(selectedScheduleId, p.id)} className="text-green-600 hover:text-green-700 font-semibold">Save</button>
+                          <button onClick={() => saveEditPoint(selectedScheduleId, p.id)} disabled={Boolean(blockingLoader)} className="text-green-600 hover:text-green-700 font-semibold disabled:opacity-50">Save</button>
                           <button onClick={() => cancelEditPoint(selectedScheduleId)} className="text-slate-500 hover:text-slate-700 font-semibold">Cancel</button>
                         </div>
                       </div>
@@ -1246,7 +1266,7 @@ const Schedules = () => {
                         </div>
                         <div className="flex items-center gap-2">
                           <button onClick={() => startEditPoint(selectedScheduleId, p)} className="text-primary hover:text-primary/80 font-semibold">Edit</button>
-                          <button onClick={() => handleDeletePoint(selectedScheduleId, p.id)} className="text-red-400 hover:text-red-600 ml-2 shrink-0">
+                          <button onClick={() => handleDeletePoint(selectedScheduleId, p.id)} disabled={Boolean(blockingLoader)} className="ml-2 shrink-0 text-red-400 hover:text-red-600 disabled:opacity-50">
                             <span className="material-symbols-outlined text-sm">delete</span>
                           </button>
                         </div>
@@ -1292,7 +1312,8 @@ const Schedules = () => {
                 />
                 <button
                   onClick={() => handleAddPoint(selectedScheduleId)}
-                  className="px-3 py-1.5 bg-primary text-black text-xs font-bold rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-1"
+                  disabled={Boolean(blockingLoader)}
+                  className="flex items-center justify-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-black transition-colors hover:bg-primary/90 disabled:opacity-60"
                 >
                   <span className="material-symbols-outlined text-sm">add</span>
                   Add Point

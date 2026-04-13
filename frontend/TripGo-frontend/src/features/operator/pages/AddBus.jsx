@@ -8,6 +8,7 @@ import { getAmenities } from '../../../api/amenityService';
 import { useBusWizard } from '../context/BusWizardContext';
 import { addBusSchema } from '../../../shared/schemas';
 import { ROUTES } from '../../../shared/constants/routes';
+import CenterScreenLoader from '../../../shared/components/ui/CenterScreenLoader';
 import './OperatorDashboard.css';
 
 const AMENITY_ICONS = {
@@ -30,6 +31,7 @@ const AddBus = () => {
   const [amenities, setAmenities] = useState([]);
   const [loadingAmenities, setLoadingAmenities] = useState(true);
   const [selectedAmenities, setSelectedAmenities] = useState(wizardData.amenityIds || []);
+  const [submitting, setSubmitting] = useState(false);
 
   const { register, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(addBusSchema),
@@ -60,12 +62,19 @@ const AddBus = () => {
   };
 
   const onSubmit = (data) => {
+    setSubmitting(true);
     updateWizard({ ...data, amenityIds: selectedAmenities });
     navigate(ROUTES.OPERATOR_BUS_LAYOUT);
   };
 
   return (
     <OperatorLayout activeItem="add-bus" title="Add Bus">
+      {submitting ? (
+        <CenterScreenLoader
+          label="Preparing your bus layout..."
+          description="Please wait while we save your bus details."
+        />
+      ) : null}
       <div className="max-w-2xl mx-auto">
 
         {/* Progress Steps */}
@@ -178,11 +187,11 @@ const AddBus = () => {
 
           {/* Actions */}
           <div className="flex gap-3 pt-1">
-            <button type="button" onClick={() => navigate(ROUTES.OPERATOR_DASHBOARD)}
+            <button type="button" onClick={() => navigate(ROUTES.OPERATOR_DASHBOARD)} disabled={submitting}
               className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all">
               Cancel
             </button>
-            <button type="submit"
+            <button type="submit" disabled={submitting}
               className="flex-1 py-3 rounded-xl bg-primary hover:bg-primary/90 text-black font-extrabold text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20">
               Next: Seat Layout
               <span className="material-symbols-outlined text-sm">arrow_forward</span>
