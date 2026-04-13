@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -12,7 +13,7 @@ import java.util.UUID;
         name = "seat_locks",
         uniqueConstraints = @UniqueConstraint(
                 name = "uq_route_schedule_seat_lock",
-                columnNames = {"route_schedule_id", "seat_number"}
+                columnNames = {"route_schedule_id", "seat_number", "travel_date"}
         )
 )
 @Getter
@@ -32,6 +33,15 @@ public class SeatLock {
 
     @Column(name = "seat_number", nullable = false)
     private String seatNumber;
+
+    @Column(name = "travel_date", nullable = false)
+    private LocalDate travelDate;
+
+    @Column(name = "from_stop", nullable = false)
+    private String fromStop;
+
+    @Column(name = "to_stop", nullable = false)
+    private String toStop;
 
     @Column(name = "lock_token", nullable = false)
     private UUID lockToken;

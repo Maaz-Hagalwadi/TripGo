@@ -3,8 +3,13 @@ package com.tripgo.backend.controller;
 import com.tripgo.backend.model.entities.Operator;
 import com.tripgo.backend.model.entities.RouteSchedule;
 import com.tripgo.backend.model.entities.User;
+import com.tripgo.backend.repository.BookingRepository;
+import com.tripgo.backend.repository.BookingSeatRepository;
 import com.tripgo.backend.repository.RouteScheduleRepository;
 import com.tripgo.backend.security.service.CustomUserDetails;
+import com.tripgo.backend.service.impl.EmailService;
+import com.tripgo.backend.service.impl.NotificationService;
+import com.tripgo.backend.model.enums.BookingStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -20,6 +25,10 @@ import java.util.UUID;
 public class TripManagementController {
 
     private final RouteScheduleRepository scheduleRepository;
+    private final BookingRepository bookingRepository;
+    private final BookingSeatRepository bookingSeatRepository;
+    private final EmailService emailService;
+    private final NotificationService notificationService;
 
     // POST /operator/schedules/{id}/start
     @PostMapping("/{scheduleId}/start")
@@ -53,6 +62,28 @@ public class TripManagementController {
         schedule.setTripStatus("COMPLETED");
         schedule.setActualArrivalTime(Instant.now());
         scheduleRepository.save(schedule);
+
+        // Send review prompt to all confirmed passengers
+        bookingRepository.findByRouteScheduleAndStatus(schedule, BookingStatus.CONFIRMED)
+                .forEach(booking -> {
+                    var seats = bookingSeatRepository.findByBookingId(booking.getId());
+                    String from = seats.isEmpty() ? schedule.getRoute().getOrigin() : seats.get(0).getFromStop();
+                    String to = seats.isEmpty() ? schedule.getRoute().getDestination() : seats.get(0).getToStop();
+
+                    // Push real-time notification
+                    notificationService.send(booking.getUser(),
+                            "TRIP_COMPLETED",
+                            "Trip Completed! Rate your experience ⭐",
+                            "Your trip from " + from + " to " + to + " is complete. How was it?",
+                            "/bookings?review=" + schedule.getId());
+
+                    // Send review prompt email
+                    emailService.sendTripCompletedReviewPrompt(
+                            booking.getUser(), from, to,
+                            schedule.getBus().getName(),
+                            schedule.getRoute().getOperator().getName(),
+                            schedule.getId());
+                });
 
         return ResponseEntity.ok(Map.of(
                 "scheduleId", scheduleId,

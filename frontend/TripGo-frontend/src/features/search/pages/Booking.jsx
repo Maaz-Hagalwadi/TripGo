@@ -255,6 +255,10 @@ const removeStorage = (key, storage = localStorage) => {
   }
 };
 
+const toDraftKeyPart = (value) => String(value || '')
+  .trim()
+  .replace(/[^a-zA-Z0-9_-]+/g, '-');
+
 const normalizeTraveler = (traveler = {}) => ({
   seatNumber: traveler?.seatNumber || '',
   name: traveler?.name || [traveler?.firstName, traveler?.lastName].filter(Boolean).join(' '),
@@ -317,7 +321,8 @@ const Booking = () => {
   const bookingState = location.state?.bus ? location.state : (persistedBookingState || {});
   const { bus, selectedType, selectedFare, searchParams } = bookingState;
   const scheduleId = bus?.scheduleId || bus?.id;
-  const draftKey = scheduleId ? `${BOOKING_DRAFT_PREFIX}${scheduleId}` : '';
+  const travelDate = searchParams?.date || bookingState?.travelDate || '';
+  const draftKey = scheduleId ? `${BOOKING_DRAFT_PREFIX}${toDraftKeyPart(scheduleId)}_${toDraftKeyPart(travelDate || 'unscheduled')}` : '';
   const savedDraft = draftKey ? readStorage(draftKey) : null;
   const savedTravelers = readStorage(SAVED_TRAVELERS_KEY, localStorage) || [];
   const savedLockExpiresAt = Number(savedDraft?.lockExpiresAt || 0);
@@ -349,7 +354,7 @@ const Booking = () => {
     setLoadingSeats(true);
     setLoadingSeatsError('');
     try {
-      setSeatsResponse(await getScheduleSeats(scheduleId));
+      setSeatsResponse(await getScheduleSeats(scheduleId, travelDate, searchParams?.from || '', searchParams?.to || ''));
     } catch (e) {
       setLoadingSeatsError(e.message || 'Failed to load seats');
     } finally {
@@ -721,7 +726,7 @@ const Booking = () => {
                   if (!scheduleId) return toast.error('Schedule ID missing for this bus');
                   try {
                     setLockingSeats(true);
-                    const result = await lockScheduleSeats(scheduleId, selectedSeats);
+                    const result = await lockScheduleSeats(scheduleId, selectedSeats, travelDate, searchParams?.from || '', searchParams?.to || '');
                     setLockInfo(result || null);
                     const expiresInMinutes = Number(result?.expiresInMinutes || 15);
                     setLockExpiresAt(Date.now() + expiresInMinutes * 60 * 1000);
@@ -899,7 +904,7 @@ const Booking = () => {
                         ]),
                         localStorage
                       );
-                      navigate(ROUTES.PAYMENT, { state: { bus, scheduleId, selectedSeats, selectedFare, selectedType, searchParams, contact, passengers, selection, lockSecondsLeft, lockExpiresAt, lockToken: lockInfo?.lockToken || '', lockInfo } });
+                      navigate(ROUTES.PAYMENT, { state: { bus, scheduleId, selectedSeats, selectedFare, selectedType, searchParams, travelDate: searchParams?.date || '', contact, passengers, selection, lockSecondsLeft, lockExpiresAt, lockToken: lockInfo?.lockToken || '', lockInfo } });
                     }}
                     className="flex-1 rounded-xl bg-primary px-4 py-2 font-semibold text-black hover:bg-primary/90"
                   >

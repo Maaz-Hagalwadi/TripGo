@@ -57,8 +57,8 @@ export const isSeatAvailableForBooking = (seat) => {
 };
 
 export const getAvailableSeatCount = (item) => {
-  if (Number.isFinite(Number(item?.availableSeatCount))) return Number(item.availableSeatCount);
-  if (Number.isFinite(Number(item?.availableSeats))) return Number(item.availableSeats);
+  if (isNumericValue(item?.availableSeatCount)) return Number(item.availableSeatCount);
+  if (isNumericValue(item?.availableSeats)) return Number(item.availableSeats);
   if (Array.isArray(item?.seatAvailability)) {
     return item.seatAvailability.filter(isSeatAvailableForBooking).length;
   }
@@ -162,7 +162,8 @@ export const shouldShowBusForSearch = (bus, searchDate, now = new Date()) => {
   if (!matchesFrequency(bus, searchDate)) return false;
   if (searchDate) {
     const todayLocalYmd = toLocalYmd(now);
-    if (searchDate === todayLocalYmd && departure.getTime() <= now.getTime()) return false;
+    const todayUtcYmd = toUtcYmd(now);
+    if ((searchDate === todayLocalYmd || searchDate === todayUtcYmd) && departure.getTime() <= now.getTime()) return false;
   }
   return true;
 };

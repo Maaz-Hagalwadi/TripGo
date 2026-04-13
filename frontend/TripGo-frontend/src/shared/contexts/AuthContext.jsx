@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { fetchCurrentUser, loginRequest, pingHealth } from '../services/authService';
+import { API_BASE_URL } from '../../config/env';
 import { toast } from 'sonner';
 
 const AuthContext = createContext();
@@ -21,42 +22,54 @@ export const AuthProvider = ({ children }) => {
     userRef.current = user;
   }, [user]);
 
-  useEffect(() => {
-    checkAuth();
-    const keepAlive = setInterval(pingHealth, 600000);
-    // Poll every 30 seconds to detect suspension while logged in
-    const statusPoll = setInterval(async () => {
-      const currentUser = userRef.current;
-      if (!currentUser || currentUser.role !== 'OPERATOR') return;
-      const token = localStorage.getItem('accessToken');
-      if (!token) return;
-      const result = await fetchCurrentUser(token);
-      if (!result) return;
-      const status = result.user?.operatorStatus || result.user?.status;
-      if (status === 'SUSPENDED') {
-        localStorage.removeItem('accessToken');
-        localStorage.removeItem('refreshToken');
-        setIsAuthenticated(false);
-        setUser(null);
-        setSuspendedWhileLoggedIn(true);
+  const tryRefreshToken = async () => {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) return false;
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!response.ok) return false;
+      const data = await response.json();
+      if (data.accessToken) {
+        localStorage.setItem('accessToken', data.accessToken);
+        if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+        return true;
       }
-    }, 30000);
-    return () => {
-      clearInterval(keepAlive);
-      clearInterval(statusPoll);
-    };
-  }, []);
+      return false;
+    } catch {
+      return false;
+    }
+  };
 
   const checkAuth = async () => {
     try {
-      const token = localStorage.getItem('accessToken');
-      if (!token) {
-        setIsAuthenticated(false);
-        setUser(null);
-        return null;
+      let currentToken = localStorage.getItem('accessToken');
+
+      // No access token — try refresh before giving up
+      if (!currentToken) {
+        const refreshed = await tryRefreshToken();
+        if (!refreshed) {
+          setIsAuthenticated(false);
+          setUser(null);
+          return null;
+        }
+        currentToken = localStorage.getItem('accessToken');
       }
 
-      const result = await fetchCurrentUser(token);
+      let result = await fetchCurrentUser(currentToken);
+
+      // Access token expired — try refresh once
+      if (!result) {
+        const refreshed = await tryRefreshToken();
+        if (refreshed) {
+          currentToken = localStorage.getItem('accessToken');
+          result = await fetchCurrentUser(currentToken);
+        }
+      }
+
       if (result) {
         setIsAuthenticated(true);
         setUser(result.user);
@@ -77,10 +90,42 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  useEffect(() => {
+    checkAuth();
+    const keepAlive = setInterval(pingHealth, 600000);
+
+    const statusPoll = setInterval(async () => {
+      const currentUser = userRef.current;
+      if (!currentUser || currentUser.role !== 'OPERATOR') return;
+      let token = localStorage.getItem('accessToken');
+      if (!token) return;
+      let result = await fetchCurrentUser(token);
+      if (!result) {
+        const refreshed = await tryRefreshToken();
+        if (!refreshed) return;
+        token = localStorage.getItem('accessToken');
+        result = await fetchCurrentUser(token);
+      }
+      if (!result) return;
+      const status = result.user?.operatorStatus || result.user?.status;
+      if (status === 'SUSPENDED') {
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        setIsAuthenticated(false);
+        setUser(null);
+        setSuspendedWhileLoggedIn(true);
+      }
+    }, 30000);
+
+    return () => {
+      clearInterval(keepAlive);
+      clearInterval(statusPoll);
+    };
+  }, []);
+
   const login = async (credentials) => {
     const result = await loginRequest(credentials);
     if (result.error) return { success: false, error: result.error };
-
     localStorage.setItem('accessToken', result.accessToken);
     localStorage.setItem('refreshToken', result.refreshToken);
     await checkAuth();

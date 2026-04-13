@@ -6,6 +6,7 @@ import com.tripgo.backend.model.entities.AmenityMaster;
 import com.tripgo.backend.model.entities.Bus;
 import com.tripgo.backend.repository.BusRepository;
 import com.tripgo.backend.service.impl.EmailService;
+import com.tripgo.backend.service.impl.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +22,8 @@ public class AdminBusController {
 
     private final BusRepository busRepository;
     private final EmailService emailService;
+    private final NotificationService notificationService;
+    private final com.tripgo.backend.repository.UserRepository userRepository;
 
     @GetMapping
     public List<BusResponse> listBuses(@RequestParam(required = false) Boolean active) {
@@ -45,6 +48,11 @@ public class AdminBusController {
         bus.setActive(true);
         busRepository.save(bus);
         emailService.sendBusApproved(bus);
+        userRepository.findByOperator(bus.getOperator()).ifPresent(opUser ->
+                notificationService.send(opUser, "BUS_APPROVED",
+                        "Bus Approved ✅",
+                        "Your bus " + bus.getName() + " (" + bus.getBusCode() + ") has been approved and is now active.",
+                        "/operator/my-buses"));
         return toResponse(bus);
     }
 
@@ -55,6 +63,11 @@ public class AdminBusController {
         bus.setActive(false);
         busRepository.save(bus);
         emailService.sendBusRejected(bus);
+        userRepository.findByOperator(bus.getOperator()).ifPresent(opUser ->
+                notificationService.send(opUser, "BUS_REJECTED",
+                        "Bus Rejected",
+                        "Your bus " + bus.getName() + " (" + bus.getBusCode() + ") was not approved. Please contact support.",
+                        "/operator/my-buses"));
         return toResponse(bus);
     }
 

@@ -106,11 +106,12 @@ const buildPaymentPayload = (booking, totalAmount, gstAmount, payableAmount) => 
   const passengerEntries = Array.isArray(booking?.passengers) && booking.passengers.length
     ? booking.passengers
     : seatNumbers.map((seatNumber) => ({ ...booking?.passenger, seatNumber }));
+  const selectedDate = booking?.searchParams?.date || booking?.travelDate || '';
 
   return {
     lockToken: booking?.lockToken || '',
     scheduleId: booking?.scheduleId || '',
-    travelDate: booking?.searchParams?.date || booking?.travelDate || '',
+    travelDate: selectedDate,
     from: booking?.searchParams?.from || '',
     to: booking?.searchParams?.to || '',
     totalAmount,
@@ -303,6 +304,7 @@ const DummyPayment = () => {
     }
 
     const payload = buildPaymentPayload(booking, totalAmount, gstAmount, payableAmount);
+    const selectedDate = booking?.searchParams?.date || booking?.travelDate || '';
     let isMounted = true;
 
     const initializePayment = async () => {
@@ -314,7 +316,7 @@ const DummyPayment = () => {
         const cacheMatchesCurrentBooking = cachedIntent
           && cachedIntent.lockToken === booking.lockToken
           && cachedIntent.scheduleId === booking.scheduleId
-          && String(cachedIntent.travelDate || '') === String(booking?.searchParams?.date || booking?.travelDate || '')
+          && String(cachedIntent.travelDate || '') === String(selectedDate)
           && Number(cachedIntent.payableAmount) === Number(payableAmount)
           && Array.isArray(cachedIntent.seatNumbers)
           && cachedIntent.seatNumbers.join(',') === (booking?.selectedSeats || []).join(',')
@@ -341,7 +343,7 @@ const DummyPayment = () => {
           gstAmount,
           seatNumbers: booking?.selectedSeats || [],
           scheduleId: booking?.scheduleId || '',
-          travelDate: booking?.searchParams?.date || booking?.travelDate || '',
+          travelDate: selectedDate,
           bus: booking?.bus || null,
           searchParams: booking?.searchParams || null,
           bookingState: booking,

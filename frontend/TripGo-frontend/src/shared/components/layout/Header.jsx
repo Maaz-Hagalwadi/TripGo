@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import TripGoIcon from '../../../assets/icons/TripGoIcon';
+import NotificationBell from '../NotificationBell';
 
 const Header = () => {
   const navigate = useNavigate();
@@ -35,6 +36,7 @@ const Header = () => {
           
           {/* Auth Buttons - Right */}
           <div className="flex items-center gap-3">
+            {isAuthenticated ? <NotificationBell /> : null}
             <button 
               onClick={() => navigate('/login')}
               className="bg-white/10 hover:bg-white/20 text-white px-3 md:px-6 py-2.5 rounded-full text-xs md:text-sm font-bold transition-all"

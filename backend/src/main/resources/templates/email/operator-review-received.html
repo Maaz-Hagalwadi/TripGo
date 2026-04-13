@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"/>
+<style>
+  body{margin:0;padding:0;background:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;}
+  .wrapper{max-width:600px;margin:30px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);}
+  .header{background:linear-gradient(135deg,#f59e0b,#d97706);padding:36px 32px;text-align:center;}
+  .header h1{color:#fff;margin:0;font-size:24px;font-weight:700;}
+  .header p{color:rgba(255,255,255,0.9);margin:6px 0 0;font-size:14px;}
+  .body{padding:32px;color:#333;}
+  .stars{font-size:28px;margin:12px 0;}
+  .review-box{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px 20px;margin:16px 0;}
+  .review-box p{margin:0 0 8px;font-size:14px;color:#555;}
+  .review-box blockquote{margin:8px 0 0;font-style:italic;color:#333;border-left:3px solid #f59e0b;padding-left:12px;}
+  .btn{display:inline-block;background:#1a73e8;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:20px;}
+  .footer{background:#f4f6f9;padding:20px 32px;text-align:center;font-size:12px;color:#999;border-top:1px solid #eee;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <h1>🚌 TripGo</h1>
+    <p>New Review Received</p>
+  </div>
+  <div class="body">
+    <p>Hi <strong th:text="${operatorName}">Operator</strong>, a passenger has submitted a review for your bus.</p>
+    <div class="stars">
+      <span th:each="i : ${#numbers.sequence(1, rating)}">⭐</span>
+      <span th:text="' ' + rating + '/5'"> 4/5</span>
+    </div>
+    <div class="review-box">
+      <p><strong>Bus:</strong> <span th:text="${busName}">Bus Name</span></p>
+      <p><strong>Route:</strong> <span th:text="${from + ' → ' + to}">A → B</span></p>
+      <p><strong>Reviewer:</strong> <span th:text="${reviewerName}">John D.</span></p>
+      <p th:if="${title != null and !#strings.isEmpty(title)}"><strong>Title:</strong> <span th:text="${title}">Great trip!</span></p>
+      <blockquote th:if="${comment != null and !#strings.isEmpty(comment)}" th:text="${comment}">Great experience overall.</blockquote>
+    </div>
+    <a th:href="${frontendUrl + '/operator/reviews'}" class="btn">View All Reviews</a>
+  </div>
+  <div class="footer">© 2026 TripGo.</div>
+</div>
+</body>
+</html>

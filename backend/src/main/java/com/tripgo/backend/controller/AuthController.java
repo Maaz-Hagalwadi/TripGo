@@ -18,6 +18,7 @@ import com.tripgo.backend.security.service.EmailVerificationService;
 import com.tripgo.backend.security.service.RefreshTokenService;
 import com.tripgo.backend.service.impl.AuthenticationService;
 import com.tripgo.backend.service.impl.EmailService;
+import com.tripgo.backend.service.impl.NotificationService;
 import com.tripgo.backend.service.impl.PasswordResetService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -48,6 +49,7 @@ public class AuthController {
     private final PasswordResetService passwordResetService;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
+    private final NotificationService notificationService;
 
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
     private String googleClientId;
@@ -145,6 +147,12 @@ public class AuthController {
 
             if (isOperator) {
                 emailService.notifyAdminsOperatorVerification(user.getOperator());
+                notificationService.sendToAdmins(
+                        "OPERATOR_PENDING",
+                        "New Operator Pending Approval 📄",
+                        "Operator '" + user.getOperator().getName() + "' has verified their email and is awaiting approval.",
+                        "/admin/operators"
+                );
             }
 
             user.setEmailVerified(true);

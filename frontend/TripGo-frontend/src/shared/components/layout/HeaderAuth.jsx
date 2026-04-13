@@ -2,22 +2,18 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import TripGoIcon from '../../../assets/icons/TripGoIcon';
+import NotificationBell from '../NotificationBell';
 
 const HeaderAuth = () => {
   const navigate = useNavigate();
   const { logout, user } = useAuth();
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
   const profileRef = useRef(null);
-  const notificationRef = useRef(null);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (profileRef.current && !profileRef.current.contains(event.target)) {
         setShowProfileDropdown(false);
-      }
-      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
-        setShowNotifications(false);
       }
     };
 
@@ -29,14 +25,6 @@ const HeaderAuth = () => {
     await logout();
     navigate('/');
   };
-
-  const notifications = [
-    { id: 1, message: "Your booking for Delhi to Mumbai is confirmed", time: "2 hours ago", unread: true },
-    { id: 2, message: "New route available: Bangalore to Chennai", time: "1 day ago", unread: false },
-    { id: 3, message: "Payment successful for booking #TG12345", time: "2 days ago", unread: false }
-  ];
-
-  const unreadCount = notifications.filter(n => n.unread).length;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b theme-border theme-bg/95 backdrop-blur-xl shadow-2xl">
@@ -68,44 +56,7 @@ const HeaderAuth = () => {
 
           {/* Right Side Actions */}
           <div className="flex items-center gap-2 md:gap-4">
-            {/* Notifications */}
-            <div className="relative" ref={notificationRef}>
-              <button
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="relative p-2 text-slate-400 hover:text-white transition-colors"
-              >
-                <span className="material-symbols-outlined text-xl md:text-2xl">notifications</span>
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-primary text-black text-xs font-bold rounded-full w-4 h-4 md:w-5 md:h-5 flex items-center justify-center text-[10px] md:text-xs">
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-              
-              {/* Notifications Dropdown */}
-              {showNotifications && (
-                <div className="absolute right-0 mt-2 w-72 md:w-80 bg-charcoal border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-                  <div className="p-4 border-b border-white/10">
-                    <h3 className="text-white font-bold text-lg">Notifications</h3>
-                  </div>
-                  <div className="max-h-64 overflow-y-auto">
-                    {notifications.map((notification) => (
-                      <div key={notification.id} className={`p-4 border-b border-white/5 hover:bg-white/5 transition-colors ${
-                        notification.unread ? 'bg-primary/5' : ''
-                      }`}>
-                        <p className="text-white text-sm mb-1">{notification.message}</p>
-                        <p className="text-slate-400 text-xs">{notification.time}</p>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="p-4 border-t border-white/10">
-                    <button className="text-primary text-sm font-medium hover:underline">
-                      View all notifications
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <NotificationBell />
 
             {/* Profile Dropdown */}
             <div className="relative" ref={profileRef}>

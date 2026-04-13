@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"/>
+<style>
+  body{margin:0;padding:0;background:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;}
+  .wrapper{max-width:600px;margin:30px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);}
+  .header{background:linear-gradient(135deg,#10b981,#059669);padding:36px 32px;text-align:center;}
+  .header h1{color:#fff;margin:0;font-size:24px;font-weight:700;}
+  .header p{color:rgba(255,255,255,0.9);margin:6px 0 0;font-size:14px;}
+  .body{padding:32px;color:#333;}
+  .stars{font-size:28px;margin:12px 0;}
+  .review-box{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin:16px 0;}
+  .footer{background:#f4f6f9;padding:20px 32px;text-align:center;font-size:12px;color:#999;border-top:1px solid #eee;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <h1>🚌 TripGo</h1>
+    <p>Thanks for your review!</p>
+  </div>
+  <div class="body">
+    <p>Hi <strong th:text="${firstName}">Traveller</strong>, thank you for sharing your experience!</p>
+    <div class="stars">
+      <span th:each="i : ${#numbers.sequence(1, rating)}">⭐</span>
+      <span th:text="' ' + rating + '/5'"> 4/5</span>
+    </div>
+    <div class="review-box">
+      <p style="margin:0 0 8px"><strong>Bus:</strong> <span th:text="${busName}">Bus Name</span></p>
+      <p style="margin:0 0 8px"><strong>Route:</strong> <span th:text="${from + ' → ' + to}">A → B</span></p>
+      <p th:if="${comment != null and !#strings.isEmpty(comment)}" style="margin:0;font-style:italic;color:#555" th:text="'\"' + comment + '\"'">Your comment</p>
+    </div>
+    <p>Your feedback helps other travellers make better decisions. Thank you for travelling with TripGo!</p>
+  </div>
+  <div class="footer">© 2026 TripGo.</div>
+</div>
+</body>
+</html>

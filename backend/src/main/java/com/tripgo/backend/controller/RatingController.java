@@ -4,6 +4,8 @@ import com.tripgo.backend.model.entities.*;
 import com.tripgo.backend.repository.*;
 import com.tripgo.backend.model.enums.BookingStatus;
 import com.tripgo.backend.security.service.CustomUserDetails;
+import com.tripgo.backend.service.impl.EmailService;
+import com.tripgo.backend.service.impl.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -19,6 +21,9 @@ public class RatingController {
     private final BookingRepository bookingRepository;
     private final RouteScheduleRepository scheduleRepository;
     private final BusRepository busRepository;
+    private final EmailService emailService;
+    private final com.tripgo.backend.repository.UserRepository userRepository;
+    private final NotificationService notificationService;
 
     // POST /booking/trips/{scheduleId}/rating
     @PostMapping("/booking/trips/{scheduleId}/rating")
@@ -70,6 +75,38 @@ public class RatingController {
                 .build();
 
         reviewRepository.save(review);
+
+        // Email user: review submitted confirmation
+        emailService.sendUserReviewSubmitted(user,
+                schedule.getBus().getName(),
+                schedule.getRoute().getOrigin(),
+                schedule.getRoute().getDestination(),
+                rating, comment);
+
+        // Notify user via WebSocket
+        notificationService.send(user, "REVIEW_SUBMITTED",
+                "Review Submitted",
+                "Thanks for rating your trip on " + schedule.getBus().getName() + "!",
+                "/bookings");
+
+        // Email operator: new review received
+        User opUser = userRepository.findByOperator(schedule.getRoute().getOperator()).orElse(null);
+        if (opUser != null) {
+            String reviewerName = user.getFirstName() + (user.getLastName() != null
+                    ? " " + user.getLastName().substring(0, 1) + "." : "");
+            emailService.notifyOperatorReviewReceived(opUser,
+                    schedule.getRoute().getOperator().getName(),
+                    schedule.getBus().getName(),
+                    schedule.getRoute().getOrigin(),
+                    schedule.getRoute().getDestination(),
+                    reviewerName, rating, title, comment);
+
+            // Notify operator via WebSocket
+            notificationService.send(opUser, "REVIEW_RECEIVED",
+                    "New Review Received ⭐",
+                    rating + "★ review on " + schedule.getBus().getName() + " by " + reviewerName,
+                    "/operator/reviews");
+        }
 
         return ResponseEntity.ok(Map.of(
                 "message", "Rating submitted successfully",

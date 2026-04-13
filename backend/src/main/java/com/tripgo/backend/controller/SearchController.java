@@ -67,7 +67,6 @@ public class SearchController {
                     adjustedSchedule.setArrivalTime(adjustedArrival);
                     adjustedSchedule.setFrequency(schedule.getFrequency());
                     adjustedSchedule.setActive(schedule.getActive());
-                    // Copy trip status fields
                     adjustedSchedule.setTripStatus(schedule.getTripStatus());
                     adjustedSchedule.setDelayMinutes(schedule.getDelayMinutes());
                     adjustedSchedule.setDelayReason(schedule.getDelayReason());

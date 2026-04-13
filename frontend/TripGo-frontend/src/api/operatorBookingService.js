@@ -16,5 +16,7 @@ export const getOperatorBookings = async (status) => {
 };
 
 export const cancelOperatorBooking = async (bookingId, cancelReason) => {
-  return apiPost(`/booking/${encodeURIComponent(bookingId)}/operator-cancel`, { cancelReason });
+  return apiPost(`/booking/${encodeURIComponent(bookingId)}/operator-cancel`, {
+    reason: cancelReason,
+  });
 };

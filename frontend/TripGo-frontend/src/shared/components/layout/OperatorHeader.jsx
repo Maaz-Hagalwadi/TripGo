@@ -6,6 +6,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import useClickOutside from '../../hooks/useClickOutside';
 import { updateCurrentUser } from '../../../api/userService';
 import ThemeToggle from '../ui/ThemeToggle';
+import NotificationBell from '../NotificationBell';
 
 const ProfileModal = ({ user, onClose, onNameUpdate }) => {
   const ref = useRef(null);
@@ -112,12 +113,6 @@ const ProfileModal = ({ user, onClose, onNameUpdate }) => {
   );
 };
 
-const NOTIFICATIONS = [
-  { id: 1, message: 'New booking received for Route TRP-102', time: '10 min ago', unread: true },
-  { id: 2, message: 'Bus TRP-088 maintenance scheduled', time: '1 hour ago', unread: true },
-  { id: 3, message: 'Monthly revenue report available', time: '2 hours ago', unread: false },
-];
-
 const OperatorHeader = ({
   title,
   searchPlaceholder = 'Search buses, routes, or bookings...',
@@ -129,16 +124,11 @@ const OperatorHeader = ({
 }) => {
   const navigate = useNavigate();
   const { user, logout, updateUser } = useAuth();
-  const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const notificationRef = useRef(null);
   const profileRef = useRef(null);
 
-  useClickOutside(notificationRef, () => setShowNotifications(false));
   useClickOutside(profileRef, () => setShowProfileDropdown(false));
-
-  const unreadCount = NOTIFICATIONS.filter(n => n.unread).length;
 
   return (
     <>
@@ -159,35 +149,7 @@ const OperatorHeader = ({
       </div>
 
       <div className="flex items-center gap-6">
-        {/* Notifications */}
-        <div className="relative" ref={notificationRef}>
-          <button
-            onClick={() => setShowNotifications(p => !p)}
-            className="relative text-slate-500 dark:text-slate-400 hover:text-primary transition-colors"
-          >
-            <span className="material-symbols-outlined">notifications</span>
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                {unreadCount}
-              </span>
-            )}
-          </button>
-          {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-op-card border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden z-50">
-              <div className="p-4 border-b border-slate-200 dark:border-slate-800">
-                <h3 className="font-bold text-sm">Notifications</h3>
-              </div>
-              <div className="max-h-64 overflow-y-auto">
-                {NOTIFICATIONS.map((n) => (
-                  <div key={n.id} className={`p-4 border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${n.unread ? 'bg-primary/5' : ''}`}>
-                    <p className="text-sm mb-1">{n.message}</p>
-                    <p className="text-slate-500 dark:text-slate-400 text-xs">{n.time}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        <NotificationBell />
 
         {/* Theme Toggle */}
         <ThemeToggle />

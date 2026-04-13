@@ -27,9 +27,6 @@ public class RefreshTokenService {
      */
     public RefreshToken createRefreshToken(User user, String tokenValue) {
 
-        // 🔥 revoke previous tokens FIRST
-        refreshTokenRepository.revokeAllByUser(user);
-
         RefreshToken refreshToken = RefreshToken.builder()
                 .token(tokenValue)
                 .user(user)

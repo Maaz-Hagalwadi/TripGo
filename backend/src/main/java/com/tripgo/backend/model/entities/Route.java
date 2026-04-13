@@ -7,6 +7,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -37,6 +38,10 @@ public class Route {
 
     @Column(name = "distance_km")
     private BigDecimal distanceKm;
+
+    @OneToMany(mappedBy = "route", fetch = FetchType.LAZY)
+    @OrderBy("seq ASC")
+    private List<RouteSegment> segments;
 
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

@@ -12,6 +12,10 @@ const PAYMENT_FLOW_STORAGE_KEY = 'tripgo_payment_flow_state';
 const CURRENT_BOOKING_STORAGE_KEY = 'tripgo_current_booking_state';
 const BOOKING_DRAFT_PREFIX = 'tripgo_booking_draft_';
 
+const toDraftKeyPart = (value) => String(value || '')
+  .trim()
+  .replace(/[^a-zA-Z0-9_-]+/g, '-');
+
 const findMatchingBooking = (bookings, pendingPayment) => {
   if (!pendingPayment) return null;
   const pendingIds = [
@@ -138,6 +142,9 @@ const PaymentSuccess = () => {
               localStorage.removeItem(CURRENT_BOOKING_STORAGE_KEY);
               if (pendingPayment?.scheduleId) {
                 localStorage.removeItem(`${BOOKING_DRAFT_PREFIX}${pendingPayment.scheduleId}`);
+                localStorage.removeItem(
+                  `${BOOKING_DRAFT_PREFIX}${toDraftKeyPart(pendingPayment.scheduleId)}_${toDraftKeyPart(pendingPayment?.travelDate || pendingPayment?.bookingState?.searchParams?.date || 'unscheduled')}`
+                );
               }
             }
             setLoading(false);

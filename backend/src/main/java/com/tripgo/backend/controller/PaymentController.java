@@ -13,6 +13,7 @@ import com.tripgo.backend.model.enums.TicketStatus;
 import com.tripgo.backend.repository.*;
 import com.tripgo.backend.security.service.CustomUserDetails;
 import com.tripgo.backend.service.impl.EmailService;
+import com.tripgo.backend.service.impl.NotificationService;
 import com.tripgo.backend.service.impl.SeatLockService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/payments")
@@ -39,6 +41,8 @@ public class PaymentController {
     private final BookingSeatRepository bookingSeatRepository;
     private final PassengerRepository passengerRepository;
     private final EmailService emailService;
+    private final NotificationService notificationService;
+    private final com.tripgo.backend.repository.UserRepository userRepository;
 
     @Value("${stripe.webhook-secret}")
     private String webhookSecret;
@@ -93,14 +97,54 @@ public class PaymentController {
                         .body(Map.of("error", "Lock token expired or invalid. Please select seats again."));
             }
 
+            boolean segmentMismatch = locks.stream().anyMatch(lock ->
+                    (lock.getFromStop() != null && from != null && !lock.getFromStop().equalsIgnoreCase(from))
+                    || (lock.getToStop() != null && to != null && !lock.getToStop().equalsIgnoreCase(to))
+            );
+            if (segmentMismatch) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Selected segment does not match the locked seats. Please select seats again."));
+            }
+
             // Parse passengers before idempotency check
             List<?> rawPassengers = (List<?>) body.get("passengers");
             List<Map<String, Object>> passengers = rawPassengers.stream()
                     .map(p -> (Map<String, Object>) p)
                     .toList();
 
+            // Derive travelDate from the adjusted departure time passed in body, or fall back to schedule date
+            java.time.LocalDate travelDate = null;
+            if (body.get("travelDate") != null) {
+                travelDate = java.time.LocalDate.parse((String) body.get("travelDate"));
+            } else {
+                travelDate = java.time.LocalDateTime
+                        .ofInstant(schedule.getDepartureTime(), java.time.ZoneOffset.UTC)
+                        .toLocalDate();
+            }
+
+            Set<String> requestedSeatNumbers = passengers.stream()
+                    .map(p -> String.valueOf(p.get("seatNumber")))
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+
             // Idempotency: reuse existing PENDING booking + PaymentIntent if still usable
-            List<Booking> existingPending = bookingRepository.findPendingByUserAndSchedule(user, scheduleId);
+            List<Booking> existingPending = bookingRepository.findPendingByUserAndScheduleAndTravelDate(user, scheduleId, travelDate)
+                    .stream()
+                    .filter(existing -> {
+                        List<BookingSeat> existingSeats = bookingSeatRepository.findByBookingId(existing.getId());
+                        if (existingSeats.isEmpty()) return false;
+
+                        Set<String> existingSeatNumbers = existingSeats.stream()
+                                .map(BookingSeat::getSeatNumber)
+                                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+                        boolean sameSegment = existingSeats.stream().allMatch(seat ->
+                                Objects.equals(normalizeValue(seat.getFromStop()), normalizeValue(from))
+                                && Objects.equals(normalizeValue(seat.getToStop()), normalizeValue(to))
+                        );
+
+                        return sameSegment && existingSeatNumbers.equals(requestedSeatNumbers);
+                    })
+                    .toList();
             if (!existingPending.isEmpty()) {
                 Booking existing = existingPending.get(0);
                 Payment existingPayment = paymentRepository.findByBooking(existing).stream()
@@ -128,16 +172,6 @@ public class PaymentController {
 
             // Create PENDING booking
             String bookingCode = "TG" + UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
-
-            // Derive travelDate from the adjusted departure time passed in body, or fall back to schedule date
-            java.time.LocalDate travelDate = null;
-            if (body.get("travelDate") != null) {
-                travelDate = java.time.LocalDate.parse((String) body.get("travelDate"));
-            } else {
-                travelDate = java.time.LocalDateTime
-                        .ofInstant(schedule.getDepartureTime(), java.time.ZoneOffset.UTC)
-                        .toLocalDate();
-            }
 
             Booking booking = Booking.builder()
                     .user(user)
@@ -247,16 +281,79 @@ public class PaymentController {
             return ResponseEntity.badRequest().body(Map.of("error", "Booking has been cancelled"));
         }
 
-        if (booking.getStatus() != BookingStatus.CONFIRMED) {
-            paymentRepository.findByProviderTransactionId(paymentIntentId).ifPresent(p -> {
+        try {
+            PaymentIntent intent = PaymentIntent.retrieve(paymentIntentId);
+            if (!"succeeded".equals(intent.getStatus())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Payment is not completed yet"));
+            }
+
+            String intentBookingId = intent.getMetadata().get("bookingId");
+            if (intentBookingId != null && !intentBookingId.equals(String.valueOf(bookingId))) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Payment does not belong to this booking"));
+            }
+
+            paymentRepository.findByProviderTransactionId(paymentIntentId).ifPresentOrElse(p -> {
                 if (p.getStatus() != PaymentStatus.SUCCESS) {
                     p.setStatus(PaymentStatus.SUCCESS);
                     paymentRepository.save(p);
                 }
-            });
+            }, () -> paymentRepository.save(Payment.builder()
+                    .booking(booking)
+                    .provider("STRIPE")
+                    .providerTransactionId(paymentIntentId)
+                    .amount(booking.getPayableAmount())
+                    .status(PaymentStatus.SUCCESS)
+                    .build()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Unable to verify payment with Stripe"));
+        }
+
+        if (booking.getStatus() != BookingStatus.CONFIRMED) {
             booking.setStatus(BookingStatus.CONFIRMED);
             bookingRepository.save(booking);
             createTicketIfAbsent(booking);
+
+            notificationService.send(booking.getUser(),
+                    "BOOKING_CONFIRMED",
+                    "Booking Confirmed! 🎉",
+                    "Your booking " + booking.getBookingCode() + " is confirmed. Have a great trip!",
+                    "/bookings");
+
+            User opUser = userRepository.findByOperator(booking.getOperator()).orElse(null);
+            if (opUser != null) {
+                notificationService.send(opUser,
+                        "NEW_BOOKING",
+                        "New Booking Received",
+                        "Booking " + booking.getBookingCode() + " confirmed on " + booking.getRouteSchedule().getBus().getName(),
+                        "/operator/bookings?bookingCode=" + booking.getBookingCode());
+            }
+
+            // Send emails
+            List<BookingSeat> seats = bookingSeatRepository.findByBookingId(booking.getId());
+            Map<String, Object> emailDetails = new LinkedHashMap<>();
+            emailDetails.put("bookingCode", booking.getBookingCode());
+            emailDetails.put("from", seats.isEmpty() ? "-" : seats.get(0).getFromStop());
+            emailDetails.put("to", seats.isEmpty() ? "-" : seats.get(0).getToStop());
+            emailDetails.put("busName", booking.getRouteSchedule().getBus().getName());
+            emailDetails.put("operatorName", booking.getOperator().getName());
+            emailDetails.put("departureTime", booking.getRouteSchedule().getDepartureTime().toString());
+            emailDetails.put("arrivalTime", booking.getRouteSchedule().getArrivalTime().toString());
+            emailDetails.put("totalAmount", booking.getTotalAmount());
+            emailDetails.put("gstAmount", booking.getGstAmount());
+            emailDetails.put("payableAmount", booking.getPayableAmount());
+            emailDetails.put("passengers", seats.stream().map(s -> {
+                Map<String, Object> p = new LinkedHashMap<>();
+                p.put("seatNumber", s.getSeatNumber());
+                if (s.getPassenger() != null) {
+                    p.put("firstName", s.getPassenger().getFirstName());
+                    p.put("lastName", s.getPassenger().getLastName() != null ? s.getPassenger().getLastName() : "");
+                    p.put("age", s.getPassenger().getAge());
+                    p.put("gender", s.getPassenger().getGender());
+                }
+                return p;
+            }).toList());
+            emailService.sendBookingConfirmation(booking.getUser(), emailDetails);
+            emailService.notifyOperatorNewBooking(booking, seats);
         }
 
         List<BookingSeat> bookingSeats = bookingSeatRepository.findByBookingId(booking.getId());
@@ -282,6 +379,10 @@ public class PaymentController {
             return p;
         }).toList());
         return ResponseEntity.ok(response);
+    }
+
+    private String normalizeValue(String value) {
+        return value == null ? "" : value.trim().toLowerCase();
     }
 
     /**
@@ -331,12 +432,29 @@ public class PaymentController {
                 // Release seat locks
                 lockService.release(UUID.fromString(lockToken));
 
-                // Send confirmation email
+                // Notify user
+                notificationService.send(booking.getUser(),
+                        "BOOKING_CONFIRMED",
+                        "Booking Confirmed! 🎉",
+                        "Your booking " + booking.getBookingCode() + " is confirmed. Have a great trip!",
+                        "/bookings");
+
+                // Notify operator
+                User opUser = userRepository.findByOperator(booking.getOperator()).orElse(null);
+                if (opUser != null) {
+                    notificationService.send(opUser,
+                            "NEW_BOOKING",
+                            "New Booking Received",
+                            "Booking " + booking.getBookingCode() + " confirmed on " + booking.getRouteSchedule().getBus().getName(),
+                            "/operator/bookings?bookingCode=" + booking.getBookingCode());
+                }
+
+                // Send confirmation email to user
                 List<BookingSeat> seats = bookingSeatRepository.findByBookingId(booking.getId());
                 Map<String, Object> emailDetails = new LinkedHashMap<>();
                 emailDetails.put("bookingCode", booking.getBookingCode());
-                emailDetails.put("from", seats.get(0).getFromStop());
-                emailDetails.put("to", seats.get(0).getToStop());
+                emailDetails.put("from", seats.isEmpty() ? "-" : seats.get(0).getFromStop());
+                emailDetails.put("to", seats.isEmpty() ? "-" : seats.get(0).getToStop());
                 emailDetails.put("busName", booking.getRouteSchedule().getBus().getName());
                 emailDetails.put("operatorName", booking.getOperator().getName());
                 emailDetails.put("departureTime", booking.getRouteSchedule().getDepartureTime().toString());
@@ -344,7 +462,21 @@ public class PaymentController {
                 emailDetails.put("totalAmount", booking.getTotalAmount());
                 emailDetails.put("gstAmount", booking.getGstAmount());
                 emailDetails.put("payableAmount", booking.getPayableAmount());
+                emailDetails.put("passengers", seats.stream().map(s -> {
+                    Map<String, Object> p = new LinkedHashMap<>();
+                    p.put("seatNumber", s.getSeatNumber());
+                    if (s.getPassenger() != null) {
+                        p.put("firstName", s.getPassenger().getFirstName());
+                        p.put("lastName", s.getPassenger().getLastName() != null ? s.getPassenger().getLastName() : "");
+                        p.put("age", s.getPassenger().getAge());
+                        p.put("gender", s.getPassenger().getGender());
+                    }
+                    return p;
+                }).toList());
                 emailService.sendBookingConfirmation(booking.getUser(), emailDetails);
+
+                // Notify operator of new booking
+                emailService.notifyOperatorNewBooking(booking, seats);
             }
 
             case "payment_intent.payment_failed" -> {
@@ -364,6 +496,19 @@ public class PaymentController {
                             p.setStatus(PaymentStatus.FAILED);
                             paymentRepository.save(p);
                         });
+
+                // Notify user of payment failure
+                notificationService.send(booking.getUser(),
+                        "PAYMENT_FAILED",
+                        "Payment Failed",
+                        "Your payment for the trip could not be processed. Please try again.",
+                        "/search-results");
+
+                List<BookingSeat> failedSeats = bookingSeatRepository.findByBookingId(booking.getId());
+                String from = failedSeats.isEmpty() ? "-" : failedSeats.get(0).getFromStop();
+                String to = failedSeats.isEmpty() ? "-" : failedSeats.get(0).getToStop();
+                emailService.sendPaymentFailed(booking.getUser(), from, to,
+                        booking.getRouteSchedule().getBus().getName(), booking.getPayableAmount());
             }
 
             default -> { /* ignore other events like charge.succeeded */ }
