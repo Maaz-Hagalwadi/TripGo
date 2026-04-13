@@ -13,6 +13,8 @@ const TYPE_ICON = {
   TRIP_COMPLETED: '🏁',
   BUS_APPROVED: '✅',
   BUS_REJECTED: '❌',
+  OPERATOR_PENDING: '📄',
+  BUS_PENDING: '🚌',
 };
 
 export default function NotificationBell() {

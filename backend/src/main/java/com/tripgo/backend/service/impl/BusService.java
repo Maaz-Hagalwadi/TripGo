@@ -55,7 +55,7 @@ public class BusService {
                 "BUS_PENDING",
                 "New Bus Pending Approval 🚌",
                 "Operator " + user.getOperator().getName() + " added bus '" + bus.getName() + "' (" + bus.getBusCode() + "). Review required.",
-                "/admin/buses"
+                "/admin/dashboard?tab=buses&status=INACTIVE&busId=" + bus.getId()
         );
 
         return toResponse(bus);

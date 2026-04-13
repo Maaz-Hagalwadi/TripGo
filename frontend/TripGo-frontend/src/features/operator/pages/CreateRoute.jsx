@@ -6,6 +6,7 @@ import { getBuses } from '../../../api/busService';
 import { createRoute, addSegment, addFare, createSchedule } from '../../../api/routeService';
 import { toast } from 'sonner';
 import { ROUTES } from '../../../shared/constants/routes';
+import CenterScreenLoader from '../../../shared/components/ui/CenterScreenLoader';
 import './OperatorDashboard.css';
 
 const CreateRoute = () => {
@@ -47,6 +48,7 @@ const CreateRoute = () => {
   const fareSeatTypes = selectedBus ? getFareSeatTypes(selectedBus.busType) : ['SEATER', 'SLEEPER', 'AC_SEATER', 'AC_SLEEPER'];
   
   const [submitting, setSubmitting] = useState(false);
+  const [submittingLabel, setSubmittingLabel] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -74,6 +76,7 @@ const CreateRoute = () => {
     
     try {
       setSubmitting(true);
+      setSubmittingLabel('Saving route details...');
       setErrorMessage('');
       const response = await createRoute(routeData);
       setRouteId(response.id);
@@ -85,6 +88,7 @@ const CreateRoute = () => {
       setErrorMessage(error.message);
     } finally {
       setSubmitting(false);
+      setSubmittingLabel('');
     }
   };
 
@@ -126,6 +130,7 @@ const CreateRoute = () => {
     
     try {
       setSubmitting(true);
+      setSubmittingLabel('Saving your stops...');
       setErrorMessage('');
       const ids = [];
       for (const segment of segments) {
@@ -153,6 +158,7 @@ const CreateRoute = () => {
       setErrorMessage(error.message);
     } finally {
       setSubmitting(false);
+      setSubmittingLabel('');
     }
   };
 
@@ -165,6 +171,7 @@ const CreateRoute = () => {
   const handleStep3Submit = async (skip = false) => {
     try {
       setSubmitting(true);
+      setSubmittingLabel('Saving your fares...');
       setErrorMessage('');
       for (const fare of fares.filter(f => f.baseFare)) {
         await addFare(routeId, {
@@ -179,6 +186,7 @@ const CreateRoute = () => {
       setErrorMessage(error.message);
     } finally {
       setSubmitting(false);
+      setSubmittingLabel('');
     }
   };
 
@@ -189,6 +197,7 @@ const CreateRoute = () => {
     }
     try {
       setSubmitting(true);
+      setSubmittingLabel('Creating your schedule...');
       setErrorMessage('');
       const payload = {
         busId: scheduleData.busId,
@@ -204,11 +213,18 @@ const CreateRoute = () => {
       setErrorMessage(error.message);
     } finally {
       setSubmitting(false);
+      setSubmittingLabel('');
     }
   };
 
   return (
     <>
+      {submitting ? (
+        <CenterScreenLoader
+          label={submittingLabel || 'Processing your request...'}
+          description="Please wait while we save your route setup."
+        />
+      ) : null}
       <OperatorLayout activeItem="schedules" title="Create Route & Schedule">
           {/* Progress Steps */}
           <div className="flex items-center justify-center mb-8">
