@@ -28,6 +28,9 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     @Query("SELECT b FROM Booking b WHERE b.user = :user AND b.routeSchedule.id = :scheduleId AND b.status = 'PENDING' ORDER BY b.createdAt DESC")
     List<Booking> findPendingByUserAndSchedule(@Param("user") User user, @Param("scheduleId") UUID scheduleId);
 
+    @Query("SELECT b FROM Booking b WHERE b.user = :user AND b.routeSchedule.id = :scheduleId AND b.travelDate = :travelDate AND b.status = 'PENDING' ORDER BY b.createdAt DESC")
+    List<Booking> findPendingByUserAndScheduleAndTravelDate(@Param("user") User user, @Param("scheduleId") UUID scheduleId, @Param("travelDate") java.time.LocalDate travelDate);
+
     @Query("SELECT COALESCE(SUM(b.payableAmount), 0) FROM Booking b WHERE b.operator = :operator AND b.status = 'CONFIRMED'")
     BigDecimal getTotalRevenueByOperator(@Param("operator") Operator operator);
 

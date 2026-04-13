@@ -17,8 +17,6 @@ import org.springframework.stereotype.Service;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
-
-
 @Service
 @RequiredArgsConstructor
 public class BusService {
@@ -27,6 +25,7 @@ public class BusService {
     private final AmenityMasterRepository amenityRepository;
     private final UserRepository userRepository;
     private final EmailService emailService;
+    private final NotificationService notificationService;
 
     public BusResponse createBus(CreateBusRequest req, User user) {
 
@@ -50,6 +49,14 @@ public class BusService {
         );
 
         emailService.notifyAdminsBusAdded(bus, user);
+
+        // Real-time notification to all admins
+        notificationService.sendToAdmins(
+                "BUS_PENDING",
+                "New Bus Pending Approval 🚌",
+                "Operator " + user.getOperator().getName() + " added bus '" + bus.getName() + "' (" + bus.getBusCode() + "). Review required.",
+                "/admin/buses"
+        );
 
         return toResponse(bus);
     }

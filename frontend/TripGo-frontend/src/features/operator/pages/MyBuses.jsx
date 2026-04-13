@@ -9,7 +9,10 @@ import EditBusModal from '../components/EditBusModal';
 import { getBuses, deleteBus, updateBus, getOperatorInsights, getBusOccupancy } from '../../../api/busService';
 import { getAmenities } from '../../../api/amenityService';
 import { ROUTES } from '../../../shared/constants/routes';
+import PaginationControls from '../../../shared/components/ui/PaginationControls';
 import './OperatorDashboard.css';
+
+const PAGE_SIZE = 10;
 
 const MyBuses = () => {
   const navigate = useNavigate();
@@ -21,6 +24,7 @@ const MyBuses = () => {
   const [insights, setInsights] = useState({ busInsights: [], popularRoutes: {} });
   const [loadingInsights, setLoadingInsights] = useState(true);
   const [busOccupancyById, setBusOccupancyById] = useState({});
+  const [page, setPage] = useState(0);
 
   const [busToDelete, setBusToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
@@ -157,6 +161,8 @@ const MyBuses = () => {
     if (statusFilter === 'inactive') return !bus.active;
     return true;
   });
+  const totalPages = Math.max(1, Math.ceil(filteredBuses.length / PAGE_SIZE));
+  const paginatedBuses = filteredBuses.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const getBusTypeLabel = (type) => type.replace(/_/g, ' ');
   const busOccupancyMap = insights.busInsights.reduce((acc, item) => {
@@ -164,6 +170,16 @@ const MyBuses = () => {
     if (key) acc[key] = item;
     return acc;
   }, {});
+
+  useEffect(() => {
+    setPage(0);
+  }, [statusFilter]);
+
+  useEffect(() => {
+    if (page >= totalPages) {
+      setPage(Math.max(totalPages - 1, 0));
+    }
+  }, [page, totalPages]);
 
   return (
     <OperatorLayout
@@ -224,7 +240,7 @@ const MyBuses = () => {
         </div>
       ) : (
         <div className="bus-grid grid gap-6">
-          {filteredBuses.map((bus) => (
+          {paginatedBuses.map((bus) => (
             <div key={bus.id} className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-lg transition-shadow">
               <div className="p-6">
                 {(() => {
@@ -304,6 +320,17 @@ const MyBuses = () => {
           ))}
         </div>
       )}
+
+      {!loadingBuses && filteredBuses.length > 0 ? (
+        <PaginationControls
+          page={page}
+          pageSize={PAGE_SIZE}
+          totalItems={filteredBuses.length}
+          onPageChange={setPage}
+          itemLabel="buses"
+          className="mt-6"
+        />
+      ) : null}
 
       {/* Modals */}
       {busToView && <BusDetailsModal bus={busToView} onClose={() => setBusToView(null)} onEdit={handleEditClick} />}

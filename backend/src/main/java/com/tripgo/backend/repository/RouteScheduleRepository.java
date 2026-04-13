@@ -16,10 +16,13 @@ public interface RouteScheduleRepository extends JpaRepository<RouteSchedule, UU
     List<RouteSchedule> findByRoute(Route route);
 
     @Query("""
-        SELECT rs FROM RouteSchedule rs 
-        JOIN rs.route r 
-        WHERE LOWER(r.origin) = LOWER(:from) 
-        AND LOWER(r.destination) = LOWER(:to) 
+        SELECT DISTINCT rs FROM RouteSchedule rs
+        JOIN rs.route r
+        JOIN r.segments seg1
+        JOIN r.segments seg2
+        WHERE LOWER(TRIM(seg1.fromStop)) = LOWER(TRIM(:from))
+        AND LOWER(TRIM(seg2.toStop)) = LOWER(TRIM(:to))
+        AND seg1.seq <= seg2.seq
         AND rs.active = true
         AND (rs.frequency IS NOT NULL
              OR (rs.departureTime >= :startOfDay AND rs.departureTime < :endOfDay))

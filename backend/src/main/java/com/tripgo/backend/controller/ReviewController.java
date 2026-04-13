@@ -107,7 +107,7 @@ public class ReviewController {
                 from,
                 to,
                 hidden,
-                PageRequest.of(page, size, Sort.by("createdAt").descending())
+                PageRequest.of(page, size)
         );
 
         return ResponseEntity.ok(toPageResponse(reviews, false));

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"/>
+<style>
+  body{margin:0;padding:0;background:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;}
+  .wrapper{max-width:600px;margin:30px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);}
+  .header{background:linear-gradient(135deg,#1a73e8,#0d47a1);padding:36px 32px;text-align:center;}
+  .header h1{color:#fff;margin:0;font-size:24px;font-weight:700;}
+  .header p{color:rgba(255,255,255,0.85);margin:6px 0 0;font-size:14px;}
+  .badge{display:inline-block;background:#4caf50;color:#fff;padding:6px 18px;border-radius:20px;font-size:13px;font-weight:600;margin-top:14px;}
+  .body{padding:32px;color:#333;}
+  .detail-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f0f0;font-size:14px;}
+  .label{color:#666;}
+  .value{font-weight:600;color:#222;}
+  .passenger-table{width:100%;border-collapse:collapse;font-size:14px;margin-top:16px;}
+  .passenger-table th{background:#f0f7ff;color:#555;font-weight:600;padding:10px 12px;text-align:left;border-bottom:1px solid #dde8f8;}
+  .passenger-table td{padding:10px 12px;border-bottom:1px solid #f0f0f0;color:#333;}
+  .btn{display:inline-block;background:#1a73e8;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:20px;}
+  .footer{background:#f4f6f9;padding:20px 32px;text-align:center;font-size:12px;color:#999;border-top:1px solid #eee;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <h1>🚌 TripGo</h1>
+    <p>New Booking on Your Bus</p>
+    <div class="badge">NEW BOOKING</div>
+  </div>
+  <div class="body">
+    <p>Hi <strong th:text="${operatorName}">Operator</strong>, a new booking has been confirmed on your bus.</p>
+    <div class="detail-row"><span class="label">Booking Code</span><span class="value" th:text="${bookingCode}">TG12345</span></div>
+    <div class="detail-row"><span class="label">Route</span><span class="value" th:text="${from + ' → ' + to}">A → B</span></div>
+    <div class="detail-row"><span class="label">Bus</span><span class="value" th:text="${busName}">Bus</span></div>
+    <div class="detail-row"><span class="label">Departure</span><span class="value" th:text="${departureTime}">10:00 PM</span></div>
+    <div class="detail-row"><span class="label">Seats</span><span class="value" th:text="${seatNumbers}">L1, L2</span></div>
+    <div class="detail-row"><span class="label">Amount Collected</span><span class="value" th:text="'₹' + ${payableAmount}">₹500</span></div>
+    <table class="passenger-table">
+      <thead><tr><th>Seat</th><th>Name</th><th>Age</th><th>Gender</th></tr></thead>
+      <tbody>
+        <tr th:each="p : ${passengers}">
+          <td th:text="${p.seatNumber}">L1</td>
+          <td th:text="${p.firstName + ' ' + (p.lastName != null ? p.lastName : '')}">John D</td>
+          <td th:text="${p.age != null ? p.age : '-'}">25</td>
+          <td th:text="${p.gender != null ? p.gender : '-'}">MALE</td>
+        </tr>
+      </tbody>
+    </table>
+    <a th:href="${frontendUrl + '/operator/schedules'}" class="btn">View Schedules</a>
+  </div>
+  <div class="footer">© 2026 TripGo.</div>
+</div>
+</body>
+</html>

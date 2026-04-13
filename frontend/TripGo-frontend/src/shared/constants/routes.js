@@ -13,6 +13,8 @@ export const ROUTES = {
   ADMIN_DASHBOARD: '/admin/dashboard',
   ADMIN_OPERATORS: '/admin/operators',
   ADMIN_REVIEWS: '/admin/reviews',
+  ADMIN_SETTINGS: '/admin/settings',
+  ADMIN_SUPPORT: '/admin/support',
 
   DASHBOARD: '/dashboard',
   USER_BOOKINGS: '/bookings',

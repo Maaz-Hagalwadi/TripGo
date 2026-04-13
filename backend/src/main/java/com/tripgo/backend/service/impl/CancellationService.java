@@ -59,8 +59,19 @@ public class CancellationService {
             processStripeRefund(booking, refundAmount);
         }
 
+        // Extract email data inside transaction before async call
+        String userEmail = booking.getUser().getEmail();
+        String firstName = booking.getUser().getFirstName();
+        String from = booking.getRouteSchedule().getRoute().getOrigin();
+        String to = booking.getRouteSchedule().getRoute().getDestination();
+        String busName = booking.getRouteSchedule().getBus().getName();
+        String bookingCode = booking.getBookingCode();
+        String refundStatus = booking.getRefundStatus();
+
         // Send cancellation email
-        emailService.sendCancellationEmail(booking, refundAmount, reason, cancelledBy);
+        emailService.sendCancellationEmail(
+                userEmail, firstName, bookingCode, from, to, busName,
+                cancelledBy, reason, refundAmount, refundStatus);
 
         return refundAmount;
     }

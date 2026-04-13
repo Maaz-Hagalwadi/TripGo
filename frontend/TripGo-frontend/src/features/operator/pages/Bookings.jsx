@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
+import PaginationControls from '../../../shared/components/ui/PaginationControls';
 import { getOperatorBookings, cancelOperatorBooking } from '../../../api/operatorBookingService';
 import { ROUTES } from '../../../shared/constants/routes';
 import './OperatorDashboard.css';
 
-const STATUS_TABS = ['ALL', 'CONFIRMED', 'CANCELLED'];
+const STATUS_TABS = ['CONFIRMED', 'CANCELLED', 'ALL'];
+const PAGE_SIZE = 10;
 
 const normalizeList = (resp) => {
   if (Array.isArray(resp)) return resp;
@@ -118,49 +120,28 @@ const getCancelledByLabel = (cancelledBy) => {
   return upper;
 };
 
-const OPERATOR_CANCEL_REASONS = [
-  'Bus breakdown',
-  'Driver unavailable',
-  'Schedule issue',
-  'Operational issue',
-  'Weather or road conditions',
-  'Other',
-];
-
-const OperatorCancelModal = ({ reasonType, setReasonType, reason, setReason, error, onClose, onConfirm, submitting }) => (
+const OperatorCancelModal = ({ reason, setReason, error, onClose, onConfirm, submitting }) => (
   <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
     <div className="bg-white dark:bg-op-card rounded-xl p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800">
       <h3 className="text-lg font-bold">Cancel Booking</h3>
-      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">100% refund will be issued because this cancellation is initiated by the operator.</p>
+      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">100% refund will be issued to the passenger.</p>
       <div className="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20">
-        Full refund will be issued to the customer.
+        100% refund will be issued to the passenger.
       </div>
       <div className="mt-5">
         <label className="mb-2 block text-sm font-semibold text-slate-900 dark:text-white">Cancellation reason</label>
-        <select
-          value={reasonType}
-          onChange={(event) => setReasonType(event.target.value)}
+        <textarea
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+          rows={4}
+          placeholder="Tell the passenger why this booking is being cancelled."
           className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-white/[0.04] dark:text-white dark:ring-white/10"
-        >
-          <option value="">Select a reason</option>
-          {OPERATOR_CANCEL_REASONS.map((item) => (
-            <option key={item} value={item}>{item}</option>
-          ))}
-        </select>
-        {reasonType === 'Other' ? (
-          <textarea
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            rows={4}
-            placeholder="Tell the customer why this booking is being cancelled."
-            className="mt-3 w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-white/[0.04] dark:text-white dark:ring-white/10"
-          />
-        ) : null}
+        />
         {error ? <p className="mt-2 text-sm text-red-500">{error}</p> : null}
       </div>
       <div className="mt-6 flex gap-3 justify-end">
         <button onClick={onClose} className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">Keep Booking</button>
-        <button onClick={onConfirm} disabled={submitting} className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-60">
+        <button onClick={onConfirm} disabled={submitting || !reason.trim()} className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-60">
           {submitting ? 'Cancelling...' : 'Confirm Cancel'}
         </button>
       </div>
@@ -209,6 +190,14 @@ const buildBookingFingerprint = (booking) => {
   return [routeName, departureTime, seatNumbers, passengerName, passengerPhone, amount].join('|');
 };
 
+const getBookingSearchTokens = (booking) => {
+  const rawId = String(pick(booking, ['publicBookingId', 'bookingCode', 'bookingNumber', 'pnr', 'bookingId', 'id', 'reference'], '')).trim();
+  const displayId = toDisplayBookingId(booking);
+  return [rawId, displayId]
+    .filter(Boolean)
+    .map((value) => String(value).trim().toUpperCase());
+};
+
 const dedupeAndSortBookings = (list) => {
   const deduped = new Map();
   const DUPLICATE_WINDOW_MS = 2 * 60 * 1000;
@@ -249,16 +238,18 @@ const dedupeAndSortBookings = (list) => {
 
 const Bookings = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user, loading } = useAuth();
-  const [status, setStatus] = useState('ALL');
+  const [status, setStatus] = useState('CONFIRMED');
   const [bookings, setBookings] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(true);
   const [cancellingId, setCancellingId] = useState(null);
   const [confirmCancelBookingId, setConfirmCancelBookingId] = useState(null);
-  const [cancelReasonType, setCancelReasonType] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [cancelReasonError, setCancelReasonError] = useState('');
   const [viewMode, setViewMode] = useState('grid');
+  const [page, setPage] = useState(0);
+  const notificationBookingCode = String(searchParams.get('bookingCode') || '').trim().toUpperCase();
 
   useEffect(() => {
     if (loading) return;
@@ -282,8 +273,14 @@ const Bookings = () => {
     fetchBookings(status);
   }, [status]);
 
+  useEffect(() => {
+    if (notificationBookingCode) {
+      setStatus('ALL');
+    }
+  }, [notificationBookingCode]);
+
   const handleCancelBooking = async (bookingId) => {
-    const normalizedReason = cancelReasonType === 'Other' ? cancelReason.trim() : cancelReasonType.trim();
+    const normalizedReason = cancelReason.trim();
     if (!normalizedReason) {
       setCancelReasonError('Cancellation reason is required.');
       return;
@@ -302,11 +299,31 @@ const Bookings = () => {
     }
   };
 
+  const visibleBookings = useMemo(() => {
+    if (!notificationBookingCode) return bookings;
+    return bookings.filter((booking) => getBookingSearchTokens(booking).some((token) => token.includes(notificationBookingCode)));
+  }, [bookings, notificationBookingCode]);
+
   const summary = useMemo(() => {
-    const total = bookings.length;
-    const cancelled = bookings.filter(b => String(pick(b, ['status'], '')).toUpperCase() === 'CANCELLED').length;
+    const total = visibleBookings.length;
+    const cancelled = visibleBookings.filter(b => String(pick(b, ['status'], '')).toUpperCase() === 'CANCELLED').length;
     return { total, cancelled, active: total - cancelled };
-  }, [bookings]);
+  }, [visibleBookings]);
+  const totalPages = Math.max(1, Math.ceil(visibleBookings.length / PAGE_SIZE));
+  const paginatedBookings = useMemo(
+    () => visibleBookings.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [visibleBookings, page]
+  );
+
+  useEffect(() => {
+    setPage(0);
+  }, [status]);
+
+  useEffect(() => {
+    if (page >= totalPages) {
+      setPage(Math.max(totalPages - 1, 0));
+    }
+  }, [page, totalPages]);
 
   return (
     <OperatorLayout activeItem="bookings" title="Bookings">
@@ -322,7 +339,7 @@ const Bookings = () => {
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
               }`}
             >
-              {tab}
+              {tab === 'ALL' ? 'All' : tab === 'CONFIRMED' ? 'Confirmed' : 'Cancelled'}
             </button>
           ))}
         </div>
@@ -339,6 +356,12 @@ const Bookings = () => {
           ))}
         </div>
       </div>
+
+      {notificationBookingCode ? (
+        <div className="mb-4 rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-slate-700 dark:text-slate-200">
+          Showing booking results for <span className="font-bold">{notificationBookingCode}</span>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <div className="bg-white dark:bg-op-card p-4 rounded-xl border border-slate-200 dark:border-slate-800">
@@ -362,14 +385,14 @@ const Bookings = () => {
             <p className="mt-4 text-slate-500">Loading bookings...</p>
           </div>
         </div>
-      ) : bookings.length === 0 ? (
+      ) : visibleBookings.length === 0 ? (
         <div className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800 p-10 text-center">
           <span className="material-symbols-outlined text-5xl text-slate-300 dark:text-slate-700 mb-3">confirmation_number</span>
-          <p className="text-slate-500">No bookings found</p>
+          <p className="text-slate-500">{notificationBookingCode ? 'No matching booking found' : 'No bookings found'}</p>
         </div>
       ) : (
         <div className={viewMode === 'grid' ? 'grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-4' : 'space-y-3'}>
-          {bookings.map((booking) => {
+          {paginatedBookings.map((booking) => {
             const bookingId = pick(booking, ['id', 'bookingId'], '');
             const displayBookingId = toDisplayBookingId(booking);
             const bookingStatus = String(pick(booking, ['status'], 'UNKNOWN')).toUpperCase();
@@ -422,7 +445,6 @@ const Bookings = () => {
                       <button
                         onClick={() => {
                           setConfirmCancelBookingId(bookingId);
-                          setCancelReasonType('');
                           setCancelReason('');
                           setCancelReasonError('');
                         }}
@@ -440,34 +462,40 @@ const Bookings = () => {
         </div>
       )}
 
+      {!loadingBookings && visibleBookings.length > 0 ? (
+        <PaginationControls
+          page={page}
+          pageSize={PAGE_SIZE}
+          totalItems={visibleBookings.length}
+          onPageChange={setPage}
+          itemLabel="bookings"
+          className="mt-6"
+        />
+      ) : null}
+
       {confirmCancelBookingId && (
         <OperatorCancelModal
-          reasonType={cancelReasonType}
-          setReasonType={(value) => {
-            setCancelReasonType(value);
-            setCancelReasonError('');
-            if (value !== 'Other') setCancelReason('');
-          }}
           reason={cancelReason}
-          setReason={setCancelReason}
+          setReason={(value) => {
+            setCancelReason(value);
+            setCancelReasonError('');
+          }}
           error={cancelReasonError}
           submitting={cancellingId === confirmCancelBookingId}
           onClose={() => {
             setConfirmCancelBookingId(null);
-            setCancelReasonType('');
             setCancelReason('');
             setCancelReasonError('');
           }}
           onConfirm={async () => {
             const targetId = confirmCancelBookingId;
-            const normalizedReason = cancelReasonType === 'Other' ? cancelReason.trim() : cancelReasonType.trim();
+            const normalizedReason = cancelReason.trim();
             if (!normalizedReason) {
               setCancelReasonError('Cancellation reason is required.');
               return;
             }
             await handleCancelBooking(targetId);
             setConfirmCancelBookingId(null);
-            setCancelReasonType('');
             setCancelReason('');
           }}
         />

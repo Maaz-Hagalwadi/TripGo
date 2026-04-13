@@ -7,6 +7,7 @@ import { useTheme } from '../../../shared/contexts/ThemeContext';
 import { ROUTES } from '../../../shared/constants/routes';
 import UserLayout from '../../../shared/components/UserLayout';
 import SearchBar from '../../../shared/components/ui/SearchBar';
+import PaginationControls from '../../../shared/components/ui/PaginationControls';
 import {
   formatUtcTime,
   getAvailableSeatCount,
@@ -24,6 +25,7 @@ const DEPARTURE_SLOTS = [
 ];
 
 const AMENITY_OPTIONS = ['WiFi', 'USB Port', 'Meal', 'Blanket', 'AC'];
+const PAGE_SIZE = 10;
 
 const formatTime = (instant) => {
   return formatUtcTime(instant);
@@ -274,6 +276,7 @@ const SearchResults = () => {
   const [maxPrice, setMaxPrice] = useState(5000);
   const [selectedAmenities, setSelectedAmenities] = useState([]);
   const [sortBy, setSortBy] = useState('cheapest');
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     if (loading) return;
@@ -299,7 +302,7 @@ const SearchResults = () => {
 
           const [featuresRes, seatsRes] = await Promise.allSettled([
             getScheduleFeatures(scheduleId),
-            hasNumericSeatCount(bus) ? Promise.resolve(null) : getScheduleSeats(scheduleId),
+            hasNumericSeatCount(bus) ? Promise.resolve(null) : getScheduleSeats(scheduleId, params.date, params.from, params.to),
           ]);
 
           const featurePayload = featuresRes.status === 'fulfilled' ? featuresRes.value : null;
@@ -389,11 +392,26 @@ const SearchResults = () => {
     () => filteredBuses.filter((bus) => getAvailableSeatCount(bus) !== 0),
     [filteredBuses]
   );
+  const totalPages = Math.max(1, Math.ceil(availableBuses.length / PAGE_SIZE));
+  const paginatedBuses = useMemo(
+    () => availableBuses.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [availableBuses, page]
+  );
 
   const allMaxPrice = useMemo(() => {
     if (!buses.length) return 5000;
     return Math.ceil(Math.max(...buses.map(b => minFare(b.faresByType))) / 100) * 100;
   }, [buses]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [appliedSearch, selectedSlots, selectedBusTypes, maxPrice, selectedAmenities, sortBy]);
+
+  useEffect(() => {
+    if (page >= totalPages) {
+      setPage(Math.max(totalPages - 1, 0));
+    }
+  }, [page, totalPages]);
 
   return (
     <UserLayout activeItem="search" title="Search Results" showHeaderSearch={false}>
@@ -527,9 +545,19 @@ const SearchResults = () => {
               </div>
             )}
 
-            {!loadingBuses && !error && availableBuses.map((bus) => (
+            {!loadingBuses && !error && paginatedBuses.map((bus) => (
               <BusCard key={bus.scheduleId} bus={bus} searchParams={appliedSearch} />
             ))}
+
+            {!loadingBuses && !error && availableBuses.length > 0 ? (
+              <PaginationControls
+                page={page}
+                pageSize={PAGE_SIZE}
+                totalItems={availableBuses.length}
+                onPageChange={setPage}
+                itemLabel="buses"
+              />
+            ) : null}
           </div>
         </div>
       </main>

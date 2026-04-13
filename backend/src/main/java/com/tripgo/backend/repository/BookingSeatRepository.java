@@ -16,6 +16,6 @@ public interface BookingSeatRepository extends JpaRepository<BookingSeat, UUID> 
 
     List<BookingSeat> findByBookingId(UUID bookingId);
 
-    @Query("SELECT COUNT(bs) > 0 FROM BookingSeat bs WHERE bs.booking.routeSchedule.id = :scheduleId AND bs.seatNumber = :seatNumber AND bs.booking.status = 'CONFIRMED'")
-    boolean existsByRouteScheduleIdAndSeatNumber(@Param("scheduleId") UUID scheduleId, @Param("seatNumber") String seatNumber);
+    @Query("SELECT COUNT(bs) > 0 FROM BookingSeat bs WHERE bs.booking.routeSchedule.id = :scheduleId AND bs.seatNumber = :seatNumber AND bs.booking.status = 'CONFIRMED' AND bs.booking.travelDate = :travelDate")
+    boolean existsByRouteScheduleIdAndSeatNumber(@Param("scheduleId") UUID scheduleId, @Param("seatNumber") String seatNumber, @Param("travelDate") java.time.LocalDate travelDate);
 }

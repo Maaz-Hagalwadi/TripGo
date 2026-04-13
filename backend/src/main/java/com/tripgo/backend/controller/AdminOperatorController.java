@@ -8,6 +8,7 @@ import com.tripgo.backend.repository.OperatorRepository;
 import com.tripgo.backend.repository.UserRepository;
 import com.tripgo.backend.security.service.RefreshTokenService;
 import com.tripgo.backend.service.impl.EmailService;
+import com.tripgo.backend.service.impl.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +25,7 @@ public class AdminOperatorController {
     private final UserRepository userRepository;
     private final RefreshTokenService refreshTokenService;
     private final EmailService emailService;
+    private final NotificationService notificationService;
 
     @GetMapping
     public List<OperatorResponse> listOperators(@RequestParam(required = false) OperatorStatus status) {
@@ -44,11 +46,14 @@ public class AdminOperatorController {
     public ResponseEntity<String> approve(@PathVariable UUID id) {
         Operator op = operatorRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Operator not found"));
-
         op.setStatus(OperatorStatus.APPROVED);
         operatorRepository.save(op);
         emailService.sendOperatorApproved(op);
-
+        userRepository.findByOperator(op).ifPresent(opUser ->
+                notificationService.send(opUser, "OPERATOR_APPROVED",
+                        "Account Approved ✅",
+                        "Your operator account has been approved. You can now add buses and schedules.",
+                        "/operator/dashboard"));
         return ResponseEntity.ok("Operator approved");
     }
 
@@ -56,11 +61,14 @@ public class AdminOperatorController {
     public ResponseEntity<String> reject(@PathVariable UUID id) {
         Operator op = operatorRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Operator not found"));
-
         op.setStatus(OperatorStatus.REJECTED);
         operatorRepository.save(op);
         emailService.sendOperatorRejected(op);
-
+        userRepository.findByOperator(op).ifPresent(opUser ->
+                notificationService.send(opUser, "OPERATOR_REJECTED",
+                        "Account Rejected",
+                        "Your operator account application was not approved. Please contact support for details.",
+                        null));
         return ResponseEntity.ok("Operator rejected");
     }
 
@@ -68,15 +76,16 @@ public class AdminOperatorController {
     public ResponseEntity<String> suspend(@PathVariable UUID id) {
         Operator op = operatorRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Operator not found"));
-
         op.setStatus(OperatorStatus.SUSPENDED);
         operatorRepository.save(op);
-
         userRepository.findByOperator(op)
                 .ifPresent(refreshTokenService::revokeAllForUser);
-
         emailService.sendOperatorSuspended(op);
-
+        userRepository.findByOperator(op).ifPresent(opUser ->
+                notificationService.send(opUser, "OPERATOR_SUSPENDED",
+                        "Account Suspended",
+                        "Your operator account has been suspended. Contact support immediately.",
+                        null));
         return ResponseEntity.ok("Operator suspended");
     }
 

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8"/>
+<style>
+  body{margin:0;padding:0;background:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;}
+  .wrapper{max-width:600px;margin:30px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);}
+  .header{background:linear-gradient(135deg,#7c3aed,#5b21b6);padding:36px 32px;text-align:center;}
+  .header h1{color:#fff;margin:0;font-size:24px;font-weight:700;}
+  .header p{color:rgba(255,255,255,0.9);margin:6px 0 0;font-size:14px;}
+  .body{padding:32px;color:#333;}
+  .trip-box{background:#f5f3ff;border:1px solid #ddd6fe;border-radius:8px;padding:16px 20px;margin:16px 0;}
+  .trip-box p{margin:0 0 8px;font-size:14px;}
+  .btn{display:inline-block;background:#7c3aed;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;margin-top:20px;font-size:15px;}
+  .footer{background:#f4f6f9;padding:20px 32px;text-align:center;font-size:12px;color:#999;border-top:1px solid #eee;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <h1>🚌 TripGo</h1>
+    <p>How was your trip?</p>
+  </div>
+  <div class="body">
+    <p>Hi <strong th:text="${firstName}">Traveller</strong>, hope you had a great journey!</p>
+    <p>Your trip has been completed. We'd love to hear your feedback — it only takes 30 seconds.</p>
+    <div class="trip-box">
+      <p><strong>Route:</strong> <span th:text="${from + ' → ' + to}">A → B</span></p>
+      <p><strong>Bus:</strong> <span th:text="${busName}">Bus Name</span></p>
+      <p style="margin:0"><strong>Operator:</strong> <span th:text="${operatorName}">Operator</span></p>
+    </div>
+    <p>Your honest review helps other travellers and motivates operators to improve.</p>
+    <a th:href="${reviewUrl}" class="btn">⭐ Rate Your Trip</a>
+  </div>
+  <div class="footer">© 2026 TripGo.</div>
+</div>
+</body>
+</html>

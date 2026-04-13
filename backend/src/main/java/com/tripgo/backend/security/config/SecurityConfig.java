@@ -57,7 +57,8 @@ public class SecurityConfig {
                                 "/booking/schedules/*/route-stops",
                                 "/booking/schedules/*/policies",
                                 "/booking/schedules/*/features",
-                                "/payments/webhook")
+                                "/payments/webhook",
+                                "/ws/**")
                         .permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")
                         .requestMatchers("/operator/**").hasRole("OPERATOR")

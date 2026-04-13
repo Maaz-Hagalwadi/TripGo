@@ -1,5 +1,7 @@
 package com.tripgo.backend.service.impl;
 
+import com.tripgo.backend.model.entities.Booking;
+import com.tripgo.backend.model.entities.BookingSeat;
 import com.tripgo.backend.model.entities.Bus;
 import com.tripgo.backend.model.entities.Operator;
 import com.tripgo.backend.model.entities.User;
@@ -13,8 +15,12 @@ import org.springframework.stereotype.Service;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
+import java.math.BigDecimal;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -31,29 +37,30 @@ public class EmailService {
     private String frontendUrl;
 
     @Async
-    public void sendCancellationEmail(com.tripgo.backend.model.entities.Booking booking,
-                                       java.math.BigDecimal refundAmount,
-                                       String reason,
-                                       com.tripgo.backend.model.enums.CancelledBy cancelledBy) {
+    public void sendCancellationEmail(String userEmail, String firstName, String bookingCode,
+                                       String from, String to, String busName,
+                                       com.tripgo.backend.model.enums.CancelledBy cancelledBy,
+                                       String reason, java.math.BigDecimal refundAmount,
+                                       String refundStatus) {
         String cancelledByLabel = switch (cancelledBy) {
             case USER -> "You";
             case OPERATOR -> "The operator";
             case SYSTEM -> "System";
         };
         sendTemplate(
-                booking.getUser().getEmail(),
-                "Booking Cancelled - " + booking.getBookingCode() + " | TripGo",
+                userEmail,
+                "Booking Cancelled - " + bookingCode + " | TripGo",
                 "booking-cancellation",
                 java.util.Map.of(
-                        "firstName", booking.getUser().getFirstName(),
-                        "bookingCode", booking.getBookingCode(),
-                        "from", booking.getRouteSchedule().getRoute().getOrigin(),
-                        "to", booking.getRouteSchedule().getRoute().getDestination(),
-                        "busName", booking.getRouteSchedule().getBus().getName(),
+                        "firstName", firstName,
+                        "bookingCode", bookingCode,
+                        "from", from,
+                        "to", to,
+                        "busName", busName,
                         "cancelledBy", cancelledByLabel,
                         "reason", reason,
                         "refundAmount", refundAmount,
-                        "refundStatus", booking.getRefundStatus(),
+                        "refundStatus", refundStatus,
                         "frontendUrl", frontendUrl
                 )
         );
@@ -70,6 +77,86 @@ public class EmailService {
                 "booking-confirmation",
                 model
         );
+    }
+
+    @Async
+    public void sendPaymentFailed(User user, String from, String to, String busName, BigDecimal amount) {
+        sendTemplate(user.getEmail(), "Payment Failed | TripGo", "payment-failed",
+                Map.of("firstName", user.getFirstName(), "from", from, "to", to,
+                        "busName", busName, "amount", amount, "frontendUrl", frontendUrl));
+    }
+
+    @Async
+    public void notifyOperatorNewBooking(Booking booking, List<BookingSeat> seats) {
+        User opUser = userRepository.findByOperator(booking.getOperator()).orElse(null);
+        if (opUser == null) return;
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a").withZone(ZoneId.of("Asia/Kolkata"));
+        String seatNumbers = seats.stream().map(BookingSeat::getSeatNumber).reduce((a, b) -> a + ", " + b).orElse("-");
+        Map<String, Object> model = new java.util.HashMap<>();
+        model.put("operatorName", booking.getOperator().getName());
+        model.put("bookingCode", booking.getBookingCode());
+        model.put("from", seats.isEmpty() ? "-" : seats.get(0).getFromStop());
+        model.put("to", seats.isEmpty() ? "-" : seats.get(0).getToStop());
+        model.put("busName", booking.getRouteSchedule().getBus().getName());
+        model.put("departureTime", fmt.format(booking.getRouteSchedule().getDepartureTime()));
+        model.put("seatNumbers", seatNumbers);
+        model.put("payableAmount", booking.getPayableAmount());
+        model.put("passengers", seats.stream().map(s -> {
+            Map<String, Object> p = new java.util.HashMap<>();
+            p.put("seatNumber", s.getSeatNumber());
+            if (s.getPassenger() != null) {
+                p.put("firstName", s.getPassenger().getFirstName());
+                p.put("lastName", s.getPassenger().getLastName() != null ? s.getPassenger().getLastName() : "");
+                p.put("age", s.getPassenger().getAge());
+                p.put("gender", s.getPassenger().getGender());
+            }
+            return p;
+        }).toList());
+        model.put("frontendUrl", frontendUrl);
+        sendTemplate(opUser.getEmail(), "New Booking - " + booking.getBookingCode() + " | TripGo", "operator-new-booking", model);
+    }
+
+    @Async
+    public void notifyOperatorReviewReceived(User operatorUser, String operatorName, String busName,
+                                              String from, String to, String reviewerName,
+                                              int rating, String title, String comment) {
+        Map<String, Object> model = new java.util.HashMap<>();
+        model.put("operatorName", operatorName);
+        model.put("busName", busName);
+        model.put("from", from);
+        model.put("to", to);
+        model.put("reviewerName", reviewerName);
+        model.put("rating", rating);
+        model.put("title", title != null ? title : "");
+        model.put("comment", comment != null ? comment : "");
+        model.put("frontendUrl", frontendUrl);
+        sendTemplate(operatorUser.getEmail(), "New Review Received - " + rating + "★ | TripGo", "operator-review-received", model);
+    }
+
+    @Async
+    public void sendUserReviewSubmitted(User user, String busName, String from, String to, int rating, String comment) {
+        Map<String, Object> model = new java.util.HashMap<>();
+        model.put("firstName", user.getFirstName());
+        model.put("busName", busName);
+        model.put("from", from);
+        model.put("to", to);
+        model.put("rating", rating);
+        model.put("comment", comment != null ? comment : "");
+        sendTemplate(user.getEmail(), "Thanks for your review! | TripGo", "user-review-submitted", model);
+    }
+
+    @Async
+    public void sendTripCompletedReviewPrompt(User user, String from, String to,
+                                               String busName, String operatorName, UUID scheduleId) {
+        String reviewUrl = frontendUrl + "/my-bookings?review=" + scheduleId;
+        Map<String, Object> model = new java.util.HashMap<>();
+        model.put("firstName", user.getFirstName());
+        model.put("from", from);
+        model.put("to", to);
+        model.put("busName", busName);
+        model.put("operatorName", operatorName);
+        model.put("reviewUrl", reviewUrl);
+        sendTemplate(user.getEmail(), "How was your trip? Rate your experience | TripGo", "trip-completed-review", model);
     }
 
     @Async

@@ -107,23 +107,56 @@ public class SeatAvailabilityService {
         // Seat availability - check actual bookings and blocked seats
         List<Seat> seats = seatRepo.findByBus(schedule.getBus());
 
-        // Get booked seat numbers for this schedule
-        Set<String> bookedSeatNumbers = bookingSeatRepo
+        // Get all confirmed booking seats for this schedule
+        // A seat is unavailable only if its booked segment OVERLAPS with the requested segment
+        // e.g. Bangalore->Tumkur booking does NOT block seat for Tumkur->Honnavar
+        List<BookingSeat> allBookingSeats = bookingSeatRepo
                 .findByRouteSchedule(schedule)
                 .stream()
                 .filter(bs -> bs.getBooking().getStatus().name().equals("CONFIRMED"))
+                .filter(bs -> {
+                    // Filter by travelDate if schedule is recurring
+                    if (schedule.getFrequency() != null) {
+                        java.time.LocalDate bookingDate = bs.getBooking().getTravelDate();
+                        if (bookingDate == null) return true; // legacy booking, include it
+                        // resolve the requested travel date from the adjusted departure
+                        java.time.LocalDate requestedDate = java.time.LocalDateTime
+                                .ofInstant(schedule.getDepartureTime(), java.time.ZoneOffset.UTC)
+                                .toLocalDate();
+                        // Use the passed-in departure date from the adjusted schedule
+                        return bookingDate.equals(requestedDate);
+                    }
+                    return true;
+                })
+                .toList();
+
+        // Build a set of seat numbers that overlap with the requested from->to segment range
+        Set<String> unavailableSeats = allBookingSeats.stream()
+                .filter(bs -> segmentsOverlap(segments, bs.getFromStop(), bs.getToStop(), from, to))
                 .map(BookingSeat::getSeatNumber)
                 .collect(Collectors.toSet());
 
         List<SeatAvailability> seatAvailability = seats.stream()
                 .map(seat -> new SeatAvailability(
                         seat.getSeatNumber(),
-                        !bookedSeatNumbers.contains(seat.getSeatNumber())
+                        !unavailableSeats.contains(seat.getSeatNumber())
                         && !Boolean.TRUE.equals(seat.getIsBlocked())
                 ))
                 .toList();
 
         return new SearchResult(faresByType, seatAvailability);
+    }
+
+    // Returns true if booking segment [bookedFrom->bookedTo] overlaps with requested [reqFrom->reqTo]
+    private boolean segmentsOverlap(List<RouteSegment> segments, String bookedFrom, String bookedTo,
+                                     String reqFrom, String reqTo) {
+        int bookedStart = indexOf(segments, bookedFrom);
+        int bookedEnd   = indexOf(segments, bookedTo);
+        int reqStart    = indexOf(segments, reqFrom);
+        int reqEnd      = indexOf(segments, reqTo);
+        if (bookedStart == -1 || bookedEnd == -1 || reqStart == -1 || reqEnd == -1) return false;
+        // Overlap exists if one range starts before the other ends
+        return bookedStart < reqEnd && bookedEnd > reqStart;
     }
 
     private int indexOf(List<RouteSegment> segs, String stop) {

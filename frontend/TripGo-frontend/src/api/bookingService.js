@@ -1,11 +1,25 @@
 import { apiGet, apiPost, apiPut, API_BASE_URL } from './apiClient';
 
-export const getScheduleSeats = async (scheduleId) => {
-  return apiGet(`/booking/schedules/${encodeURIComponent(scheduleId)}/seats`);
+const withSeatQuery = (path, params = {}) => {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      search.append(key, String(value));
+    }
+  });
+  const qs = search.toString();
+  return qs ? `${path}${path.includes('?') ? '&' : '?'}${qs}` : path;
 };
 
-export const lockScheduleSeats = async (scheduleId, selectedSeats) => {
-  return apiPost(`/booking/lock?scheduleId=${encodeURIComponent(scheduleId)}`, selectedSeats);
+export const getScheduleSeats = async (scheduleId, travelDate, from, to) => {
+  return apiGet(withSeatQuery(`/booking/schedules/${encodeURIComponent(scheduleId)}/seats`, { travelDate, from, to }));
+};
+
+export const lockScheduleSeats = async (scheduleId, selectedSeats, travelDate, from, to) => {
+  return apiPost(
+    withSeatQuery(`/booking/lock?scheduleId=${encodeURIComponent(scheduleId)}`, { travelDate, from, to }),
+    selectedSeats
+  );
 };
 
 export const confirmBooking = async (payload) => {
@@ -17,7 +31,9 @@ export const getMyBookings = async () => {
 };
 
 export const cancelMyBooking = async (bookingId, cancelReason) => {
-  return apiPost(`/booking/${encodeURIComponent(bookingId)}/cancel`, { cancelReason });
+  return apiPost(`/booking/${encodeURIComponent(bookingId)}/cancel`, {
+    reason: cancelReason,
+  });
 };
 
 export const getSchedulePointsForBooking = async (scheduleId) => {

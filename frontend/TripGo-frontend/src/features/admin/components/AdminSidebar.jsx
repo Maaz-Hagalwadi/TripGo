@@ -13,8 +13,8 @@ const AdminSidebar = ({ activeItem = 'overview', collapsed = false, onToggleColl
   ];
 
   const bottomItems = [
-    { id: 'settings', icon: 'settings',      label: 'Settings' },
-    { id: 'support',  icon: 'support_agent', label: 'Support' },
+    { id: 'settings', icon: 'settings',      label: 'Settings', route: ROUTES.ADMIN_SETTINGS },
+    { id: 'support',  icon: 'support_agent', label: 'Support', route: ROUTES.ADMIN_SUPPORT },
   ];
 
   return (
@@ -73,6 +73,7 @@ const AdminSidebar = ({ activeItem = 'overview', collapsed = false, onToggleColl
         {bottomItems.map((item) => (
           <button
             key={item.id}
+            onClick={() => navigate(item.route)}
             className={`w-full flex items-center gap-3 px-4 py-3 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors ${collapsed ? 'justify-center' : ''}`}
             title={collapsed ? item.label : ''}
           >
