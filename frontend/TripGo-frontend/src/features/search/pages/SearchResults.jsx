@@ -140,36 +140,64 @@ const InlineLoader = ({ label }) => (
   </div>
 );
 
+const isSoldOut = (bus) => {
+  const totalSeats = Number(bus?.totalSeats ?? 0);
+  const availableSeats = Number(bus?.availableSeats ?? bus?.availableSeatCount ?? 0);
+  const seatAvailability = Array.isArray(bus?.seatAvailability) ? bus.seatAvailability : [];
+  // Only truly sold out if totalSeats is known (>0) and available is 0
+  if (totalSeats > 0 && availableSeats === 0) return true;
+  // Or if seatAvailability is populated and none are available
+  if (seatAvailability.length > 0 && seatAvailability.filter(isSeatAvailableForBooking).length === 0) return true;
+  return false;
+};
+
 const BusCard = ({ bus, searchParams }) => {
   const navigate = useNavigate();
   const fareEntries = Object.entries(bus.faresByType || {});
   const [selectedType, setSelectedType] = useState(fareEntries[0]?.[0] || null);
   const selectedFare = bus.faresByType?.[selectedType];
   const availableSeats = getAvailableSeatCount(bus);
+  const soldOut = isSoldOut(bus);
   const tripStatus = getTripStatusValue(bus);
   const delayMins = getDelayMinutes(bus);
   const tripStatusMeta = getTripStatusMeta(tripStatus, delayMins);
 
   return (
-    <div className="rounded-[28px] bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 transition-all hover:-translate-y-0.5 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)] dark:bg-charcoal dark:ring-white/5 dark:hover:ring-primary/20">
+    <div className={`rounded-[28px] bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 transition-all dark:bg-charcoal ${
+      soldOut
+        ? 'opacity-60 ring-slate-200/40 dark:ring-white/5 cursor-not-allowed'
+        : 'ring-slate-200/70 hover:-translate-y-0.5 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)] dark:ring-white/5 dark:hover:ring-primary/20'
+    }`}>
       <div className="flex flex-col md:flex-row md:items-center gap-6">
         <div className="flex items-center gap-4 md:w-48 flex-shrink-0">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-            <span className="material-symbols-outlined text-2xl text-primary">directions_bus</span>
+          <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${
+            soldOut ? 'bg-slate-100 dark:bg-slate-800' : 'bg-primary/10'
+          }`}>
+            <span className={`material-symbols-outlined text-2xl ${
+              soldOut ? 'text-slate-400' : 'text-primary'
+            }`}>directions_bus</span>
           </div>
           <div>
             <h4 className="font-bold text-slate-900 dark:text-white">{bus.busName}</h4>
             <p className="text-xs text-slate-500 dark:text-slate-400">{bus.busType}</p>
             <p className="text-xs text-slate-400 dark:text-slate-500">{bus.operatorName}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${tripStatusMeta.chipClass}`}>
-                {tripStatusMeta.label}
-              </span>
+              {soldOut ? (
+                <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+                  Sold Out
+                </span>
+              ) : (
+                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${tripStatusMeta.chipClass}`}>
+                  {tripStatusMeta.label}
+                </span>
+              )}
             </div>
-            <p className={`mt-2 text-[11px] font-semibold ${tripStatusMeta.textClass}`}>
-              {delayMins > 0 ? `Delay Time: ${delayMins} min` : 'Delay Time: 0 min'}
-            </p>
-            {bus.delayReason ? (
+            {!soldOut && (
+              <p className={`mt-2 text-[11px] font-semibold ${tripStatusMeta.textClass}`}>
+                {delayMins > 0 ? `Delay Time: ${delayMins} min` : 'Delay Time: 0 min'}
+              </p>
+            )}
+            {!soldOut && bus.delayReason ? (
               <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
                 Reason: {bus.delayReason}
               </p>
@@ -197,7 +225,7 @@ const BusCard = ({ bus, searchParams }) => {
         </div>
 
         <div className="flex min-w-[180px] flex-col items-end gap-3 md:pl-2">
-          {fareEntries.length > 1 && (
+          {!soldOut && fareEntries.length > 1 && (
             <div className="flex gap-2 flex-wrap justify-end">
               {fareEntries.map(([type, fare]) => (
                 <button
@@ -214,10 +242,10 @@ const BusCard = ({ bus, searchParams }) => {
               ))}
             </div>
           )}
-          {fareEntries.length === 1 && (
+          {!soldOut && fareEntries.length === 1 && (
             <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{fareEntries[0][0]}</p>
           )}
-          <p className="text-2xl font-black text-primary">
+          <p className={`text-2xl font-black ${ soldOut ? 'text-slate-400 line-through' : 'text-primary'}`}>
             ₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}
           </p>
           {bus.amenities?.length > 0 && (
@@ -227,15 +255,28 @@ const BusCard = ({ bus, searchParams }) => {
               ))}
             </div>
           )}
-          {availableSeats !== null && (
-            <p className={`rounded-full px-3 py-1 text-[11px] font-semibold ${availableSeats > 0 ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' : 'bg-rose-50 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400'}`}>
-              {availableSeats > 0 ? `${availableSeats} seats available` : 'Sold out'}
+          {soldOut ? (
+            <p className="rounded-full bg-rose-100 px-4 py-1.5 text-[11px] font-bold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
+              🚫 No seats available
             </p>
-          )}
+          ) : availableSeats !== null ? (
+            <p className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
+              availableSeats < 5
+                ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
+                : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
+            }`}>
+              {availableSeats < 5 ? `Only ${availableSeats} seats left!` : `${availableSeats} seats available`}
+            </p>
+          ) : null}
           <button
-            onClick={() => navigate(ROUTES.BOOKING, { state: { bus, selectedType, selectedFare, searchParams } })}
-            className="w-full rounded-2xl bg-slate-900 px-6 py-3 text-sm font-bold text-white transition-all hover:bg-primary hover:text-black dark:bg-white/10 dark:hover:bg-primary dark:hover:text-black">
-            Select Seat
+            disabled={soldOut}
+            onClick={() => !soldOut && navigate(ROUTES.BOOKING, { state: { bus, selectedType, selectedFare, searchParams } })}
+            className={`w-full rounded-2xl px-6 py-3 text-sm font-bold transition-all ${
+              soldOut
+                ? 'cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600'
+                : 'bg-slate-900 text-white hover:bg-primary hover:text-black dark:bg-white/10 dark:hover:bg-primary dark:hover:text-black'
+            }`}>
+            {soldOut ? 'Sold Out' : 'Select Seat'}
           </button>
         </div>
       </div>
@@ -389,7 +430,7 @@ const SearchResults = () => {
   }, [buses, selectedSlots, selectedBusTypes, maxPrice, selectedAmenities, sortBy]);
 
   const availableBuses = useMemo(
-    () => filteredBuses.filter((bus) => getAvailableSeatCount(bus) !== 0),
+    () => filteredBuses,
     [filteredBuses]
   );
   const totalPages = Math.max(1, Math.ceil(availableBuses.length / PAGE_SIZE));

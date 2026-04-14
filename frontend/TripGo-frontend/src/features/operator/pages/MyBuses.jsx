@@ -113,7 +113,9 @@ const MyBuses = () => {
   };
 
   const handleEditClick = (bus) => {
-    setBusToEdit(bus);
+    // Store the full bus object but also resolve the ID upfront
+    const resolvedId = bus?.id ?? bus?.busId ?? bus?.uuid;
+    setBusToEdit({ ...bus, id: resolvedId });
     setEditFormData({
       name: bus.name, busCode: bus.busCode, vehicleNumber: bus.vehicleNumber,
       model: bus.model, totalSeats: bus.totalSeats, busType: bus.busType,
@@ -144,9 +146,16 @@ const MyBuses = () => {
     if (!editFormData.busType) errors.busType = 'Bus type is required';
     if (Object.keys(errors).length) { setEditErrors(errors); return; }
 
+    // Resolve ID — backend may return id, busId, or uuid
+    const busId = busToEdit?.id ?? busToEdit?.busId ?? busToEdit?.uuid;
+    if (!busId) {
+      toast.error('Bus ID is missing. Please close and try again.');
+      return;
+    }
+
     try {
       setUpdating(true);
-      await updateBus(busToEdit.id, editFormData);
+      await updateBus(busId, editFormData);
       setBusToEdit(null);
       showSuccess('Bus Updated Successfully!');
     } catch (err) {
@@ -337,6 +346,7 @@ const MyBuses = () => {
       {busToDelete && <DeleteBusModal bus={busToDelete} deleting={deleting} onConfirm={handleDeleteConfirm} onCancel={() => setBusToDelete(null)} />}
       {busToEdit && (
         <EditBusModal
+          busId={busToEdit.id}
           formData={editFormData}
           errors={editErrors}
           amenities={amenities}

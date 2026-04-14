@@ -40,6 +40,9 @@ public class Review {
     @Column(nullable = false)
     private Integer rating;
 
+    @Column(name = "travel_date")
+    private java.time.LocalDate travelDate;
+
     private String title;
 
     private String comment;

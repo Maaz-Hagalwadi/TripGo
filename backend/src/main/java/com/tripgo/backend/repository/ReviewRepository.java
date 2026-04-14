@@ -15,6 +15,8 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
     boolean existsByUserIdAndRouteScheduleId(UUID userId, UUID scheduleId);
 
+    boolean existsByUserIdAndRouteScheduleIdAndTravelDate(UUID userId, UUID scheduleId, java.time.LocalDate travelDate);
+
     // Operator queries
     Page<Review> findByOperatorId(UUID operatorId, Pageable pageable);
     Page<Review> findByBusId(UUID busId, Pageable pageable);

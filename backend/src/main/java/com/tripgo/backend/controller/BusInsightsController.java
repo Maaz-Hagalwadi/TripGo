@@ -62,7 +62,7 @@ public class BusInsightsController {
 
         // Get all schedules for this bus
         List<RouteSchedule> busSchedules = scheduleRepository.findAll().stream()
-                .filter(s -> s.getBus().getId().equals(busId))
+                .filter(s -> s.getBus() != null && s.getBus().getId().equals(busId))
                 .toList();
 
         List<Map<String, Object>> scheduleOccupancy = busSchedules.stream().map(schedule -> {
@@ -104,7 +104,7 @@ public class BusInsightsController {
             int totalSeats = seatRepository.findByBus(bus).size();
 
             List<RouteSchedule> busSchedules = scheduleRepository.findAll().stream()
-                    .filter(s -> s.getBus().getId().equals(bus.getId()))
+                    .filter(s -> s.getBus() != null && s.getBus().getId().equals(bus.getId()))
                     .toList();
 
             int totalBooked = busSchedules.stream()

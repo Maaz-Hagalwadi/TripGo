@@ -73,9 +73,11 @@ const parseJsonIfPresent = async (response) => {
  */
 export const fetchWithAuth = async (url, options = {}) => {
   const token = localStorage.getItem('accessToken');
+  const lang = localStorage.getItem('tripgo_lang') || 'en';
 
   const buildHeaders = (t) => ({
     'Content-Type': 'application/json',
+    'Accept-Language': lang,
     ...(t && { Authorization: `Bearer ${t}` }),
     ...options.headers,
   });

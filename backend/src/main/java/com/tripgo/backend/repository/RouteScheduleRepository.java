@@ -25,8 +25,10 @@ public interface RouteScheduleRepository extends JpaRepository<RouteSchedule, UU
         AND seg1.seq <= seg2.seq
         AND rs.active = true
         AND rs.tripStatus NOT IN ('STARTED', 'COMPLETED', 'CANCELLED')
-        AND (rs.frequency IS NOT NULL
-             OR (rs.departureTime >= :startOfDay AND rs.departureTime < :endOfDay))
+        AND (
+            (rs.frequency IS NOT NULL AND rs.frequency != 'ONCE')
+            OR (rs.departureTime >= :startOfDay AND rs.departureTime < :endOfDay)
+        )
         """)
     List<RouteSchedule> findByFromAndToAndDate(
         @Param("from") String from,

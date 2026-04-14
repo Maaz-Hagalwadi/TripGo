@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, API_BASE_URL } from './apiClient';
+import { apiGet, apiPost, apiPut, API_BASE_URL, fetchWithAuth } from './apiClient';
 
 const withSeatQuery = (path, params = {}) => {
   const search = new URLSearchParams();
@@ -110,4 +110,23 @@ export const getMyCompletedTrips = async () => {
 
 export const submitTripRating = async (scheduleId, payload) => {
   return apiPost(`/booking/trips/${encodeURIComponent(scheduleId)}/rating`, payload);
+};
+
+export const downloadTicketFromApi = async (bookingId, fallbackFilename = 'ticket.pdf') => {
+  try {
+    const response = await fetchWithAuth(`${API_BASE_URL}/booking/${encodeURIComponent(bookingId)}/ticket/download`);
+    if (!response.ok) throw new Error('API ticket not available');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const disposition = response.headers.get('content-disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    link.download = match?.[1] || fallbackFilename;
+    link.click();
+    URL.revokeObjectURL(url);
+    return true;
+  } catch {
+    return false;
+  }
 };

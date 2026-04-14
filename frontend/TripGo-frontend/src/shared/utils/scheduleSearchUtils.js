@@ -57,11 +57,19 @@ export const isSeatAvailableForBooking = (seat) => {
 };
 
 export const getAvailableSeatCount = (item) => {
-  if (isNumericValue(item?.availableSeatCount)) return Number(item.availableSeatCount);
-  if (isNumericValue(item?.availableSeats)) return Number(item.availableSeats);
-  if (Array.isArray(item?.seatAvailability)) {
+  // If totalSeats is 0 and seatAvailability is empty, data is missing — treat as unknown
+  const totalSeats = Number(item?.totalSeats ?? 0);
+  const seatAvailabilityEmpty = !Array.isArray(item?.seatAvailability) || item.seatAvailability.length === 0;
+  if (totalSeats === 0 && seatAvailabilityEmpty) return null;
+
+  if (isNumericValue(item?.availableSeatCount) && Number(item.availableSeatCount) > 0) return Number(item.availableSeatCount);
+  if (isNumericValue(item?.availableSeats) && Number(item.availableSeats) > 0) return Number(item.availableSeats);
+  if (Array.isArray(item?.seatAvailability) && item.seatAvailability.length > 0) {
     return item.seatAvailability.filter(isSeatAvailableForBooking).length;
   }
+  // availableSeats explicitly 0 but totalSeats > 0 → truly sold out
+  if (isNumericValue(item?.availableSeats)) return Number(item.availableSeats);
+  if (isNumericValue(item?.availableSeatCount)) return Number(item.availableSeatCount);
   return null;
 };
 

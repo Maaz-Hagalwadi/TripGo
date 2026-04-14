@@ -1,6 +1,7 @@
 package com.tripgo.backend.security.config;
 
 import com.tripgo.backend.security.OAuth2SuccessHandler;
+import com.tripgo.backend.security.filter.RateLimitFilter;
 import com.tripgo.backend.security.jwt.JwtAuthenticationEntryPoint;
 import com.tripgo.backend.security.jwt.JwtAuthenticationFilter;
 import com.tripgo.backend.security.service.CustomUserDetailsService;
@@ -30,6 +31,7 @@ public class SecurityConfig {
     private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
     private final CorsConfigurationSource corsConfigurationSource;
+    private final RateLimitFilter rateLimitFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http)throws Exception {
@@ -66,6 +68,7 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.PUT, "/booking/schedules/*/policies").hasRole("OPERATOR")
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
+                .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .oauth2Login(oauth -> oauth
                         .successHandler(oAuth2SuccessHandler)

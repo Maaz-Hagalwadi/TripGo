@@ -50,8 +50,8 @@ public class SearchController {
         );
         
         return schedules.stream()
+                .filter(schedule -> matchesFrequency(schedule.getFrequency(), date))
                 .filter(schedule -> {
-                    // For recurring schedules, only hide COMPLETED if searching today or past
                     if (schedule.getFrequency() != null) return true;
                     return !"COMPLETED".equals(schedule.getTripStatus());
                 })
@@ -75,9 +75,21 @@ public class SearchController {
 
                     return availabilityService.search(adjustedSchedule, normalizedFrom, normalizedTo, null);
                 })
+                .filter(r -> r != null)
                 .toList();
     }
     
+    private boolean matchesFrequency(String frequency, LocalDate date) {
+        if (frequency == null || frequency.equals("ONCE")) return true;
+        java.time.DayOfWeek day = date.getDayOfWeek();
+        return switch (frequency) {
+            case "DAILY" -> true;
+            case "WEEKDAYS" -> day != java.time.DayOfWeek.SATURDAY && day != java.time.DayOfWeek.SUNDAY;
+            case "WEEKENDS" -> day == java.time.DayOfWeek.SATURDAY || day == java.time.DayOfWeek.SUNDAY;
+            default -> true;
+        };
+    }
+
     private String normalizeStopName(String stop) {
         if (stop == null || stop.isEmpty()) return stop;
         // Title-case each word: "new delhi" -> "New Delhi"
