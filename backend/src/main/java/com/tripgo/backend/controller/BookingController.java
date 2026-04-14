@@ -5,6 +5,8 @@ import com.tripgo.backend.model.entities.*;
 import com.tripgo.backend.repository.*;
 import com.tripgo.backend.security.service.CustomUserDetails;
 import com.tripgo.backend.service.impl.SeatLockService;
+import com.tripgo.backend.service.impl.TicketPdfService;
+import com.tripgo.backend.repository.TicketRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -28,6 +30,8 @@ public class BookingController {
     private final BookingSeatRepository bookingSeatRepository;
     private final RouteSegmentRepository routeSegmentRepository;
     private final PaymentRepository paymentRepository;
+    private final TicketPdfService ticketPdfService;
+    private final TicketRepository ticketRepository;
 
     // ─── GET seats for schedule ───────────────────────────────────────────────
     @GetMapping("/schedules/{scheduleId}/seats")
@@ -166,6 +170,29 @@ public class BookingController {
             if (segments.get(i).getToStop().equalsIgnoreCase(stop)) return i + 1;
         }
         return -1;
+    }
+
+    // ─── GET ticket PDF ───────────────────────────────────────────────────────
+    @GetMapping("/{bookingId}/ticket/download")
+    public ResponseEntity<?> downloadTicket(@PathVariable UUID bookingId, Authentication auth) {
+        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new RuntimeException("Booking not found"));
+
+        if (!booking.getUser().getId().equals(user.getId())) {
+            return ResponseEntity.status(403).body(Map.of("error", "Unauthorized"));
+        }
+
+        if (booking.getStatus() != com.tripgo.backend.model.enums.BookingStatus.CONFIRMED) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Ticket only available for confirmed bookings"));
+        }
+
+        byte[] pdf = ticketPdfService.generateTicketPdf(booking);
+
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=ticket-" + booking.getBookingCode() + ".pdf")
+                .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
+                .body(pdf);
     }
 
     // ─── GET my bookings (user) ───────────────────────────────────────────────

@@ -16,6 +16,8 @@ public record SearchResponse(
         List<String> amenities,
         Map<String, FareResult> faresByType,
         List<SeatAvailability> seatAvailability,
+        int totalSeats,
+        int availableSeats,
         String tripStatus,
         Integer delayMinutes,
         Instant actualDepartureTime,

@@ -62,7 +62,7 @@ public class BusService {
     }
 
     public List<BusResponse> list(User user) {
-        List<Bus> buses = busRepository.findByOperator(user.getOperator());
+        List<Bus> buses = busRepository.findByOperatorAndActiveTrue(user.getOperator());
         return buses.stream().map(this::toResponse).toList();
     }
 

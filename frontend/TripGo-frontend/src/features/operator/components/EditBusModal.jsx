@@ -22,7 +22,7 @@ const Field = ({ icon, label, field, type = 'text', value, error, onChange }) =>
   </div>
 );
 
-const EditBusModal = ({ formData, errors, amenities, updating, onChange, onAmenityToggle, onSave, onCancel }) => (
+const EditBusModal = ({ busId, formData, errors, amenities, updating, onChange, onAmenityToggle, onSave, onCancel }) => (
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
     <div className="bg-white dark:bg-op-card rounded-2xl w-full max-w-lg shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
 
@@ -34,7 +34,7 @@ const EditBusModal = ({ formData, errors, amenities, updating, onChange, onAmeni
           </div>
           <div>
             <h3 className="font-extrabold text-base">Edit Bus</h3>
-            <p className="text-xs text-slate-400">{formData.name}</p>
+            <p className="text-xs text-slate-400">{formData.name} · ID: {busId}</p>
           </div>
         </div>
         <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">

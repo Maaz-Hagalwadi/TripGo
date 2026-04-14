@@ -259,38 +259,38 @@ const AdminDashboard = () => {
         {activeItem === 'overview' && (
           <>
             <div className="grid grid-cols-2 gap-4 lg:grid-cols-4 lg:gap-6">
-              <button onClick={() => navigate(`${ROUTES.ADMIN_DASHBOARD}?tab=operators`)} className="flex items-start justify-between rounded-xl border border-slate-200 bg-white p-6 text-left transition-all hover:border-primary/30 dark:border-slate-800 dark:bg-op-card">
+              <button onClick={() => navigate(`${ROUTES.ADMIN_DASHBOARD}?tab=operators`)} className="flex items-start justify-between rounded-xl border border-purple-100 dark:border-purple-900/50 border-l-4 border-l-purple-500 bg-purple-50 dark:bg-purple-950/30 p-6 text-left transition-all hover:shadow-md">
                 <div>
                   <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Operators</p>
-                  <h3 className="mt-2 text-3xl font-bold">{dataLoading ? '...' : operators.length}</h3>
+                  <h3 className="mt-2 text-3xl font-bold text-purple-700 dark:text-purple-300">{dataLoading ? '...' : operators.length}</h3>
                   <p className="mt-2 flex items-center gap-1 text-xs text-slate-400">
                     <span className="material-symbols-outlined text-xs">info</span>
                     {dataLoading ? '...' : `${pendingOperators.length} pending`}
                   </p>
                 </div>
-                <div className="rounded-lg bg-primary/10 p-3 text-primary">
+                <div className="rounded-lg bg-purple-500/10 p-3 text-purple-500">
                   <span className="material-symbols-outlined">business</span>
                 </div>
               </button>
 
-              <button onClick={() => navigate(`${ROUTES.ADMIN_DASHBOARD}?tab=buses`)} className="flex items-start justify-between rounded-xl border border-slate-200 bg-white p-6 text-left transition-all hover:border-primary/30 dark:border-slate-800 dark:bg-op-card">
+              <button onClick={() => navigate(`${ROUTES.ADMIN_DASHBOARD}?tab=buses`)} className="flex items-start justify-between rounded-xl border border-blue-100 dark:border-blue-900/50 border-l-4 border-l-blue-500 bg-blue-50 dark:bg-blue-950/30 p-6 text-left transition-all hover:shadow-md">
                 <div>
                   <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Buses</p>
-                  <h3 className="mt-2 text-3xl font-bold">{dataLoading ? '...' : buses.length}</h3>
+                  <h3 className="mt-2 text-3xl font-bold text-blue-700 dark:text-blue-300">{dataLoading ? '...' : buses.length}</h3>
                   <p className="mt-2 flex items-center gap-1 text-xs text-slate-400">
                     <span className="material-symbols-outlined text-xs">info</span>
                     {dataLoading ? '...' : `${allInactiveBuses.length} pending approval`}
                   </p>
                 </div>
-                <div className="rounded-lg bg-green-500/10 p-3 text-green-500">
+                <div className="rounded-lg bg-blue-500/10 p-3 text-blue-500">
                   <span className="material-symbols-outlined">directions_bus</span>
                 </div>
               </button>
 
-              <button onClick={() => navigate(`${ROUTES.ADMIN_DASHBOARD}?tab=users`)} className="flex items-start justify-between rounded-xl border border-slate-200 bg-white p-6 text-left transition-all hover:border-primary/30 dark:border-slate-800 dark:bg-op-card">
+              <button onClick={() => navigate(`${ROUTES.ADMIN_DASHBOARD}?tab=users`)} className="flex items-start justify-between rounded-xl border border-orange-100 dark:border-orange-900/50 border-l-4 border-l-orange-500 bg-orange-50 dark:bg-orange-950/30 p-6 text-left transition-all hover:shadow-md">
                 <div>
                   <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Users</p>
-                  <h3 className="mt-2 text-3xl font-bold">{dataLoading ? '...' : users.length}</h3>
+                  <h3 className="mt-2 text-3xl font-bold text-orange-700 dark:text-orange-300">{dataLoading ? '...' : users.length}</h3>
                   <p className="mt-2 text-xs text-slate-400">Registered users</p>
                 </div>
                 <div className="rounded-lg bg-orange-500/10 p-3 text-orange-500">
@@ -298,7 +298,7 @@ const AdminDashboard = () => {
                 </div>
               </button>
 
-              <button onClick={() => navigate(`${ROUTES.ADMIN_DASHBOARD}?tab=operators`)} className="relative flex items-start justify-between overflow-hidden rounded-xl bg-primary p-6 text-left">
+              <button onClick={() => navigate(`${ROUTES.ADMIN_DASHBOARD}?tab=operators`)} className="relative flex items-start justify-between overflow-hidden rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 p-6 text-left">
                 <div className="relative z-10">
                   <p className="text-sm font-medium text-white/80">Approved Operators</p>
                   <h3 className="mt-2 text-3xl font-bold text-white">{dataLoading ? '...' : approvedOperators.length}</h3>

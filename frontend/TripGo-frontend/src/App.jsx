@@ -60,7 +60,7 @@ function App() {
     <AuthProvider>
       <Toaster position="top-right" richColors theme="dark" closeButton />
       <Router>
-        <Suspense fallback={<CenterScreenLoader label="Loading page..." description="Please wait a moment." />}>
+        <Suspense fallback={<CenterScreenLoader label="Loading..." description="Please wait a moment." />}>
         <Routes>
           {/* Public routes */}
           <Route path={ROUTES.HOME} element={<Home />} />

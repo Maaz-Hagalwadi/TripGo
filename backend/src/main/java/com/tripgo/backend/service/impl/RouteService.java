@@ -268,8 +268,7 @@ public class RouteService {
             throw new RuntimeException("Access denied");
         }
 
-        schedule.setActive(false);
-        scheduleRepository.save(schedule);
+        scheduleRepository.delete(schedule);
     }
 
     public RouteScheduleResponse updateSchedule(UUID scheduleId, CreateScheduleRequest req, User user) {
@@ -299,17 +298,19 @@ public class RouteService {
         // Get assigned driver for this bus
         UUID driverId = null;
         String driverName = null;
-        var assignment = assignmentRepository.findByBusAndAssignedToIsNull(schedule.getBus());
-        if (assignment.isPresent()) {
-            Driver driver = assignment.get().getDriver();
-            driverId = driver.getId();
-            driverName = driver.getFirstName() + " " + (driver.getLastName() != null ? driver.getLastName() : "");
+        if (schedule.getBus() != null) {
+            var assignment = assignmentRepository.findByBusAndAssignedToIsNull(schedule.getBus());
+            if (assignment.isPresent()) {
+                Driver driver = assignment.get().getDriver();
+                driverId = driver.getId();
+                driverName = driver.getFirstName() + " " + (driver.getLastName() != null ? driver.getLastName() : "");
+            }
         }
 
         return new RouteScheduleResponse(
                 schedule.getId(),
                 new RouteResponse(route.getId(), route.getName(), route.getOrigin(), route.getDestination(), route.getDistanceKm()),
-                toBusResponse(schedule.getBus()),
+                schedule.getBus() != null ? toBusResponse(schedule.getBus()) : null,
                 schedule.getDepartureTime(),
                 schedule.getArrivalTime(),
                 schedule.getFrequency(),

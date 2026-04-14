@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import UserLayout from '../../../shared/components/UserLayout';
 import PaginationControls from '../../../shared/components/ui/PaginationControls';
-import { cancelMyBooking, getMyBookings } from '../../../api/bookingService';
+import { cancelMyBooking, getMyBookings, downloadTicketFromApi } from '../../../api/bookingService';
 import { getMyCompletedTrips, submitTripRating } from '../../../api/reviewService';
 import { ROUTES } from '../../../shared/constants/routes';
 import { formatUtcDateTime } from '../../../shared/utils/scheduleSearchUtils';
@@ -490,7 +490,18 @@ const toTitleCase = (value) => String(value || '')
   .toLowerCase()
   .replace(/\b\w/g, (char) => char.toUpperCase());
 
-const downloadTicket = (booking) => {
+const downloadTicket = async (booking) => {
+  const rawId = String(
+    booking?.bookingId || booking?.id || booking?.publicBookingId || booking?.bookingCode || ''
+  ).trim();
+
+  // Try API download first
+  if (rawId) {
+    const success = await downloadTicketFromApi(rawId, `${toDisplayBookingId(booking)}.pdf`);
+    if (success) return;
+  }
+
+  // Fallback: generate txt ticket
   const bookingId = toDisplayBookingId(booking);
   const { routeFrom, routeTo } = getBookingRouteSegment(booking);
   const seats = extractSeats(booking);

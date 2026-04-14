@@ -34,22 +34,47 @@ public class RatingController {
 
         User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
 
-        // Check if user has a completed booking for this schedule
         RouteSchedule schedule = scheduleRepository.findById(scheduleId)
                 .orElseThrow(() -> new RuntimeException("Schedule not found"));
 
-        boolean hasCompletedBooking = bookingRepository
+        // Find the specific booking for this user + schedule + travelDate
+        String travelDateStr = (String) body.get("travelDate");
+        java.time.LocalDate travelDate = travelDateStr != null
+                ? java.time.LocalDate.parse(travelDateStr)
+                : null;
+
+        // Find confirmed booking for this user on this schedule on the specific travel date
+        Booking eligibleBooking = bookingRepository
                 .findByUserAndStatus(user, BookingStatus.CONFIRMED)
                 .stream()
-                .anyMatch(b -> b.getRouteSchedule().getId().equals(scheduleId)
-                        && "COMPLETED".equals(b.getRouteSchedule().getTripStatus()));
+                .filter(b -> b.getRouteSchedule().getId().equals(scheduleId))
+                .filter(b -> travelDate == null || travelDate.equals(b.getTravelDate()))
+                .filter(b -> {
+                    // Trip must be COMPLETED for that specific travel date
+                    // For DAILY schedules: check if the schedule was completed on or after travelDate
+                    String tripStatus = b.getRouteSchedule().getTripStatus();
+                    java.time.LocalDate bookingTravelDate = b.getTravelDate();
+                    if (bookingTravelDate == null) return "COMPLETED".equals(tripStatus);
+                    // Schedule is completed and the travel date has passed
+                    return "COMPLETED".equals(tripStatus)
+                            || bookingTravelDate.isBefore(java.time.LocalDate.now());
+                })
+                .findFirst()
+                .orElse(null);
 
-        if (!hasCompletedBooking) {
+        if (eligibleBooking == null) {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "You can only rate trips you have completed"));
         }
 
-        if (reviewRepository.existsByUserIdAndRouteScheduleId(user.getId(), scheduleId)) {
+        java.time.LocalDate resolvedTravelDate = eligibleBooking.getTravelDate();
+
+        // Duplicate check scoped to scheduleId + travelDate
+        boolean alreadyRated = resolvedTravelDate != null
+                ? reviewRepository.existsByUserIdAndRouteScheduleIdAndTravelDate(user.getId(), scheduleId, resolvedTravelDate)
+                : reviewRepository.existsByUserIdAndRouteScheduleId(user.getId(), scheduleId);
+
+        if (alreadyRated) {
             return ResponseEntity.badRequest()
                     .body(Map.of("error", "You have already rated this trip"));
         }

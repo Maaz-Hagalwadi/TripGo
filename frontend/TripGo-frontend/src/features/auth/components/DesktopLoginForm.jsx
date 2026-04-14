@@ -94,8 +94,8 @@ const DesktopLoginForm = () => {
               <div className="text-primary cursor-pointer" onClick={() => navigate('/')}>
                 <TripGoIcon className="w-10 h-10" />
               </div>
-              <span 
-                className="text-3xl font-extrabold tracking-tight text-white cursor-pointer hover:text-primary transition-colors" 
+              <span
+                className="text-3xl font-extrabold tracking-tight text-white cursor-pointer hover:text-primary transition-colors"
                 onClick={() => navigate('/')}
               >
                 TripGo
