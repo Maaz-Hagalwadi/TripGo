@@ -24,6 +24,7 @@ public interface RouteScheduleRepository extends JpaRepository<RouteSchedule, UU
         AND LOWER(TRIM(seg2.toStop)) = LOWER(TRIM(:to))
         AND seg1.seq <= seg2.seq
         AND rs.active = true
+        AND rs.tripStatus NOT IN ('STARTED', 'COMPLETED', 'CANCELLED')
         AND (rs.frequency IS NOT NULL
              OR (rs.departureTime >= :startOfDay AND rs.departureTime < :endOfDay))
         """)
@@ -51,7 +52,6 @@ public interface RouteScheduleRepository extends JpaRepository<RouteSchedule, UU
         SELECT rs FROM RouteSchedule rs
         WHERE rs.tripStatus NOT IN ('COMPLETED', 'CANCELLED')
         AND rs.arrivalTime < :now
-        AND rs.frequency IS NULL
         """)
     List<RouteSchedule> findPastUncompletedSchedules(@Param("now") Instant now);
 }

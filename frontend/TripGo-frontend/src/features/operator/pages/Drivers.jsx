@@ -5,6 +5,7 @@ import OperatorLayout from '../../../shared/components/OperatorLayout';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ROUTES } from '../../../shared/constants/routes';
 import { getDrivers, addDriver, updateDriver, deleteDriver } from '../../../api/operatorDriverService';
+import CenterScreenLoader from '../../../shared/components/ui/CenterScreenLoader';
 import './OperatorDashboard.css';
 
 const EMPTY_FORM = {
@@ -48,11 +49,10 @@ const Drivers = () => {
   const { user, loading } = useAuth();
   const [drivers, setDrivers] = useState([]);
   const [loadingDrivers, setLoadingDrivers] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [blockingLoader, setBlockingLoader] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [editingDriverId, setEditingDriverId] = useState(null);
   const [editForm, setEditForm] = useState(EMPTY_FORM);
-  const [savingEdit, setSavingEdit] = useState(false);
   const [deletingDriverId, setDeletingDriverId] = useState(null);
   const [deleteModalDriver, setDeleteModalDriver] = useState(null);
   const [viewMode, setViewMode] = useState('grid');
@@ -92,9 +92,8 @@ const Drivers = () => {
       toast.error('First name, phone, license number and expiry are required');
       return;
     }
-
     try {
-      setSaving(true);
+      setBlockingLoader('Adding driver...');
       await addDriver(form);
       setForm(EMPTY_FORM);
       await fetchDrivers();
@@ -102,7 +101,7 @@ const Drivers = () => {
     } catch (e) {
       toast.error(e.message || 'Failed to add driver');
     } finally {
-      setSaving(false);
+      setBlockingLoader(null);
     }
   };
 
@@ -127,9 +126,8 @@ const Drivers = () => {
       toast.error('First name, phone, license number and expiry are required');
       return;
     }
-
     try {
-      setSavingEdit(true);
+      setBlockingLoader('Saving driver...');
       await updateDriver(driverId, editForm);
       toast.success('Driver updated');
       setEditingDriverId(null);
@@ -137,13 +135,14 @@ const Drivers = () => {
     } catch (e) {
       toast.error(e.message || 'Failed to update driver');
     } finally {
-      setSavingEdit(false);
+      setBlockingLoader(null);
     }
   };
 
   const handleDeleteDriver = async (driverId) => {
     try {
       setDeletingDriverId(driverId);
+      setBlockingLoader('Deleting driver...');
       await deleteDriver(driverId);
       toast.success('Driver deleted');
       await fetchDrivers();
@@ -151,6 +150,7 @@ const Drivers = () => {
       toast.error(e.message || 'Failed to delete driver');
     } finally {
       setDeletingDriverId(null);
+      setBlockingLoader(null);
     }
   };
 
@@ -159,6 +159,13 @@ const Drivers = () => {
   };
 
   return (
+    <>
+    {blockingLoader && (
+      <CenterScreenLoader
+        label={blockingLoader}
+        description="Please wait while we update your driver information."
+      />
+    )}
     <OperatorLayout activeItem="drivers" title="Drivers">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div className="bg-white dark:bg-op-card border border-slate-200 dark:border-slate-800 rounded-xl p-5">
@@ -234,10 +241,10 @@ const Drivers = () => {
           <div className="lg:col-span-5 flex justify-end">
             <button
               onClick={handleAddDriver}
-              disabled={saving}
+              disabled={Boolean(blockingLoader)}
               className="px-4 py-2 bg-primary text-black font-bold rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-60"
             >
-              {saving ? 'Adding...' : 'Add Driver'}
+              Add Driver
             </button>
           </div>
         </div>
@@ -318,10 +325,10 @@ const Drivers = () => {
                       </button>
                       <button
                         onClick={() => handleSaveDriver(driver.id)}
-                        disabled={savingEdit}
+                        disabled={Boolean(blockingLoader)}
                         className="px-3 py-1.5 text-xs rounded bg-green-600 text-white hover:bg-green-700 disabled:opacity-60"
                       >
-                        {savingEdit ? 'Saving...' : 'Save'}
+                        Save
                       </button>
                     </div>
                   </div>
@@ -409,6 +416,7 @@ const Drivers = () => {
         </div>
       )}
     </OperatorLayout>
+    </>
   );
 };
 

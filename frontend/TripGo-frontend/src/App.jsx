@@ -7,6 +7,7 @@ import ProtectedRoute from './shared/components/ProtectedRoute';
 import { BusWizardProvider } from './features/operator/context/BusWizardContext';
 import { ROUTES } from './shared/constants/routes';
 import ErrorBoundary from './shared/components/ErrorBoundary';
+import CenterScreenLoader from './shared/components/ui/CenterScreenLoader';
 
 const Home = lazy(() => import('./features/home/pages/Home'));
 const Dashboard = lazy(() => import('./features/home/pages/Dashboard'));
@@ -59,7 +60,7 @@ function App() {
     <AuthProvider>
       <Toaster position="top-right" richColors theme="dark" closeButton />
       <Router>
-        <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><span className="material-symbols-outlined animate-spin text-primary text-4xl">progress_activity</span></div>}>
+        <Suspense fallback={<CenterScreenLoader label="Loading page..." description="Please wait a moment." />}>
         <Routes>
           {/* Public routes */}
           <Route path={ROUTES.HOME} element={<Home />} />
