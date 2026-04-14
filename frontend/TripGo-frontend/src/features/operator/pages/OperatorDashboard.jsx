@@ -141,26 +141,26 @@ const OperatorDashboard = () => {
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
 
-          {/* Total Buses — real data */}
-          <div className="bg-white dark:bg-op-card p-6 rounded-xl border border-slate-200 dark:border-slate-800 flex items-start justify-between">
+          {/* Total Buses */}
+          <div className="bg-blue-50 dark:bg-blue-950/30 p-6 rounded-xl border-l-4 border-blue-500 border border-blue-100 dark:border-blue-900/50 flex items-start justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Buses</p>
-              <h3 className="text-3xl font-bold mt-2">{loadingBuses ? '...' : resolvedTotalBuses}</h3>
+              <h3 className="text-3xl font-bold mt-2 text-blue-700 dark:text-blue-300">{loadingBuses ? '...' : resolvedTotalBuses}</h3>
               <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
                 <span className="material-symbols-outlined text-xs">info</span>
                 {loadingStats ? '...' : `${stats.totalRoutes} routes`} · {loadingBuses ? '...' : `${activeBuses} active`}
               </p>
             </div>
-            <div className="bg-primary/10 p-3 rounded-lg text-primary">
+            <div className="bg-blue-500/10 p-3 rounded-lg text-blue-500">
               <span className="material-symbols-outlined">directions_bus</span>
             </div>
           </div>
 
           {/* Confirmed Bookings */}
-          <div className="bg-white dark:bg-op-card p-6 rounded-xl border border-slate-200 dark:border-slate-800 flex items-start justify-between">
+          <div className="bg-green-50 dark:bg-green-950/30 p-6 rounded-xl border-l-4 border-green-500 border border-green-100 dark:border-green-900/50 flex items-start justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Confirmed Bookings</p>
-              <h3 className="text-3xl font-bold mt-2">{loadingStats ? '...' : stats.confirmedBookings}</h3>
+              <h3 className="text-3xl font-bold mt-2 text-green-700 dark:text-green-300">{loadingStats ? '...' : stats.confirmedBookings}</h3>
               <p className="text-xs text-slate-400 mt-2">Cancelled: {loadingStats ? '...' : stats.cancelledBookings}</p>
             </div>
             <div className="bg-green-500/10 p-3 rounded-lg text-green-500">
@@ -169,10 +169,10 @@ const OperatorDashboard = () => {
           </div>
 
           {/* Total Bookings */}
-          <div className="bg-white dark:bg-op-card p-6 rounded-xl border border-slate-200 dark:border-slate-800 flex items-start justify-between">
+          <div className="bg-orange-50 dark:bg-orange-950/30 p-6 rounded-xl border-l-4 border-orange-500 border border-orange-100 dark:border-orange-900/50 flex items-start justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Bookings</p>
-              <h3 className="text-3xl font-bold mt-2">{loadingStats ? '...' : stats.totalBookings}</h3>
+              <h3 className="text-3xl font-bold mt-2 text-orange-700 dark:text-orange-300">{loadingStats ? '...' : stats.totalBookings}</h3>
               <p className="text-xs text-slate-400 mt-2">All booking statuses</p>
             </div>
             <div className="bg-orange-500/10 p-3 rounded-lg text-orange-500">
@@ -181,7 +181,7 @@ const OperatorDashboard = () => {
           </div>
 
           {/* Total Revenue */}
-          <div className="bg-primary p-6 rounded-xl flex items-start justify-between relative overflow-hidden group">
+          <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-6 rounded-xl flex items-start justify-between relative overflow-hidden group">
             <div className="relative z-10">
               <p className="text-sm font-medium text-white/80">Total Revenue</p>
               <h3 className="text-3xl font-bold mt-2 text-white">{loadingStats ? '...' : `₹${Math.round(stats.totalRevenue).toLocaleString()}`}</h3>

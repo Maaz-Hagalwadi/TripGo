@@ -22,7 +22,7 @@ const Header = () => {
           {/* Logo - Left Corner */}
           <div className="flex items-center gap-2 -ml-2 cursor-pointer" onClick={() => navigate('/')}>
             <div className="text-primary">
-              <TripGoIcon />
+              <TripGoIcon className="w-10 h-10" />
             </div>
             <span className="text-2xl font-extrabold tracking-tight text-white">TripGo</span>
           </div>
