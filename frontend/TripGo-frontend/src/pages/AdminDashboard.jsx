@@ -464,8 +464,9 @@ const AdminDashboard = () => {
             </div>
 
             {requestedOperatorId ? (
-              <div className="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-slate-700 dark:text-slate-200">
-                Showing operator notification context for <span className="font-bold">{requestedOperatorId}</span>
+              <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-300">
+                <span className="material-symbols-outlined text-base">notifications</span>
+                Opened from a notification — showing the relevant operator below.
               </div>
             ) : null}
 
@@ -547,8 +548,9 @@ const AdminDashboard = () => {
             </div>
 
             {requestedBusId ? (
-              <div className="rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm text-slate-700 dark:text-slate-200">
-                Showing bus notification context for <span className="font-bold">{requestedBusId}</span>
+              <div className="flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-300">
+                <span className="material-symbols-outlined text-base">notifications</span>
+                Opened from a notification — showing the relevant bus below.
               </div>
             ) : null}
 
