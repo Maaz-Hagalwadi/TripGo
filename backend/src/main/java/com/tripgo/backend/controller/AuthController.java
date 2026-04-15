@@ -86,6 +86,31 @@ public class AuthController {
         return "Successfully validated with api";
     }
 
+    @GetMapping("/test-email")
+    public ResponseEntity<Map<String, Object>> testEmail(@RequestParam String to) {
+        try {
+            // Log configuration for debugging
+            System.out.println("=== EMAIL CONFIG DEBUG ===");
+            System.out.println("Mail Host: smtp.resend.com");
+            System.out.println("Mail Port: 587");
+            System.out.println("Mail Username: resend");
+            System.out.println("From Email: " + fromEmail);
+            System.out.println("API Key Set: " + (System.getenv("RESEND_API_KEY") != null ? "YES" : "NO"));
+            System.out.println("=========================");
+            
+            User testUser = new User();
+            testUser.setFirstName("Test");
+            testUser.setEmail(to);
+            
+            emailService.sendUserVerificationEmail(testUser, "http://test-link.com");
+            return ResponseEntity.ok(Map.of("success", true, "message", "Test email sent via Resend"));
+        } catch (Exception e) {
+            System.err.println("Email error: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.ok(Map.of("success", false, "error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/google-client-id")
     public ResponseEntity<Map<String, String>> getGoogleClientId() {
         return ResponseEntity.ok(Map.of("clientId", googleClientId));
