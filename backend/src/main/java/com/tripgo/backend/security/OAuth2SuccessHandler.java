@@ -64,7 +64,6 @@ public class OAuth2SuccessHandler implements AuthenticationSuccessHandler {
                     return userRepository.save(
                             User.builder()
                                     .email(email)
-                                    .username(email)
                                     .firstName(firstName)
                                     .lastName(lastName)
                                     .isEmailVerified(true)
