@@ -60,6 +60,9 @@ public class AuthController {
     @Value("${app.backend.url}")
     private String backendUrl;
 
+    @Value("${app.mail.from}")
+    private String fromEmail;
+
     @PostMapping("/register")
     public ResponseEntity<String> register(@Valid @RequestBody RegisterRequest request) {
         authService.register(request);
