@@ -1,36 +1,51 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<head><meta charset="UTF-8"/>
-<style>
-  body{margin:0;padding:0;background:#f4f6f9;font-family:'Segoe UI',Arial,sans-serif;}
-  .wrapper{max-width:600px;margin:30px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);}
-  .header{background:linear-gradient(135deg,#e53e3e,#c53030);padding:36px 32px;text-align:center;}
-  .header h1{color:#fff;margin:0;font-size:24px;font-weight:700;}
-  .header p{color:rgba(255,255,255,0.85);margin:6px 0 0;font-size:14px;}
-  .body{padding:32px;color:#333;}
-  .info-box{background:#fff5f5;border:1px solid #fed7d7;border-radius:8px;padding:16px 20px;margin:20px 0;}
-  .btn{display:inline-block;background:#1a73e8;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;margin-top:20px;}
-  .footer{background:#f4f6f9;padding:20px 32px;text-align:center;font-size:12px;color:#999;border-top:1px solid #eee;}
-</style>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Payment Failed</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f4f6f9; font-family: 'Segoe UI', Arial, sans-serif; }
+    .wrapper { max-width: 600px; margin: 30px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #e53e3e, #c53030); padding: 36px 32px; text-align: center; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 26px; font-weight: 700; }
+    .header p { color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 14px; }
+    .badge { display: inline-block; background: #fff; color: #e53e3e; padding: 6px 18px; border-radius: 20px; font-size: 13px; font-weight: 700; margin-top: 14px; }
+    .body { padding: 32px; color: #333; }
+    .greeting { font-size: 16px; margin-bottom: 16px; }
+    .info-box { background: #fff5f5; border: 1px solid #fed7d7; border-radius: 8px; padding: 20px 24px; margin: 20px 0; }
+    .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #ffe0e0; font-size: 14px; }
+    .info-row:last-child { border-bottom: none; }
+    .info-row .label { color: #888; }
+    .info-row .value { font-weight: 600; color: #222; }
+    .note { font-size: 14px; color: #555; margin: 20px 0; }
+    .btn { display: inline-block; background: #1a73e8; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; }
+    .footer { background: #f4f6f9; padding: 24px 32px; text-align: center; font-size: 12px; color: #999; border-top: 1px solid #eee; }
+    .footer a { color: #1a73e8; text-decoration: none; }
+  </style>
 </head>
 <body>
 <div class="wrapper">
   <div class="header">
     <h1>🚌 TripGo</h1>
-    <p>Payment Failed</p>
+    <p>Payment Could Not Be Processed</p>
+    <div class="badge">✕ PAYMENT FAILED</div>
   </div>
   <div class="body">
-    <p>Hi <strong th:text="${firstName}">Traveller</strong>,</p>
+    <p class="greeting">Hi <strong th:text="${firstName}">Traveller</strong>,</p>
     <p>Unfortunately your payment could not be processed for the following booking attempt:</p>
     <div class="info-box">
-      <p style="margin:0 0 8px"><strong>Route:</strong> <span th:text="${from}">City A</span> → <span th:text="${to}">City B</span></p>
-      <p style="margin:0 0 8px"><strong>Bus:</strong> <span th:text="${busName}">Bus Name</span></p>
-      <p style="margin:0"><strong>Amount:</strong> ₹<span th:text="${amount}">0</span></p>
+      <div class="info-row"><span class="label">Route</span><span class="value" th:text="${from + ' → ' + to}">A → B</span></div>
+      <div class="info-row"><span class="label">Bus</span><span class="value" th:text="${busName}">Bus</span></div>
+      <div class="info-row"><span class="label">Amount</span><span class="value" th:text="'₹' + ${amount}">₹0</span></div>
     </div>
-    <p>Your seats have been released. Please try booking again.</p>
+    <p class="note">Your seats have been released. Please try booking again — your preferred seats may still be available.</p>
     <a th:href="${frontendUrl + '/search-results'}" class="btn">Try Again</a>
   </div>
-  <div class="footer">© 2026 TripGo. Need help? Contact our support team.</div>
+  <div class="footer">
+    <p>© 2026 TripGo. All rights reserved.</p>
+    <p>Need help? <a th:href="${frontendUrl + '/support'}">Contact Support</a></p>
+  </div>
 </div>
 </body>
 </html>

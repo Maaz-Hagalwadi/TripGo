@@ -6,19 +6,20 @@ import com.tripgo.backend.model.entities.Bus;
 import com.tripgo.backend.model.entities.Operator;
 import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.repository.UserRepository;
-import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.*;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.math.BigDecimal;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -28,17 +29,20 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class EmailService {
 
-    private final JavaMailSender mailSender;
     private final UserRepository userRepository;
     private final TemplateEngine templateEngine;
+    private final RestTemplate restTemplate = new RestTemplate();
 
-    @org.springframework.beans.factory.annotation.Value("${app.mail.from:tripGo@mzdev.co.in}")
+    @Value("${RESEND_API_KEY}")
+    private String resendApiKey;
+
+    @Value("${app.mail.from:tripGo@mzdev.co.in}")
     private String fromEmail;
 
-    @org.springframework.beans.factory.annotation.Value("${app.backend.url}")
+    @Value("${app.backend.url}")
     private String backendUrl;
 
-    @org.springframework.beans.factory.annotation.Value("${app.frontend.url}")
+    @Value("${app.frontend.url}")
     private String frontendUrl;
 
     @Async
@@ -52,43 +56,32 @@ public class EmailService {
             case OPERATOR -> "The operator";
             case SYSTEM -> "System";
         };
-        sendTemplate(
-                userEmail,
-                "Booking Cancelled - " + bookingCode + " | TripGo",
-                "booking-cancellation",
-                java.util.Map.of(
-                        "firstName", firstName,
-                        "bookingCode", bookingCode,
-                        "from", from,
-                        "to", to,
-                        "busName", busName,
-                        "cancelledBy", cancelledByLabel,
-                        "reason", reason,
-                        "refundAmount", refundAmount,
-                        "refundStatus", refundStatus,
-                        "frontendUrl", frontendUrl
-                )
-        );
-    }
-
-    @Async
-    public void sendBookingConfirmation(User user, Map<String, Object> bookingDetails) {
-        Map<String, Object> model = new java.util.HashMap<>(bookingDetails);
-        model.put("firstName", user.getFirstName());
-        model.put("frontendUrl", frontendUrl);
-        sendTemplate(
-                user.getEmail(),
-                "Booking Confirmed - " + bookingDetails.get("bookingCode") + " | TripGo",
-                "booking-confirmation",
-                model
-        );
+        Map<String, Object> data = new HashMap<>();
+        data.put("subject", "Booking Cancelled - " + bookingCode + " | TripGo");
+        data.put("firstName", firstName);
+        data.put("bookingCode", bookingCode);
+        data.put("from", from);
+        data.put("to", to);
+        data.put("busName", busName);
+        data.put("cancelledBy", cancelledByLabel);
+        data.put("reason", reason);
+        data.put("refundAmount", refundAmount);
+        data.put("refundStatus", refundStatus);
+        data.put("frontendUrl", frontendUrl);
+        sendResendTemplate(userEmail, "booking-cancellation", data);
     }
 
     @Async
     public void sendPaymentFailed(User user, String from, String to, String busName, BigDecimal amount) {
-        sendTemplate(user.getEmail(), "Payment Failed | TripGo", "payment-failed",
-                Map.of("firstName", user.getFirstName(), "from", from, "to", to,
-                        "busName", busName, "amount", amount, "frontendUrl", frontendUrl));
+        Map<String, Object> data = new HashMap<>();
+        data.put("subject", "Payment Failed for Your TripGo Booking");
+        data.put("firstName", user.getFirstName());
+        data.put("from", from);
+        data.put("to", to);
+        data.put("busName", busName);
+        data.put("amount", amount);
+        data.put("frontendUrl", frontendUrl);
+        sendResendTemplate(user.getEmail(), "payment-failed", data);
     }
 
     @Async
@@ -166,41 +159,70 @@ public class EmailService {
 
     @Async
     public void sendUserVerificationEmail(User user, String link) {
-        sendTemplate(
-                user.getEmail(),
-                "Verify Your TripGo Account",
-                "user-verification",
-                Map.of(
-                        "firstName", user.getFirstName(),
-                        "verificationLink", link
-                )
-        );
+        sendResendTemplate(user.getEmail(), "user-verification", Map.of(
+                "subject", "Verify Your TripGo Account",
+                "firstName", user.getFirstName(),
+                "verificationLink", link
+        ));
     }
 
     @Async
     public void sendResetPasswordEmail(User user, String resetLink) {
-        sendTemplate(
-                user.getEmail(),
-                "Reset Your TripGo Password",
-                "reset-password",
-                Map.of(
-                        "firstName", user.getFirstName(),
-                        "resetLink", resetLink
-                )
-        );
+        sendResendTemplate(user.getEmail(), "reset-password", Map.of(
+                "subject", "Reset Your TripGo Password",
+                "firstName", user.getFirstName(),
+                "resetLink", resetLink
+        ));
     }
 
     @Async
     public void sendOperatorVerificationEmail(User user, String link) {
-        sendTemplate(
-                user.getEmail(),
-                "Verify Your Operator Account",
-                "operator-verification",
-                Map.of(
-                        "firstName", user.getFirstName(),
-                        "verificationLink", link
-                )
-        );
+        sendResendTemplate(user.getEmail(), "operator-verification", Map.of(
+                "subject", "Verify Your TripGo Operator Account",
+                "firstName", user.getFirstName(),
+                "verificationLink", link
+        ));
+    }
+
+    @Async
+    public void sendBookingConfirmation(User user, Map<String, Object> bookingDetails) {
+        Map<String, Object> templateData = new HashMap<>(bookingDetails);
+        templateData.put("subject", "Booking Confirmed - " + bookingDetails.getOrDefault("bookingCode", "") + " | TripGo");
+        templateData.put("firstName", user.getFirstName());
+        templateData.put("frontendUrl", frontendUrl);
+        sendResendTemplate(user.getEmail(), "booking-confirmation", templateData);
+    }
+
+    private void sendResendTemplate(String to, String templateName, Map<String, Object> variables) {
+        try {
+            Context ctx = new Context();
+            ctx.setVariables(variables);
+            String html = templateEngine.process("email/" + templateName, ctx);
+
+            String subject = variables.getOrDefault("subject", "TripGo Notification").toString();
+
+            String url = "https://api.resend.com/emails";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(resendApiKey);
+
+            Map<String, Object> emailData = new HashMap<>();
+            emailData.put("from", fromEmail);
+            emailData.put("to", new String[]{to});
+            emailData.put("subject", subject);
+            emailData.put("html", html);
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(emailData, headers);
+            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                log.info("Email sent successfully to {} using template {}", to, templateName);
+            } else {
+                log.error("Failed to send email to {} using template {}. Status: {} Body: {}", to, templateName, response.getStatusCode(), response.getBody());
+            }
+        } catch (Exception e) {
+            log.error("Error sending email to {} using template {}: {}", to, templateName, e.getMessage(), e);
+        }
     }
 
     @Async
@@ -310,23 +332,8 @@ public class EmailService {
     }
 
     private void sendTemplate(String to, String subject, String template, Map<String, Object> model) {
-        try {
-            Context ctx = new Context();
-            model.forEach(ctx::setVariable);
-
-            String html = templateEngine.process("email/" + template, ctx);
-
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true);
-            helper.setFrom(fromEmail);
-            helper.setTo(to);
-            helper.setSubject(subject);
-            helper.setText(html, true);
-
-            mailSender.send(message);
-            log.info("Email sent to {} | subject: {}", to, subject);
-        } catch (Exception e) {
-            log.error("Failed to send email to {} | subject: {} | error: {}", to, subject, e.getMessage(), e);
-        }
+        model = new HashMap<>(model);
+        model.put("subject", subject);
+        sendResendTemplate(to, template, model);
     }
 }

@@ -1,15 +1,49 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
-<body style="font-family: Arial;">
-<h3>Welcome to TripGo!</h3>
-
-<p>Hello <span th:text="${firstName}">User</span>,</p>
-<p>Please verify your email by clicking the button below:</p>
-
-<a th:href="${verificationLink}" style="background:#ff6600;padding:10px;color:#fff;text-decoration:none;border-radius:4px;">
-    Verify Email
-</a>
-
-<p>This link will expire in 24 hours.</p>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Verify Your Email</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f4f6f9; font-family: 'Segoe UI', Arial, sans-serif; }
+    .wrapper { max-width: 600px; margin: 30px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #1a73e8, #0d47a1); padding: 36px 32px; text-align: center; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 26px; font-weight: 700; }
+    .header p { color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 14px; }
+    .body { padding: 40px 32px; color: #333; }
+    .message { font-size: 14px; color: #555; line-height: 1.6; margin-bottom: 32px; }
+    .btn-wrap { text-align: center; margin: 32px 0; }
+    .btn { display: inline-block; background: #1a73e8; color: white; padding: 14px 36px; border-radius: 8px; text-decoration: none; font-size: 15px; font-weight: 700; }
+    .expiry-note { font-size: 13px; color: #999; text-align: center; }
+    .divider { border: none; border-top: 1px solid #eee; margin: 28px 0; }
+    .link-fallback { font-size: 12px; color: #aaa; text-align: center; word-break: break-all; }
+    .link-fallback a { color: #1a73e8; }
+    .footer { background: #f4f6f9; padding: 24px 32px; text-align: center; font-size: 12px; color: #999; border-top: 1px solid #eee; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <h1>🚌 TripGo</h1>
+    <p>Welcome! Please verify your email</p>
+  </div>
+  <div class="body">
+    <p>Hi <strong th:text="${firstName}">Traveller</strong>,</p>
+    <p class="message">Thanks for signing up with TripGo! To activate your account and start booking bus tickets, please verify your email address by clicking the button below.</p>
+    <div class="btn-wrap">
+      <a th:href="${verificationLink}" class="btn">✉ Verify My Email</a>
+    </div>
+    <p class="expiry-note">⏰ This link will expire in <strong>24 hours</strong>.</p>
+    <hr class="divider"/>
+    <p class="link-fallback">
+      If the button doesn't work, copy and paste this link into your browser:<br/>
+      <a th:href="${verificationLink}" th:text="${verificationLink}">link</a>
+    </p>
+  </div>
+  <div class="footer">
+    <p>© 2026 TripGo. All rights reserved.</p>
+    <p>If you didn't create an account, you can safely ignore this email.</p>
+  </div>
+</div>
 </body>
 </html>
