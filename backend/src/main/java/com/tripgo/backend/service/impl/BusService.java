@@ -66,6 +66,11 @@ public class BusService {
         return buses.stream().map(this::toResponse).toList();
     }
 
+    public List<BusResponse> listPending(User user) {
+        List<Bus> buses = busRepository.findByOperatorAndActiveFalse(user.getOperator());
+        return buses.stream().map(this::toResponse).toList();
+    }
+
     private BusResponse toResponse(Bus bus) {
         return new BusResponse(
                 bus.getId(),

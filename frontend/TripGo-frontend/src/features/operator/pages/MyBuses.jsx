@@ -6,7 +6,7 @@ import OperatorLayout from '../../../shared/components/OperatorLayout';
 import DeleteBusModal from '../components/DeleteBusModal';
 import BusDetailsModal from '../components/BusDetailsModal';
 import EditBusModal from '../components/EditBusModal';
-import { getBuses, deleteBus, updateBus, getOperatorInsights, getBusOccupancy } from '../../../api/busService';
+import { getBuses, deleteBus, updateBus, getOperatorInsights, getBusOccupancy, getPendingBuses } from '../../../api/busService';
 import { getAmenities } from '../../../api/amenityService';
 import { ROUTES } from '../../../shared/constants/routes';
 import PaginationControls from '../../../shared/components/ui/PaginationControls';
@@ -50,9 +50,14 @@ const MyBuses = () => {
   const fetchBuses = async () => {
     try {
       setLoadingBuses(true);
-      const data = await getBuses();
-      setBuses(data || []);
-      fetchBusOccupancy(data || []);
+      const [allData, pendingData] = await Promise.allSettled([getBuses(), getPendingBuses()]);
+      const all = allData.status === 'fulfilled' ? (allData.value || []) : [];
+      const pending = pendingData.status === 'fulfilled' ? (pendingData.value || []) : [];
+      // Merge: pending buses not already in all list
+      const allIds = new Set(all.map(b => String(b.id)));
+      const merged = [...all, ...pending.filter(b => !allIds.has(String(b.id)))];
+      setBuses(merged);
+      fetchBusOccupancy(merged);
     } catch {
       setBuses([]);
       setBusOccupancyById({});

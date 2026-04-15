@@ -127,6 +127,32 @@ public class RouteController {
         return ResponseEntity.ok().build();
     }
 
+    @PutMapping("/{routeId}")
+    public RouteResponse updateRoute(@PathVariable UUID routeId,
+                                     @RequestBody CreateRouteRequest req,
+                                     Authentication auth) {
+        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+        return routeService.updateRoute(routeId, req, user);
+    }
+
+    @PutMapping("/{routeId}/segments/{segmentId}")
+    public SegmentResponse updateSegment(@PathVariable UUID routeId,
+                                         @PathVariable UUID segmentId,
+                                         @RequestBody AddSegmentRequest req,
+                                         Authentication auth) {
+        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+        return routeService.updateSegment(routeId, segmentId, req, user);
+    }
+
+    @DeleteMapping("/{routeId}/segments/{segmentId}")
+    public ResponseEntity<Void> deleteSegment(@PathVariable UUID routeId,
+                                              @PathVariable UUID segmentId,
+                                              Authentication auth) {
+        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+        routeService.deleteSegment(routeId, segmentId, user);
+        return ResponseEntity.ok().build();
+    }
+
     @DeleteMapping("/{routeId}")
     public ResponseEntity<Void> deleteRoute(@PathVariable UUID routeId, Authentication auth) {
         User user = ((CustomUserDetails) auth.getPrincipal()).getUser();

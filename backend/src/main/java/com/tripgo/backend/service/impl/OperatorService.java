@@ -20,6 +20,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.Set;
 
+import com.tripgo.backend.service.impl.NotificationService;
+
 @Service
 @RequiredArgsConstructor
 public class OperatorService {
@@ -30,6 +32,7 @@ public class OperatorService {
     private final PasswordEncoder passwordEncoder;
     private final EmailVerificationService emailVerificationService;
     private final EmailService emailService;
+    private final NotificationService notificationService;
 
     @Value("${app.backend.url}")
     private String backendUrl;
@@ -74,6 +77,12 @@ public class OperatorService {
 
         emailService.sendOperatorVerificationEmail(user, verificationLink);
 
+        notificationService.sendToAdmins(
+                "OPERATOR_PENDING",
+                "New Operator Registration",
+                "Operator '" + operator.getName() + "' has registered and is pending approval.",
+                "/admin/dashboard?tab=operators"
+        );
 
         return new OperatorRegistrationResponse(
                 user.getId(),
