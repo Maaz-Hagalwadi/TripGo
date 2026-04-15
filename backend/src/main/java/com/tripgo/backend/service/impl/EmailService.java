@@ -8,6 +8,7 @@ import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.repository.UserRepository;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EmailService {
@@ -322,8 +324,9 @@ public class EmailService {
             helper.setText(html, true);
 
             mailSender.send(message);
+            log.info("Email sent to {} | subject: {}", to, subject);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to send email to " + to + ": " + e.getMessage(), e);
+            log.error("Failed to send email to {} | subject: {} | error: {}", to, subject, e.getMessage(), e);
         }
     }
 }
