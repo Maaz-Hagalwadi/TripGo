@@ -30,6 +30,9 @@ public class EmailService {
     private final UserRepository userRepository;
     private final TemplateEngine templateEngine;
 
+    @org.springframework.beans.factory.annotation.Value("${app.mail.from:tripGo@mzdev.co.in}")
+    private String fromEmail;
+
     @org.springframework.beans.factory.annotation.Value("${app.backend.url}")
     private String backendUrl;
 
@@ -313,6 +316,7 @@ public class EmailService {
 
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true);
+            helper.setFrom(fromEmail);
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(html, true);
