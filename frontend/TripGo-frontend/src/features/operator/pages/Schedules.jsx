@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
-import { getRoutes, getRouteSegments, getRouteSchedules, deleteSchedule, deleteRoute, getPoints, addPoint, updatePoint, deletePoint, getFares, addFare, deleteFare, updateFare, startTrip, completeTrip, markDelay, updateSchedule, createSchedule } from '../../../api/routeService';
+import { getRoutes, getRouteSegments, getRouteSchedules, deleteSchedule, deleteRoute, getPoints, addPoint, updatePoint, deletePoint, getFares, addFare, deleteFare, updateFare, startTrip, completeTrip, markDelay, updateSchedule, createSchedule, updateRoute, copyPointsToSchedule, updateSegment, deleteSegment, getRoutePoints, importPointsFromRoute, addSegment } from '../../../api/routeService';
 import { getDrivers, assignDriverToSchedule } from '../../../api/operatorDriverService';
 import { getBuses } from '../../../api/busService';
 import { toast } from 'sonner';
@@ -48,11 +48,18 @@ const Schedules = () => {
   const [buses, setBuses] = useState([]);
   const [assigningDriver, setAssigningDriver] = useState({});
   const [blockingLoader, setBlockingLoader] = useState(null);
+  const [expandingRoute, setExpandingRoute] = useState(null);
   const [driverAssignModal, setDriverAssignModal] = useState({
     routeId: null,
     scheduleId: null,
     selectedDriverId: ''
   });
+  const [editRouteModal, setEditRouteModal] = useState(null); // { id, name, origin, destination }
+  const [copyPointsModal, setCopyPointsModal] = useState({ scheduleId: null, routeId: null, targetScheduleId: '' });
+  const [editingSegment, setEditingSegment] = useState({}); // { [routeId]: { segmentId, fromStop, toStop, distanceKm, durationMinutes } }
+  const [routePoints, setRoutePoints] = useState({}); // { [routeId]: [...] } — all unique points on route
+  const [addSegmentForm, setAddSegmentForm] = useState({}); // { [routeId]: { fromStop, toStop, distanceKm, durationMinutes } }
+  const [showAddSegment, setShowAddSegment] = useState({}); // { [routeId]: bool }
   const [editScheduleModal, setEditScheduleModal] = useState({
     routeId: null,
     scheduleId: null,
@@ -430,11 +437,13 @@ const Schedules = () => {
     }
   };
 
-  const toggleRoute = (routeId) => {
+  const toggleRoute = async (routeId) => {
     if (expandedRoute === routeId) { setExpandedRoute(null); return; }
+    setExpandingRoute(routeId);
+    await fetchSegments(routeId);
+    await fetchSchedules(routeId);
+    setExpandingRoute(null);
     setExpandedRoute(routeId);
-    fetchSegments(routeId);
-    fetchSchedules(routeId);
   };
 
   const openManageFares = async (routeId) => {
@@ -732,6 +741,129 @@ const Schedules = () => {
     }
   };
 
+  const submitEditRoute = async () => {
+    const { id, name, origin, destination } = editRouteModal;
+    if (!name?.trim() || !origin?.trim() || !destination?.trim()) {
+      toast.error('Name, origin and destination are required');
+      return;
+    }
+    try {
+      const updated = await runBlockingAction('Updating route...', () => updateRoute(id, { name, origin, destination }));
+      setRoutes(prev => prev.map(r => r.id === id ? { ...r, ...updated, name, origin, destination } : r));
+      setEditRouteModal(null);
+      toast.success('Route updated successfully');
+    } catch (e) {
+      toast.error(e.message || 'Failed to update route');
+    }
+  };
+
+  const handleSaveSegment = async (routeId) => {
+    const edit = editingSegment[routeId];
+    if (!edit?.fromStop?.trim() || !edit?.toStop?.trim()) {
+      toast.error('From stop and to stop are required');
+      return;
+    }
+    try {
+      const updated = await runBlockingAction('Saving segment...', () =>
+        updateSegment(routeId, edit.segmentId, {
+          fromStop: edit.fromStop,
+          toStop: edit.toStop,
+          distanceKm: Number(edit.distanceKm) || 0,
+          durationMinutes: Number(edit.durationMinutes) || 0,
+        })
+      );
+      setSegments(prev => ({
+        ...prev,
+        [routeId]: (prev[routeId] || []).map(s =>
+          String(s.id) === String(edit.segmentId) ? { ...s, ...updated } : s
+        ),
+      }));
+      setEditingSegment(prev => ({ ...prev, [routeId]: null }));
+      toast.success('Segment updated');
+    } catch (e) {
+      toast.error(e.message || 'Failed to update segment');
+    }
+  };
+
+  const handleDeleteSegment = async (routeId, segmentId) => {
+    try {
+      await runBlockingAction('Deleting segment...', () => deleteSegment(routeId, segmentId));
+      setSegments(prev => ({
+        ...prev,
+        [routeId]: (prev[routeId] || []).filter(s => String(s.id) !== String(segmentId)),
+      }));
+      // Also clear fares that belonged to this segment
+      setFares(prev => ({
+        ...prev,
+        [routeId]: (prev[routeId] || []).filter(f =>
+          String(f?.segmentId || f?.segment?.id) !== String(segmentId)
+        ),
+      }));
+      toast.success('Segment deleted');
+    } catch (e) {
+      toast.error(e.message || 'Failed to delete segment');
+    }
+  };
+
+  const handleAddSegment = async (routeId) => {
+    const form = addSegmentForm[routeId] || {};
+    if (!form.fromStop?.trim() || !form.toStop?.trim()) {
+      toast.error('From stop and to stop are required');
+      return;
+    }
+    try {
+      const created = await runBlockingAction('Adding segment...', () =>
+        addSegment(routeId, {
+          fromStop: form.fromStop.trim(),
+          toStop: form.toStop.trim(),
+          distanceKm: Number(form.distanceKm) || 0,
+          durationMinutes: Number(form.durationMinutes) || 0,
+        })
+      );
+      setSegments(prev => ({ ...prev, [routeId]: [...(prev[routeId] || []), created] }));
+      setAddSegmentForm(prev => ({ ...prev, [routeId]: {} }));
+      setShowAddSegment(prev => ({ ...prev, [routeId]: false }));
+      toast.success('Segment added');
+    } catch (e) {
+      toast.error(e.message || 'Failed to add segment');
+    }
+  };
+
+  const handlePreviewRoutePoints = async (routeId) => {
+    try {
+      const data = await runBlockingAction('Loading route points...', () => getRoutePoints(routeId));
+      setRoutePoints(prev => ({ ...prev, [routeId]: Array.isArray(data) ? data : [] }));
+    } catch (e) {
+      toast.error(e.message || 'Failed to load route points');
+    }
+  };
+
+  const handleImportPoints = async (scheduleId, routeId) => {
+    try {
+      await runBlockingAction('Importing points...', () => importPointsFromRoute(scheduleId));
+      // Refresh points for this schedule
+      const fresh = await getPoints(scheduleId);
+      setPoints(prev => ({ ...prev, [scheduleId]: fresh }));
+      setRoutePoints(prev => ({ ...prev, [routeId]: [] })); // clear preview
+      toast.success('Points imported successfully');
+    } catch (e) {
+      toast.error(e.message || 'Failed to import points');
+    }
+  };
+
+  const submitCopyPoints = async () => {
+    const { scheduleId, routeId, targetScheduleId } = copyPointsModal;
+    if (!targetScheduleId) { toast.error('Please select a target schedule'); return; }
+    if (targetScheduleId === scheduleId) { toast.error('Cannot copy to the same schedule'); return; }
+    try {
+      await runBlockingAction('Copying boarding/dropping points...', () => copyPointsToSchedule(scheduleId, targetScheduleId));
+      setCopyPointsModal({ scheduleId: null, routeId: null, targetScheduleId: '' });
+      toast.success('Points copied successfully');
+    } catch (e) {
+      toast.error(e.message || 'Failed to copy points');
+    }
+  };
+
   return (
     <>
       {blockingLoader ? (
@@ -796,25 +928,36 @@ const Schedules = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); openAddScheduleModal(route.id); }}
-                          disabled={Boolean(blockingLoader)}
-                          className="px-2.5 py-1 text-xs rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
-                        >
+                      {expandingRoute === route.id && (
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                      )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditRouteModal({ id: route.id, name: route.name, origin: route.origin, destination: route.destination }); }}
+                        disabled={Boolean(blockingLoader)}
+                        className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors"
+                        title="Edit route"
+                      >
+                        <span className="material-symbols-outlined text-sm">edit</span>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openAddScheduleModal(route.id); }}
+                        disabled={Boolean(blockingLoader)}
+                        className="px-2.5 py-1 text-xs rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
+                      >
                         Add Schedule
                       </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); openManageFares(route.id); }}
-                          disabled={Boolean(blockingLoader)}
-                          className="px-2.5 py-1 text-xs rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
-                        >
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openManageFares(route.id); }}
+                        disabled={Boolean(blockingLoader)}
+                        className="px-2.5 py-1 text-xs rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
+                      >
                         Manage Fares
                       </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); openManagePoints(route.id); }}
-                          disabled={Boolean(blockingLoader)}
-                          className="px-2.5 py-1 text-xs rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
-                        >
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openManagePoints(route.id); }}
+                        disabled={Boolean(blockingLoader)}
+                        className="px-2.5 py-1 text-xs rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
+                      >
                         Manage Points
                       </button>
                       <button
@@ -836,23 +979,66 @@ const Schedules = () => {
                           <span className="material-symbols-outlined text-sm">route</span>Route Segments
                         </h4>
                         <div className="space-y-2">
-                          {segments[route.id].map((segment, idx) => (
-                            <div key={segment.id} className="bg-white dark:bg-op-card p-4 rounded-lg border border-slate-200 dark:border-slate-700">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">{idx + 1}</span>
-                                  <span className="font-medium">{segment.fromStop}</span>
-                                  <span className="material-symbols-outlined text-sm text-slate-400">arrow_forward</span>
-                                  <span className="font-medium">{segment.toStop}</span>
-                                </div>
-                                <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
-                                  <span>{segment.distanceKm} km</span>
-                                  <span>{segment.durationMinutes} min</span>
-                                </div>
+                          {segments[route.id].map((segment, idx) => {
+                            const isEditing = editingSegment[route.id]?.segmentId === segment.id;
+                            return (
+                              <div key={segment.id} className="bg-white dark:bg-op-card p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                                {isEditing ? (
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <input placeholder="From stop *" value={editingSegment[route.id]?.fromStop || ''} onChange={e => setEditingSegment(prev => ({ ...prev, [route.id]: { ...prev[route.id], fromStop: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
+                                    <input placeholder="To stop *" value={editingSegment[route.id]?.toStop || ''} onChange={e => setEditingSegment(prev => ({ ...prev, [route.id]: { ...prev[route.id], toStop: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
+                                    <input type="number" min="0" placeholder="Distance (km)" value={editingSegment[route.id]?.distanceKm || ''} onChange={e => setEditingSegment(prev => ({ ...prev, [route.id]: { ...prev[route.id], distanceKm: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
+                                    <input type="number" min="0" placeholder="Duration (min)" value={editingSegment[route.id]?.durationMinutes || ''} onChange={e => setEditingSegment(prev => ({ ...prev, [route.id]: { ...prev[route.id], durationMinutes: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
+                                    <div className="col-span-2 flex gap-2 justify-end">
+                                      <button onClick={() => setEditingSegment(prev => ({ ...prev, [route.id]: null }))} className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+                                      <button onClick={() => handleSaveSegment(route.id)} disabled={Boolean(blockingLoader)} className="px-3 py-1.5 text-xs rounded-lg bg-primary text-black font-bold hover:bg-primary/90 disabled:opacity-60">Save</button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                      <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">{idx + 1}</span>
+                                      <span className="font-medium">{segment.fromStop}</span>
+                                      <span className="material-symbols-outlined text-sm text-slate-400">arrow_forward</span>
+                                      <span className="font-medium">{segment.toStop}</span>
+                                    </div>
+                                    <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
+                                      <span>{segment.distanceKm} km</span>
+                                      <span>{segment.durationMinutes} min</span>
+                                      <button onClick={() => setEditingSegment(prev => ({ ...prev, [route.id]: { segmentId: segment.id, fromStop: segment.fromStop, toStop: segment.toStop, distanceKm: segment.distanceKm, durationMinutes: segment.durationMinutes } }))} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500">
+                                        <span className="material-symbols-outlined text-sm">edit</span>
+                                      </button>
+                                      <button onClick={() => handleDeleteSegment(route.id, segment.id)} disabled={Boolean(blockingLoader)} className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-red-500 disabled:opacity-60">
+                                        <span className="material-symbols-outlined text-sm">delete</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Add Segment */}
+                        {showAddSegment[route.id] ? (
+                          <div className="mt-3 p-3 rounded-lg border border-dashed border-primary/40 bg-primary/5">
+                            <p className="text-xs font-semibold text-primary mb-2">New Segment</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <input placeholder="From stop *" value={addSegmentForm[route.id]?.fromStop || ''} onChange={e => setAddSegmentForm(prev => ({ ...prev, [route.id]: { ...prev[route.id], fromStop: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
+                              <input placeholder="To stop *" value={addSegmentForm[route.id]?.toStop || ''} onChange={e => setAddSegmentForm(prev => ({ ...prev, [route.id]: { ...prev[route.id], toStop: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
+                              <input type="number" min="0" placeholder="Distance (km)" value={addSegmentForm[route.id]?.distanceKm || ''} onChange={e => setAddSegmentForm(prev => ({ ...prev, [route.id]: { ...prev[route.id], distanceKm: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
+                              <input type="number" min="0" placeholder="Duration (min)" value={addSegmentForm[route.id]?.durationMinutes || ''} onChange={e => setAddSegmentForm(prev => ({ ...prev, [route.id]: { ...prev[route.id], durationMinutes: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
+                              <div className="col-span-2 flex gap-2 justify-end">
+                                <button onClick={() => setShowAddSegment(prev => ({ ...prev, [route.id]: false }))} className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+                                <button onClick={() => handleAddSegment(route.id)} disabled={Boolean(blockingLoader)} className="px-3 py-1.5 text-xs rounded-lg bg-primary text-black font-bold hover:bg-primary/90 disabled:opacity-60">Add Segment</button>
                               </div>
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        ) : (
+                          <button onClick={() => setShowAddSegment(prev => ({ ...prev, [route.id]: true }))} className="mt-2 flex items-center gap-1 text-xs text-primary hover:underline font-semibold">
+                            <span className="material-symbols-outlined text-sm">add</span> Add Segment
+                          </button>
+                        )}
                       </div>
                     )}
                     {schedules[route.id]?.length > 0 ? (
@@ -1319,6 +1505,34 @@ const Schedules = () => {
                   Add Point
                 </button>
               </div>
+
+              {/* Copy points to another schedule */}
+              {routeSchedules.length > 1 && (
+                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
+                  <p className="text-xs font-semibold text-slate-500 mb-2">Copy these points to another schedule</p>
+                  <div className="flex gap-2">
+                    <select
+                      value={copyPointsModal.scheduleId === selectedScheduleId ? copyPointsModal.targetScheduleId : ''}
+                      onChange={e => setCopyPointsModal({ scheduleId: selectedScheduleId, routeId, targetScheduleId: e.target.value })}
+                      className="flex-1 px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="">Select target schedule</option>
+                      {routeSchedules.filter(s => s.id !== selectedScheduleId).map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.bus?.name || 'Bus'} ({new Date(s.departureTime).toLocaleString()})
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={submitCopyPoints}
+                      disabled={Boolean(blockingLoader) || !copyPointsModal.targetScheduleId}
+                      className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white font-bold hover:bg-blue-700 disabled:opacity-60 transition-colors"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -1598,6 +1812,55 @@ const Schedules = () => {
               </button>
               <button onClick={confirmDelete} className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors">
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editRouteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-op-card rounded-xl p-6 max-w-md w-full border border-slate-200 dark:border-slate-800">
+            <h3 className="text-lg font-bold mb-4">Edit Route</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Route Name *</label>
+                <input
+                  value={editRouteModal.name}
+                  onChange={e => setEditRouteModal(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Origin *</label>
+                <input
+                  value={editRouteModal.origin}
+                  onChange={e => setEditRouteModal(prev => ({ ...prev, origin: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-slate-500 mb-1">Destination *</label>
+                <input
+                  value={editRouteModal.destination}
+                  onChange={e => setEditRouteModal(prev => ({ ...prev, destination: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-6">
+              <button
+                onClick={() => setEditRouteModal(null)}
+                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitEditRoute}
+                disabled={Boolean(blockingLoader)}
+                className="px-4 py-2 rounded-lg bg-primary text-black font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60"
+              >
+                Save Route
               </button>
             </div>
           </div>

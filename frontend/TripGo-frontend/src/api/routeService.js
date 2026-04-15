@@ -189,3 +189,27 @@ export const updatePoint = async (scheduleId, pointId, data) => {
 export const deletePoint = async (scheduleId, pointId) => {
   return apiDelete(`/operator/schedules/${scheduleId}/points/${pointId}`);
 };
+
+export const copyPointsToSchedule = async (scheduleId, targetScheduleId) => {
+  return apiPost(`/operator/schedules/${scheduleId}/points/copy-to/${targetScheduleId}`, {});
+};
+
+export const updateRoute = async (routeId, data) => {
+  return apiPut(`/operator/routes/${routeId}`, data);
+};
+
+export const updateSegment = async (routeId, segmentId, data) => {
+  return apiPut(`/operator/routes/${routeId}/segments/${segmentId}`, data);
+};
+
+export const deleteSegment = async (routeId, segmentId) => {
+  return apiDelete(`/operator/routes/${routeId}/segments/${segmentId}`);
+};
+
+export const getRoutePoints = async (routeId) => {
+  return apiGet(`/operator/schedules/routes/${routeId}/points`);
+};
+
+export const importPointsFromRoute = async (scheduleId) => {
+  return apiPost(`/operator/schedules/${scheduleId}/points/import-from-route`, {});
+};

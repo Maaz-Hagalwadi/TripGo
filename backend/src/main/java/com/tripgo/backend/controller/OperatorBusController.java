@@ -41,6 +41,12 @@ public class OperatorBusController {
         return busService.list(user);
     }
 
+    @GetMapping("/pending")
+    public List<BusResponse> listPendingBuses(Authentication auth) {
+        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+        return busService.listPending(user);
+    }
+
     @GetMapping("/{id}")
     public BusResponse get(@PathVariable UUID id, Authentication auth) {
         User user = ((CustomUserDetails) auth.getPrincipal()).getUser();

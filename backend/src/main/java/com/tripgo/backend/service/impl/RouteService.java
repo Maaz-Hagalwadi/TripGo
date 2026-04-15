@@ -53,6 +53,62 @@ public class RouteService {
         );
     }
 
+    public SegmentResponse updateSegment(UUID routeId, UUID segmentId, AddSegmentRequest req, User user) {
+        Route route = routeRepository.findById(routeId)
+                .orElseThrow(() -> new RuntimeException("Route not found"));
+
+        if (user.getOperator() == null ||
+                !route.getOperator().getId().equals(user.getOperator().getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        RouteSegment seg = segmentRepository.findById(segmentId)
+                .filter(s -> s.getRoute().getId().equals(routeId))
+                .orElseThrow(() -> new RuntimeException("Segment not found"));
+
+        seg.setFromStop(req.fromStop());
+        seg.setToStop(req.toStop());
+        seg.setDistanceKm(req.distanceKm());
+        seg.setDurationMinutes(req.durationMinutes());
+        segmentRepository.save(seg);
+
+        return new SegmentResponse(seg.getId(), seg.getSeq(), seg.getFromStop(), seg.getToStop(), seg.getDistanceKm(), seg.getDurationMinutes());
+    }
+
+    public void deleteSegment(UUID routeId, UUID segmentId, User user) {
+        Route route = routeRepository.findById(routeId)
+                .orElseThrow(() -> new RuntimeException("Route not found"));
+
+        if (user.getOperator() == null ||
+                !route.getOperator().getId().equals(user.getOperator().getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        RouteSegment seg = segmentRepository.findById(segmentId)
+                .filter(s -> s.getRoute().getId().equals(routeId))
+                .orElseThrow(() -> new RuntimeException("Segment not found"));
+
+        fareRepository.findByRouteSegment(seg).forEach(fareRepository::delete);
+        segmentRepository.delete(seg);
+    }
+
+    public RouteResponse updateRoute(UUID routeId, CreateRouteRequest req, User user) {
+        Route route = routeRepository.findById(routeId)
+                .orElseThrow(() -> new RuntimeException("Route not found"));
+
+        if (user.getOperator() == null ||
+                !route.getOperator().getId().equals(user.getOperator().getId())) {
+            throw new RuntimeException("Access denied");
+        }
+
+        route.setName(req.name());
+        route.setOrigin(req.origin());
+        route.setDestination(req.destination());
+        routeRepository.save(route);
+
+        return new RouteResponse(route.getId(), route.getName(), route.getOrigin(), route.getDestination(), route.getDistanceKm());
+    }
+
     public BigDecimal recomputeDistance(UUID routeId, User user) {
         Route route = routeRepository.findById(routeId)
                 .orElseThrow(() -> new RuntimeException("Route not found"));

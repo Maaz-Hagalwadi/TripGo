@@ -87,6 +87,90 @@ public class ScheduleController {
         return ResponseEntity.ok(BoardingDroppingPointResponse.from(pointRepository.save(point)));
     }
 
+    @GetMapping("/routes/{routeId}/points")
+    public ResponseEntity<?> getRoutePoints(@PathVariable UUID routeId, Authentication auth) {
+        return ResponseEntity.ok(
+                pointRepository.findByRouteId(routeId)
+                        .stream().map(BoardingDroppingPointResponse::from).toList()
+        );
+    }
+
+    @PostMapping("/{scheduleId}/points/import-from-route")
+    public ResponseEntity<?> importPointsFromRoute(@PathVariable UUID scheduleId,
+                                                   Authentication auth) {
+        RouteSchedule schedule = getScheduleOwnedBy(scheduleId, auth);
+        UUID routeId = schedule.getRoute().getId();
+
+        List<BoardingDroppingPoint> existing = pointRepository.findByScheduleOrderByTypeAscArrivalTimeAsc(schedule);
+        if (!existing.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Schedule already has points. Use copy-to endpoint instead."));
+        }
+
+        List<BoardingDroppingPoint> routePoints = pointRepository.findByRouteId(routeId)
+                .stream()
+                .filter(p -> !p.getSchedule().getId().equals(scheduleId))
+                .toList();
+
+        if (routePoints.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "No points found on this route from other schedules."));
+        }
+
+        // Deduplicate by name+type
+        List<BoardingDroppingPoint> unique = routePoints.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        p -> p.getName() + "|" + p.getType(),
+                        p -> p,
+                        (a, b) -> a
+                ))
+                .values().stream().toList();
+
+        List<BoardingDroppingPoint> imported = unique.stream().map(p ->
+                BoardingDroppingPoint.builder()
+                        .schedule(schedule)
+                        .name(p.getName())
+                        .type(p.getType())
+                        .address(p.getAddress())
+                        .landmark(p.getLandmark())
+                        .arrivalTime(p.getArrivalTime())
+                        .build()
+        ).toList();
+
+        pointRepository.saveAll(imported);
+        return ResponseEntity.ok(Map.of("message", "Imported " + imported.size() + " points",
+                "points", imported.stream().map(BoardingDroppingPointResponse::from).toList()));
+    }
+
+    @PostMapping("/{scheduleId}/points/copy-to/{targetScheduleId}")
+    public ResponseEntity<?> copyPoints(@PathVariable UUID scheduleId,
+                                        @PathVariable UUID targetScheduleId,
+                                        Authentication auth) {
+        RouteSchedule source = getScheduleOwnedBy(scheduleId, auth);
+        RouteSchedule target = getScheduleOwnedBy(targetScheduleId, auth);
+
+        if (!source.getRoute().getId().equals(target.getRoute().getId())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Schedules must be on the same route"));
+        }
+
+        List<BoardingDroppingPoint> sourcePoints = pointRepository.findByScheduleOrderByTypeAscArrivalTimeAsc(source);
+
+        pointRepository.deleteAll(pointRepository.findByScheduleOrderByTypeAscArrivalTimeAsc(target));
+
+        List<BoardingDroppingPoint> copied = sourcePoints.stream().map(p ->
+                BoardingDroppingPoint.builder()
+                        .schedule(target)
+                        .name(p.getName())
+                        .type(p.getType())
+                        .address(p.getAddress())
+                        .landmark(p.getLandmark())
+                        .arrivalTime(p.getArrivalTime())
+                        .build()
+        ).toList();
+
+        pointRepository.saveAll(copied);
+
+        return ResponseEntity.ok(Map.of("message", "Copied " + copied.size() + " points to target schedule"));
+    }
+
     @DeleteMapping("/{scheduleId}/points/{pointId}")
     public ResponseEntity<?> deletePoint(@PathVariable UUID scheduleId,
                                          @PathVariable UUID pointId,

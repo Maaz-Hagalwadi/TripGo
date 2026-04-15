@@ -87,6 +87,10 @@ export const toggleBusStatus = async (busId) => {
   return apiPatch(`/operator/buses/${busId}/toggle-status`);
 };
 
+export const getPendingBuses = async () => {
+  return apiGet('/operator/buses/pending');
+};
+
 export const getBusOccupancy = async (busId) => {
   return apiGet(`/operator/buses/${busId}/occupancy`);
 };
