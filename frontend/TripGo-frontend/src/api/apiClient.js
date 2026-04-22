@@ -2,34 +2,74 @@ import { API_BASE_URL } from '../config/env';
 
 export { API_BASE_URL };
 
-/**
- * Attempts to refresh the access token using the stored refresh token.
- * @returns {Promise<boolean>} true if refresh succeeded, false otherwise
- */
-const refreshAccessToken = async () => {
-  const refreshToken = localStorage.getItem('refreshToken');
-  if (!refreshToken) return false;
+// ─── Token helpers ────────────────────────────────────────────────────────────
 
+const getTokenExpiry = (token) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken }),
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      if (data.accessToken) {
-        localStorage.setItem('accessToken', data.accessToken);
-        if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-        return true;
-      }
-    }
-    return false;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
   } catch {
-    return false;
+    return null;
   }
 };
+
+const isTokenExpiringSoon = (token, bufferMs = 2 * 60 * 1000) => {
+  const expiry = getTokenExpiry(token);
+  if (!expiry) return false;
+  return Date.now() >= expiry - bufferMs;
+};
+
+let refreshPromise = null; // deduplicate concurrent refresh calls
+
+const refreshAccessToken = async () => {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) return false;
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.accessToken) {
+          localStorage.setItem('accessToken', data.accessToken);
+          if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+          scheduleProactiveRefresh(data.accessToken);
+          return true;
+        }
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+};
+
+// ─── Proactive refresh scheduler ─────────────────────────────────────────────
+
+let proactiveRefreshTimer = null;
+
+export const scheduleProactiveRefresh = (token) => {
+  if (proactiveRefreshTimer) clearTimeout(proactiveRefreshTimer);
+  const expiry = getTokenExpiry(token);
+  if (!expiry) return;
+  const delay = expiry - Date.now() - 2 * 60 * 1000;
+  if (delay <= 0) {
+    refreshAccessToken();
+    return;
+  }
+  proactiveRefreshTimer = setTimeout(() => refreshAccessToken(), delay);
+};
+
+// Kick off proactive refresh on page load if token exists
+const existingToken = localStorage.getItem('accessToken');
+if (existingToken) scheduleProactiveRefresh(existingToken);
 
 /**
  * Parses error response into a readable message.
@@ -72,8 +112,14 @@ const parseJsonIfPresent = async (response) => {
  * @returns {Promise<Response>}
  */
 export const fetchWithAuth = async (url, options = {}) => {
-  const token = localStorage.getItem('accessToken');
+  let token = localStorage.getItem('accessToken');
   const lang = localStorage.getItem('tripgo_lang') || 'en';
+
+  // Proactively refresh if token is expiring within 2 minutes
+  if (token && isTokenExpiringSoon(token)) {
+    await refreshAccessToken();
+    token = localStorage.getItem('accessToken');
+  }
 
   const buildHeaders = (t) => ({
     'Content-Type': 'application/json',

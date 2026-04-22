@@ -221,7 +221,7 @@ const PaymentSuccess = () => {
             </div>
           </div>
 
-          <h1 className="mt-5 text-center text-3xl font-black text-slate-900 dark:text-white">
+          <h1 className="mt-5 text-center text-xl md:text-3xl font-black text-slate-900 dark:text-white">
             {heading}
           </h1>
           <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-slate-500 dark:text-slate-400">
@@ -235,7 +235,7 @@ const PaymentSuccess = () => {
           <div className="mt-8 grid gap-4 md:grid-cols-2">
             <div className="rounded-3xl bg-slate-50 p-5 ring-1 ring-slate-200/70 dark:bg-black/50 dark:ring-slate-800">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Booking code</p>
-              <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">
+              <p className="mt-2 text-base md:text-xl font-black text-slate-900 dark:text-white">
                 {pendingPayment?.bookingCode || booking?.bookingCode || 'Generating...'}
               </p>
               <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
@@ -245,7 +245,7 @@ const PaymentSuccess = () => {
 
             <div className="rounded-3xl bg-slate-50 p-5 ring-1 ring-slate-200/70 dark:bg-black/50 dark:ring-slate-800">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Payment status</p>
-              <p className="mt-2 text-xl font-black text-slate-900 dark:text-white">
+              <p className="mt-2 text-base md:text-xl font-black text-slate-900 dark:text-white">
                 {visualState === 'confirmed' ? 'Confirmed' : visualState === 'paid' ? 'Paid, syncing booking' : 'Processing'}
               </p>
               <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Your payment has been received safely.</p>

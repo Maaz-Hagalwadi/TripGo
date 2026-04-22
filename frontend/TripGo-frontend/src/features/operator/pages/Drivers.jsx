@@ -167,18 +167,18 @@ const Drivers = () => {
       />
     )}
     <OperatorLayout activeItem="drivers" title="Drivers">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white dark:bg-op-card border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-          <p className="text-sm text-slate-500">Total Drivers</p>
-          <p className="text-3xl font-bold mt-1">{drivers.length}</p>
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="bg-white dark:bg-op-card border border-slate-200 dark:border-slate-800 rounded-xl p-3 md:p-5">
+          <p className="text-[10px] md:text-sm text-slate-500">Total Drivers</p>
+          <p className="text-xl md:text-3xl font-bold mt-1">{drivers.length}</p>
         </div>
-        <div className="bg-white dark:bg-op-card border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-          <p className="text-sm text-slate-500">Licenses Expiring in 30 Days</p>
-          <p className="text-3xl font-bold mt-1">{expiringSoon}</p>
+        <div className="bg-white dark:bg-op-card border border-slate-200 dark:border-slate-800 rounded-xl p-3 md:p-5">
+          <p className="text-[10px] md:text-sm text-slate-500">Expiring Soon</p>
+          <p className="text-xl md:text-3xl font-bold mt-1">{expiringSoon}</p>
         </div>
-        <div className="bg-white dark:bg-op-card border border-red-200 dark:border-red-900/50 rounded-xl p-5">
-          <p className="text-sm text-slate-500">Expired Licenses</p>
-          <p className="text-3xl font-bold mt-1 text-red-600 dark:text-red-400">{expiredLicenses}</p>
+        <div className="bg-white dark:bg-op-card border border-red-200 dark:border-red-900/50 rounded-xl p-3 md:p-5">
+          <p className="text-[10px] md:text-sm text-slate-500">Expired</p>
+          <p className="text-xl md:text-3xl font-bold mt-1 text-red-600 dark:text-red-400">{expiredLicenses}</p>
         </div>
       </div>
 
@@ -251,9 +251,9 @@ const Drivers = () => {
       </div>
 
       <div className="bg-white dark:bg-op-card border border-slate-200 dark:border-slate-800 rounded-xl p-5">
-        <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="mb-3 flex items-center justify-between gap-3">
           <h3 className="font-bold">Driver List</h3>
-          <div className="inline-flex rounded-2xl bg-slate-100 p-1 dark:bg-white/5">
+          <div className="inline-flex shrink-0 rounded-2xl bg-slate-100 p-1 dark:bg-white/5">
             {['grid', 'list'].map((mode) => (
               <button
                 key={mode}

@@ -543,7 +543,6 @@ const AdminDashboard = () => {
                     {filter}
                   </button>
                 ))}
-                <ViewToggle viewMode={busViewMode} onChange={setBusViewMode} />
               </div>
             </div>
 
@@ -566,29 +565,68 @@ const AdminDashboard = () => {
               </div>
             ) : (
               <>
-                <div className={busViewMode === 'grid' ? 'grid gap-4 xl:grid-cols-3' : 'space-y-3'}>
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                   {paginatedBuses.map((bus) => (
-                    <div key={bus.id} className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-op-card">
-                      <div className={`flex gap-4 ${busViewMode === 'grid' ? 'h-full flex-col' : 'flex-col lg:flex-row lg:items-start lg:justify-between'}`}>
-                        <div className="space-y-3">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h4 className="text-xl font-black text-slate-900 dark:text-white">{bus.name}</h4>
-                            <StatusBadge status={bus.active ? 'ACTIVE' : 'INACTIVE'} />
+                    <div key={bus.id} className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-lg transition-shadow">
+                      <div className="p-5">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <h3 className="font-bold text-lg">{bus.name}</h3>
+                            <p className="text-xs text-slate-500 dark:text-slate-400">{bus.busCode || '—'}</p>
                           </div>
-                          <div className="grid gap-3 text-sm text-slate-600 dark:text-slate-300 md:grid-cols-2">
-                            <p><span className="font-semibold text-slate-900 dark:text-white">Type:</span> {bus.busType || '—'}</p>
-                            <p><span className="font-semibold text-slate-900 dark:text-white">Seats:</span> {bus.totalSeats || '—'}</p>
-                            <p><span className="font-semibold text-slate-900 dark:text-white">Vehicle:</span> {bus.vehicleNumber || '—'}</p>
-                            <p><span className="font-semibold text-slate-900 dark:text-white">Operator:</span> {bus.operatorName || bus.operator?.name || '—'}</p>
+                          <div className="flex flex-col items-end gap-2">
+                            <span className="material-symbols-outlined text-primary text-3xl">directions_bus</span>
+                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                              bus.active
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
+                                : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400'
+                            }`}>
+                              {bus.active ? 'Active' : 'Pending'}
+                            </span>
                           </div>
                         </div>
-                        <div className={`flex flex-wrap gap-2 ${busViewMode === 'grid' ? 'mt-auto border-t border-slate-200 pt-4 dark:border-slate-800' : 'lg:min-w-[220px] lg:justify-end'}`}>
-                          {!bus.active ? (
-                            <button onClick={() => confirm(`Approve bus "${bus.name}"?`, () => approveBus(bus.id), bus.id, `approve-bus-${bus.id}`, `Bus "${bus.name}" has been approved.`, `Approving bus ${bus.name}...`)} disabled={Boolean(actionLoadingId)} className="rounded-xl border border-green-500/20 bg-green-500/10 px-4 py-2 text-sm font-bold text-green-500 hover:bg-green-500/20 disabled:opacity-60">
+
+                        <div className="space-y-2 mb-4">
+                          {[
+                            { icon: 'tag', value: bus.vehicleNumber || '—' },
+                            { icon: 'category', value: (bus.busType || '—').replace(/_/g, ' ') },
+                            { icon: 'event_seat', value: `${bus.totalSeats || '—'} Seats` },
+                            { icon: 'badge', value: bus.operatorName || bus.operator?.name || '—' },
+                          ].map(({ icon, value }) => (
+                            <div key={icon} className="flex items-center gap-2 text-sm">
+                              <span className="material-symbols-outlined text-slate-400 text-[18px]">{icon}</span>
+                              <span className="text-slate-600 dark:text-slate-400">{value}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {bus.amenities?.length > 0 && (
+                          <div className="mb-4">
+                            <p className="text-xs text-slate-500 mb-2">Amenities</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {bus.amenities.map((a) => (
+                                <span key={a.id || a.code} className="text-xs bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">{a.code || a}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-2 pt-4 border-t border-slate-200 dark:border-slate-800">
+                          <span className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold ${
+                            bus.active
+                              ? 'border border-green-300 text-green-700 dark:border-green-700 dark:text-green-300'
+                              : 'border border-yellow-300 text-yellow-700 dark:border-yellow-700 dark:text-yellow-300'
+                          }`}>
+                            {bus.active ? 'Approved' : 'Awaiting Approval'}
+                          </span>
+                          {!bus.active && (
+                            <button
+                              onClick={() => confirm(`Approve bus "${bus.name}"?`, () => approveBus(bus.id), bus.id, `approve-bus-${bus.id}`, `Bus "${bus.name}" has been approved.`, `Approving bus ${bus.name}...`)}
+                              disabled={Boolean(actionLoadingId)}
+                              className="ml-auto px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 text-xs font-bold text-green-600 dark:text-green-400 hover:bg-green-500/20 disabled:opacity-60 transition-colors"
+                            >
                               Approve
                             </button>
-                          ) : (
-                            <span className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300">Approved</span>
                           )}
                         </div>
                       </div>

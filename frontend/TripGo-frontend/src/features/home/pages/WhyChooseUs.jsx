@@ -33,11 +33,11 @@ const WhyChooseUs = () => {
   ];
 
   return (
-    <section className="py-24 theme-bg">
+    <section className="py-12 md:py-24 theme-bg">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-20">
-          <h2 className="text-4xl font-extrabold text-white mb-6">Why Choose TripGo</h2>
-          <p className="text-slate-400 max-w-2xl mx-auto text-xl">
+        <div className="text-center mb-12 md:mb-20">
+          <h2 className="text-2xl md:text-4xl font-extrabold text-white mb-3 md:mb-6">Why Choose TripGo</h2>
+          <p className="text-slate-400 max-w-2xl mx-auto text-sm md:text-xl">
             Redefining the standards of bus travel with cutting-edge technology and premium service.
           </p>
         </div>

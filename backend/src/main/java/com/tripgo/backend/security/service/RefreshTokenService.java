@@ -26,6 +26,8 @@ public class RefreshTokenService {
      * Create and store refresh token
      */
     public RefreshToken createRefreshToken(User user, String tokenValue) {
+        // Delete old tokens before inserting new one to avoid unique constraint violation
+        refreshTokenRepository.deleteByUser(user);
 
         RefreshToken refreshToken = RefreshToken.builder()
                 .token(tokenValue)

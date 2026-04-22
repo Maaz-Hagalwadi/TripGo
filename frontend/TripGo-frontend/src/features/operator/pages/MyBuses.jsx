@@ -256,7 +256,7 @@ const MyBuses = () => {
         <div className="bus-grid grid gap-6">
           {paginatedBuses.map((bus) => (
             <div key={bus.id} className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden hover:shadow-lg transition-shadow">
-              <div className="p-6">
+              <div className="p-4 md:p-6">
                 {(() => {
                   const byId = busOccupancyMap[String(bus.id)];
                   const byName = busOccupancyMap[String(bus.name || '')];
@@ -271,11 +271,11 @@ const MyBuses = () => {
                 })()}
                 <div className="flex items-start justify-between mb-4">
                   <div>
-                    <h3 className="font-bold text-lg">{bus.name}</h3>
-                    <p className="text-sm text-slate-500">{bus.busCode}</p>
+                    <h3 className="font-bold text-base md:text-lg">{bus.name}</h3>
+                    <p className="text-xs text-slate-500">{bus.busCode}</p>
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    <span className="material-symbols-outlined text-primary text-3xl">directions_bus</span>
+                    <span className="material-symbols-outlined text-primary text-2xl md:text-3xl">directions_bus</span>
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${bus.active ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400'}`}>
                       {bus.active ? 'Active' : 'Pending'}
                     </span>
@@ -310,22 +310,22 @@ const MyBuses = () => {
                 </div>
 
                 <div className="flex gap-2 pt-4 border-t border-slate-200 dark:border-slate-800">
-                  <div className={`px-3 py-2 rounded-lg text-xs font-semibold ${
+                  <div className={`px-2 py-1.5 rounded-lg text-[10px] md:text-xs font-semibold shrink-0 ${
                     bus.active
                       ? 'border border-green-300 text-green-700 dark:border-green-700 dark:text-green-300'
                       : 'border border-yellow-300 text-yellow-700 dark:border-yellow-700 dark:text-yellow-300'
                   }`}>
-                    {bus.active ? 'Approved by Admin' : 'Awaiting Admin Approval'}
+                    {bus.active ? 'Approved' : 'Pending'}
                   </div>
-                  <button onClick={() => setBusToView(bus)} className="flex-1 bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors text-sm">
+                  <button onClick={() => setBusToView(bus)} className="bg-primary text-white px-3 py-2 rounded-lg hover:bg-primary/90 transition-colors text-xs md:text-sm">
                     View Details
                   </button>
-                  <button onClick={() => handleEditClick(bus)} className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">edit</span>
+                  <button onClick={() => handleEditClick(bus)} className="px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                    <span className="material-symbols-outlined text-[18px]">edit</span>
                   </button>
                   {bus.active && (
-                    <button onClick={() => setBusToDelete(bus)} className="px-4 py-2 border border-red-200 dark:border-red-700 text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
-                      <span className="material-symbols-outlined text-[20px]">delete</span>
+                    <button onClick={() => setBusToDelete(bus)} className="px-3 py-2 border border-red-200 dark:border-red-700 text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                      <span className="material-symbols-outlined text-[18px]">delete</span>
                     </button>
                   )}
                 </div>

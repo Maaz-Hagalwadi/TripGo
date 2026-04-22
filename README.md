@@ -4,7 +4,7 @@ TripGo is a **production-grade online bus booking system** built using **Java Sp
 
 This project is structured to reflect **industry-level quality**, making it ideal for portfolios, interviews, and hands-on learning.
 
----
+----
 
 ## 🧑‍💻 Tech Stack
 

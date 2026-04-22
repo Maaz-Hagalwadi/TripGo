@@ -7,6 +7,7 @@ import useClickOutside from '../../hooks/useClickOutside';
 import { updateCurrentUser } from '../../../api/userService';
 import ThemeToggle from '../ui/ThemeToggle';
 import NotificationBell from '../NotificationBell';
+import TripGoIcon from '../../../assets/icons/TripGoIcon';
 
 const ProfileModal = ({ user, onClose, onNameUpdate }) => {
   const ref = useRef(null);
@@ -134,7 +135,11 @@ const OperatorHeader = ({
     <>
     <header className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-op-bg flex items-center justify-between px-4 lg:px-8 shrink-0">
       <div className="flex items-center gap-4 flex-1">
-        {showTitle && title ? <h2 className="text-lg font-semibold capitalize">{title}</h2> : null}
+        <div className="md:hidden flex items-center gap-1.5 cursor-pointer" onClick={() => navigate('/')}>
+          <TripGoIcon className="w-6 h-6 text-primary" />
+          <span className="text-base font-extrabold tracking-tight">TripGo</span>
+        </div>
+        {showTitle && title ? <h2 className="hidden md:block text-lg font-semibold capitalize">{title}</h2> : null}
         
         {children}
       </div>

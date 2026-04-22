@@ -2,7 +2,7 @@ import SearchBar from '../../../shared/components/ui/SearchBar';
 
 const HeroSection = () => {
   return (
-    <section className="relative w-full h-[700px] flex items-center justify-center overflow-hidden">
+    <section className="relative w-full h-[700px] flex items-center justify-center overflow-visible">
       <div 
         className="absolute inset-0 bg-cover bg-center" 
         style={{
@@ -11,11 +11,11 @@ const HeroSection = () => {
       />
       
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <h1 className="text-5xl md:text-7xl font-extrabold text-white mb-8 tracking-tight leading-tight">
+        <h1 className="text-3xl md:text-5xl lg:text-7xl font-extrabold text-white mb-6 md:mb-8 tracking-tight leading-tight">
           Your Journey, <span className="text-primary">Simplified.</span>
         </h1>
-        
-        <p className="text-xl md:text-2xl text-slate-300 mb-12 max-w-3xl mx-auto font-medium">
+
+        <p className="text-sm md:text-xl lg:text-2xl text-slate-300 mb-8 md:mb-12 max-w-3xl mx-auto font-medium">
           Book premium bus tickets across 500+ cities. Experience comfort at every mile.
         </p>
         

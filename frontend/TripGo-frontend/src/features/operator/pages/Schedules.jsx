@@ -908,61 +908,66 @@ const Schedules = () => {
           <div className="space-y-4">
             {routes.map((route) => (
               <div key={route.id} className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-                <div onClick={() => toggleRoute(route.id)} className="p-6 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <h3 className="text-lg font-bold mb-2">{route.name}</h3>
-                      <div className="flex items-center gap-4 text-sm text-slate-500 dark:text-slate-400">
-                        <span className="flex items-center gap-1">
-                          <span className="material-symbols-outlined text-sm">location_on</span>{route.origin}
-                        </span>
-                        <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                        <span className="flex items-center gap-1">
-                          <span className="material-symbols-outlined text-sm">location_on</span>{route.destination}
-                        </span>
-                        {route.totalDistanceKm && (
-                          <span className="flex items-center gap-1 ml-4">
-                            <span className="material-symbols-outlined text-sm">straighten</span>{route.totalDistanceKm} km
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
+                <div onClick={() => toggleRoute(route.id)} className="p-4 md:p-6 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  {/* Row 1: route name + edit */}
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-base md:text-lg font-bold">{route.name}</h3>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditRouteModal({ id: route.id, name: route.name, origin: route.origin, destination: route.destination }); }}
+                      disabled={Boolean(blockingLoader)}
+                      className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors shrink-0"
+                      title="Edit route"
+                    >
+                      <span className="material-symbols-outlined text-sm">edit</span>
+                    </button>
+                  </div>
+                  {/* Row 2: origin → destination */}
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mb-3">
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">location_on</span>{route.origin}
+                    </span>
+                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">location_on</span>{route.destination}
+                    </span>
+                    {route.totalDistanceKm && (
+                      <span className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-sm">straighten</span>{route.totalDistanceKm} km
+                      </span>
+                    )}
+                  </div>
+                  {/* Row 3: action buttons left, delete + expand right */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       {expandingRoute === route.id && (
                         <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
                       )}
                       <button
-                        onClick={(e) => { e.stopPropagation(); setEditRouteModal({ id: route.id, name: route.name, origin: route.origin, destination: route.destination }); }}
-                        disabled={Boolean(blockingLoader)}
-                        className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors"
-                        title="Edit route"
-                      >
-                        <span className="material-symbols-outlined text-sm">edit</span>
-                      </button>
-                      <button
                         onClick={(e) => { e.stopPropagation(); openAddScheduleModal(route.id); }}
                         disabled={Boolean(blockingLoader)}
-                        className="px-2.5 py-1 text-xs rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
+                        className="px-2 py-1 text-[11px] rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
                       >
                         Add Schedule
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); openManageFares(route.id); }}
                         disabled={Boolean(blockingLoader)}
-                        className="px-2.5 py-1 text-xs rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
+                        className="px-2 py-1 text-[11px] rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
                       >
                         Manage Fares
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); openManagePoints(route.id); }}
                         disabled={Boolean(blockingLoader)}
-                        className="px-2.5 py-1 text-xs rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
+                        className="px-2 py-1 text-[11px] rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
                       >
                         Manage Points
                       </button>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
                       <button
                         onClick={(e) => { e.stopPropagation(); setDeleteModal({ show: true, routeId: route.id, type: 'route' }); }}
-                        className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-red-500 transition-colors"
+                        className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-red-500 transition-colors"
                       >
                         <span className="material-symbols-outlined text-sm">delete</span>
                       </button>

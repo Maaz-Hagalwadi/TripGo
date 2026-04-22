@@ -60,6 +60,9 @@ public class AuthController {
     @Value("${app.backend.url}")
     private String backendUrl;
 
+    @Value("${app.mail.from}")
+    private String fromEmail;
+
     @PostMapping("/register")
     public ResponseEntity<String> register(@Valid @RequestBody RegisterRequest request) {
         authService.register(request);
@@ -86,6 +89,31 @@ public class AuthController {
         return "Successfully validated with api";
     }
 
+    @GetMapping("/test-email")
+    public ResponseEntity<Map<String, Object>> testEmail(@RequestParam String to) {
+        try {
+            // Log configuration for debugging
+            System.out.println("=== EMAIL CONFIG DEBUG ===");
+            System.out.println("Mail Host: smtp.resend.com");
+            System.out.println("Mail Port: 587");
+            System.out.println("Mail Username: resend");
+            System.out.println("From Email: " + fromEmail);
+            System.out.println("API Key Set: " + (System.getenv("RESEND_API_KEY") != null ? "YES" : "NO"));
+            System.out.println("=========================");
+            
+            User testUser = new User();
+            testUser.setFirstName("Test");
+            testUser.setEmail(to);
+            
+            emailService.sendUserVerificationEmail(testUser, "http://test-link.com");
+            return ResponseEntity.ok(Map.of("success", true, "message", "Test email sent via Resend"));
+        } catch (Exception e) {
+            System.err.println("Email error: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.ok(Map.of("success", false, "error", e.getMessage()));
+        }
+    }
+
     @GetMapping("/google-client-id")
     public ResponseEntity<Map<String, String>> getGoogleClientId() {
         return ResponseEntity.ok(Map.of("clientId", googleClientId));
@@ -104,7 +132,9 @@ public class AuthController {
         RefreshToken storedToken = refreshTokenService.validateRefreshToken(refreshToken);
         User user = storedToken.getUser();
 
-        refreshTokenService.revokeToken(storedToken);
+        // Delete old token instead of just revoking to avoid unique constraint violation
+        refreshTokenRepository.delete(storedToken);
+        refreshTokenRepository.flush(); // Force immediate delete
 
         Authentication auth = new UsernamePasswordAuthenticationToken(
                 new CustomUserDetails(user), null, new CustomUserDetails(user).getAuthorities());
