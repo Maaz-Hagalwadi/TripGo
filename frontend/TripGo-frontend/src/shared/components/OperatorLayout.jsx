@@ -40,17 +40,17 @@ const OperatorLayout = ({ activeItem, title, searchPlaceholder, headerChildren, 
       </main>
 
       <nav className="mobile-bottom-nav fixed bottom-0 left-0 right-0 bg-white dark:bg-op-card border-t border-slate-200 dark:border-slate-800 z-50">
-        <div className="grid grid-cols-8 h-16">
+        <div className="grid grid-cols-4">
           {MOBILE_NAV.map((item) => (
             <button
               key={item.label}
               onClick={() => item.route && navigate(item.route)}
-              className={`flex flex-col items-center justify-center gap-1 transition-colors ${
+              className={`flex flex-col items-center justify-center gap-0.5 py-2 transition-colors ${
                 activeItem === item.label.toLowerCase().replace(' ', '-') ? 'text-primary' : 'text-slate-400'
               }`}
             >
               <span className="material-symbols-outlined text-xl">{item.icon}</span>
-              <span className="text-[10px] font-medium">{item.label}</span>
+              <span className="text-[9px] font-medium">{item.label}</span>
             </button>
           ))}
         </div>

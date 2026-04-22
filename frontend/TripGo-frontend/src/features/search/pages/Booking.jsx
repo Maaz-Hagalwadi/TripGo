@@ -584,7 +584,25 @@ const Booking = () => {
   return (
     <UserLayout activeItem="search" title="Booking Details" showHeaderSearch={false}>
       <div className="space-y-6 bg-[linear-gradient(180deg,#f7fbff_0%,#eef4ff_100%)] p-4 text-slate-900 dark:bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.14),transparent_0%,transparent_32%),linear-gradient(180deg,#040404_0%,#0b0b0b_100%)] dark:text-slate-100 md:rounded-[32px] md:p-6">
-        <div className="grid gap-4 xl:grid-cols-[1.65fr_0.9fr]">
+        {/* Mobile compact trip bar */}
+        <div className="md:hidden rounded-2xl bg-white dark:bg-white/[0.05] ring-1 ring-slate-200/70 dark:ring-white/10 p-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{bus.busName}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{searchParams?.from} → {searchParams?.to} · {selectedType || 'Seat'}</p>
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tripStatusMeta.className}`}>{tripStatusMeta.label}</span>
+              <span className="text-[10px] text-slate-400">{step === 'seats' ? 'Step 1: Select seats' : 'Step 2: Passenger details'}</span>
+            </div>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <p className="text-lg font-black text-primary">₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}</p>
+            {lockInfo && lockSecondsLeft > 0 && (
+              <p className="text-[11px] font-bold text-amber-500">{formatCountdown(lockSecondsLeft)}</p>
+            )}
+          </div>
+        </div>
+
+        <div className="hidden md:grid gap-4 xl:grid-cols-[1.65fr_0.9fr]">
           <div className="rounded-[30px] bg-[linear-gradient(135deg,#ffffff,#f4f8ff)] p-5 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(135deg,rgba(9,9,9,0.96),rgba(17,17,17,0.92))] dark:shadow-[0_30px_70px_rgba(0,0,0,0.45)] dark:ring-white/10">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
@@ -880,6 +898,17 @@ const Booking = () => {
                     <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Finish payment before the timer ends to keep these seats reserved.</p>
                   </div>
                 </div>
+                {/* Mobile-only compact trip summary above Proceed to Payment */}
+                <div className="md:hidden mt-4 rounded-2xl bg-primary/10 p-4 ring-1 ring-primary/20 dark:bg-primary/[0.08]">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary/80 mb-1.5">Trip Summary</p>
+                  <p className="font-bold text-slate-900 dark:text-white text-sm">{bus?.busName}</p>
+                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5">{searchParams?.from} → {searchParams?.to}</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{selectedSeats.length ? `Seats: ${selectedSeats.join(', ')}` : 'No seats selected'}</span>
+                    <span className="text-lg font-black text-primary">₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}</span>
+                  </div>
+                </div>
+
                 <div className="mt-5 flex gap-3">
                   <button onClick={() => setStep('seats')} className={`flex-1 ${SOFT_BUTTON_CLASS}`}>Back to Seats</button>
                   <button

@@ -327,13 +327,13 @@ const Bookings = () => {
 
   return (
     <OperatorLayout activeItem="bookings" title="Bookings">
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-3">
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           {STATUS_TABS.map(tab => (
             <button
               key={tab}
               onClick={() => setStatus(tab)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 status === tab
                   ? 'bg-primary text-white'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
@@ -343,13 +343,13 @@ const Bookings = () => {
             </button>
           ))}
         </div>
-        <div className="inline-flex rounded-2xl bg-slate-100 p-1 dark:bg-white/5">
+        <div className="inline-flex shrink-0 rounded-2xl bg-slate-100 p-1 dark:bg-white/5">
           {['grid', 'list'].map((mode) => (
             <button
               key={mode}
               type="button"
               onClick={() => setViewMode(mode)}
-              className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${viewMode === mode ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-white' : 'text-slate-500 dark:text-slate-300'}`}
+              className={`rounded-xl px-3 py-1.5 text-sm font-semibold transition ${viewMode === mode ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-white' : 'text-slate-500 dark:text-slate-300'}`}
             >
               {mode === 'grid' ? 'Grid' : 'List'}
             </button>
@@ -363,18 +363,18 @@ const Bookings = () => {
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white dark:bg-op-card p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-          <p className="text-xs text-slate-500">Total</p>
-          <p className="text-2xl font-bold">{summary.total}</p>
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        <div className="bg-white dark:bg-op-card p-3 md:p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+          <p className="text-[10px] md:text-xs text-slate-500">Total</p>
+          <p className="text-lg md:text-2xl font-bold">{summary.total}</p>
         </div>
-        <div className="bg-white dark:bg-op-card p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-          <p className="text-xs text-slate-500">Active</p>
-          <p className="text-2xl font-bold text-green-600">{summary.active}</p>
+        <div className="bg-white dark:bg-op-card p-3 md:p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+          <p className="text-[10px] md:text-xs text-slate-500">Active</p>
+          <p className="text-lg md:text-2xl font-bold text-green-600">{summary.active}</p>
         </div>
-        <div className="bg-white dark:bg-op-card p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-          <p className="text-xs text-slate-500">Cancelled</p>
-          <p className="text-2xl font-bold text-red-600">{summary.cancelled}</p>
+        <div className="bg-white dark:bg-op-card p-3 md:p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+          <p className="text-[10px] md:text-xs text-slate-500">Cancelled</p>
+          <p className="text-lg md:text-2xl font-bold text-red-600">{summary.cancelled}</p>
         </div>
       </div>
 

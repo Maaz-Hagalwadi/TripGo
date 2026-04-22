@@ -132,7 +132,9 @@ public class AuthController {
         RefreshToken storedToken = refreshTokenService.validateRefreshToken(refreshToken);
         User user = storedToken.getUser();
 
-        refreshTokenService.revokeToken(storedToken);
+        // Delete old token instead of just revoking to avoid unique constraint violation
+        refreshTokenRepository.delete(storedToken);
+        refreshTokenRepository.flush(); // Force immediate delete
 
         Authentication auth = new UsernamePasswordAuthenticationToken(
                 new CustomUserDetails(user), null, new CustomUserDetails(user).getAuthorities());

@@ -130,33 +130,33 @@ const DesktopForm = () => {
   };
 
   return (
-    <div className="bg-deep-black text-slate-100 min-h-screen flex items-center justify-center p-4">
+    <div className="bg-deep-black text-slate-100 min-h-screen flex">
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] glow-accent blur-3xl"></div>
         <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] glow-accent blur-3xl"></div>
       </div>
-      <div className="max-w-6xl w-full bg-charcoal/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-row min-h-[800px]">
-        <div 
-          className="flex w-1/2 relative bg-cover bg-center items-center p-12 overflow-hidden"
+      <div className="w-full flex flex-row min-h-screen">
+        <div
+          className="hidden md:flex flex-col w-1/2 relative bg-cover bg-center p-12 overflow-hidden"
           style={{
             backgroundImage: "linear-gradient(rgba(5, 5, 5, 0.6), rgba(5, 5, 5, 0.8)), url('https://lh3.googleusercontent.com/aida-public/AB6AXuBaWdLvirFLq9gQIzc79yRfhZecULRAzSPQ-Eev3IdORsc2x4lKQEngg0b6iKpxyeUMQ3F3ndbAaochZqTN2xApDbxj_p_cT4_9gOtcKGLnxNMztUuDqUAxUgkV3wbpWpD8twOaCcLb8D_afIznu8gxsBjvhKgjQjMYKn5mpo-cqf4sRm8EXrrYZ9PM2LGiIp1wpostxaih0VJ2ZAvymjAewnAa1CusAzdfLA84hhKCwvxAteOK4ie_JUSDj4zUqp_62VUoc0FM7qvk')"
           }}
         >
-          <div className="relative z-10 space-y-6">
-            <div className="flex items-center gap-3 mb-12">
-              <div className="text-primary cursor-pointer" onClick={() => navigate('/')}>
-                <TripGoIcon className="w-10 h-10" />
-              </div>
-              <span 
-                className="text-3xl font-extrabold tracking-tight text-white cursor-pointer hover:text-primary transition-colors" 
-                onClick={() => navigate('/')}
-              >
-                TripGo
-              </span>
+          <div className="relative z-10 flex items-center gap-3">
+            <div className="text-primary cursor-pointer" onClick={() => navigate('/')}>
+              <TripGoIcon className="w-10 h-10" />
             </div>
+            <span
+              className="text-3xl font-extrabold tracking-tight text-white cursor-pointer hover:text-primary transition-colors"
+              onClick={() => navigate('/')}
+            >
+              TripGo
+            </span>
+          </div>
+          <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center space-y-6">
             <h2 className="text-4xl lg:text-5xl font-extrabold text-white leading-tight">Start Your Premium Journey Today.</h2>
             <p className="text-slate-300 text-lg max-w-md">Join over 2 million travelers booking seamless bus journeys across 500+ cities.</p>
-            <div className="pt-8 space-y-4">
+            <div className="pt-4 space-y-4 text-left">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary">
                   <span className="material-symbols-outlined !text-xl">verified_user</span>
@@ -173,8 +173,14 @@ const DesktopForm = () => {
           </div>
           <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-deep-black to-transparent opacity-60"></div>
         </div>
-        <div className="w-1/2 p-8 md:p-16 flex flex-col justify-center bg-deep-black/60">
+        <div className="w-full md:w-1/2 p-6 md:p-16 flex flex-col justify-center bg-deep-black/60">
           <div className="max-w-md w-full mx-auto">
+            <div className="md:hidden flex justify-end mb-6">
+              <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
+                <TripGoIcon className="w-7 h-7 text-primary" />
+                <span className="text-lg font-extrabold tracking-tight text-white">TripGo</span>
+              </div>
+            </div>
             <div className="mb-6">
               <h1 className="text-3xl font-extrabold text-white mb-3">Create Account</h1>
               <p className="text-slate-400">Choose your account type and enter your details.</p>

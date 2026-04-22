@@ -163,52 +163,37 @@ const BusCard = ({ bus, searchParams }) => {
   const tripStatusMeta = getTripStatusMeta(tripStatus, delayMins);
 
   return (
-    <div className={`rounded-[28px] bg-white p-6 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 transition-all dark:bg-charcoal ${
+    <div className={`rounded-[28px] bg-white shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 transition-all dark:bg-charcoal ${
       soldOut
         ? 'opacity-60 ring-slate-200/40 dark:ring-white/5 cursor-not-allowed'
         : 'ring-slate-200/70 hover:-translate-y-0.5 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)] dark:ring-white/5 dark:hover:ring-primary/20'
     }`}>
-      <div className="flex flex-col md:flex-row md:items-center gap-6">
-        <div className="flex items-center gap-4 md:w-48 flex-shrink-0">
-          <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${
-            soldOut ? 'bg-slate-100 dark:bg-slate-800' : 'bg-primary/10'
-          }`}>
-            <span className={`material-symbols-outlined text-2xl ${
-              soldOut ? 'text-slate-400' : 'text-primary'
-            }`}>directions_bus</span>
-          </div>
-          <div>
-            <h4 className="font-bold text-slate-900 dark:text-white">{bus.busName}</h4>
-            <p className="text-xs text-slate-500 dark:text-slate-400">{bus.busType}</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500">{bus.operatorName}</p>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              {soldOut ? (
-                <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
-                  Sold Out
-                </span>
-              ) : (
-                <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${tripStatusMeta.chipClass}`}>
-                  {tripStatusMeta.label}
-                </span>
-              )}
+      {/* Mobile layout */}
+      <div className="md:hidden p-4">
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <div className={`flex h-9 w-9 items-center justify-center rounded-xl flex-shrink-0 ${soldOut ? 'bg-slate-100 dark:bg-slate-800' : 'bg-primary/10'}`}>
+              <span className={`material-symbols-outlined text-lg ${soldOut ? 'text-slate-400' : 'text-primary'}`}>directions_bus</span>
             </div>
-            {!soldOut && (
-              <p className={`mt-2 text-[11px] font-semibold ${tripStatusMeta.textClass}`}>
-                {delayMins > 0 ? `Delay Time: ${delayMins} min` : 'Delay Time: 0 min'}
-              </p>
+            <div>
+              <h4 className="font-bold text-sm text-slate-900 dark:text-white leading-tight">{bus.busName}</h4>
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">{bus.busType}{bus.operatorName ? ` · ${bus.operatorName}` : ''}</p>
+            </div>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <p className={`text-xl font-black ${soldOut ? 'text-slate-400 line-through' : 'text-primary'}`}>
+              ₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}
+            </p>
+            {!soldOut && fareEntries.length === 1 && (
+              <p className="text-[10px] text-slate-500">{fareEntries[0][0]}</p>
             )}
-            {!soldOut && bus.delayReason ? (
-              <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-                Reason: {bus.delayReason}
-              </p>
-            ) : null}
           </div>
         </div>
 
-        <div className="flex-1 grid grid-cols-3 items-center text-center">
-          <div>
-            <p className="text-xl font-extrabold text-slate-900 dark:text-white">{formatTime(bus.departureTime)}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">{searchParams.from}</p>
+        <div className="grid grid-cols-3 items-center text-center mb-3">
+          <div className="text-left">
+            <p className="text-base font-extrabold text-slate-900 dark:text-white">{formatTime(bus.departureTime)}</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">{searchParams.from}</p>
           </div>
           <div className="flex flex-col items-center">
             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">
@@ -218,66 +203,142 @@ const BusCard = ({ bus, searchParams }) => {
               <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-primary/40 ring-2 ring-primary/80"></div>
             </div>
           </div>
-          <div>
-            <p className="text-xl font-extrabold text-slate-900 dark:text-white">{formatTime(bus.arrivalTime)}</p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">{searchParams.to}</p>
+          <div className="text-right">
+            <p className="text-base font-extrabold text-slate-900 dark:text-white">{formatTime(bus.arrivalTime)}</p>
+            <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">{searchParams.to}</p>
           </div>
         </div>
 
-        <div className="flex min-w-[180px] flex-col items-end gap-3 md:pl-2">
-          {!soldOut && fareEntries.length > 1 && (
-            <div className="flex gap-2 flex-wrap justify-end">
-              {fareEntries.map(([type, fare]) => (
-                <button
-                  key={type}
-                  onClick={() => setSelectedType(type)}
-                  className={`rounded-full px-3 py-1 text-xs font-bold transition-all ${
-                    selectedType === type
-                      ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
-                      : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10'
-                  }`}
-                >
-                  {type} · ₹{Math.round(fare.totalFare)}
-                </button>
-              ))}
-            </div>
-          )}
-          {!soldOut && fareEntries.length === 1 && (
-            <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{fareEntries[0][0]}</p>
-          )}
-          <p className={`text-2xl font-black ${ soldOut ? 'text-slate-400 line-through' : 'text-primary'}`}>
-            ₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}
-          </p>
-          {bus.amenities?.length > 0 && (
-            <div className="flex gap-1 flex-wrap justify-end">
-              {bus.amenities.slice(0, 4).map(a => (
-                <span key={a} className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] text-slate-500 dark:bg-white/5 dark:text-slate-400">{a}</span>
-              ))}
-            </div>
-          )}
-          {soldOut ? (
-            <p className="rounded-full bg-rose-100 px-4 py-1.5 text-[11px] font-bold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">
-              🚫 No seats available
-            </p>
-          ) : availableSeats !== null ? (
-            <p className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
-              availableSeats < 5
-                ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400'
-                : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'
-            }`}>
-              {availableSeats < 5 ? `Only ${availableSeats} seats left!` : `${availableSeats} seats available`}
-            </p>
-          ) : null}
+        {!soldOut && fareEntries.length > 1 && (
+          <div className="flex gap-1.5 flex-wrap mb-3">
+            {fareEntries.map(([type, fare]) => (
+              <button key={type} onClick={() => setSelectedType(type)}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-all ${
+                  selectedType === type ? 'bg-primary/10 text-primary ring-1 ring-primary/30' : 'bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-400'
+                }`}>
+                {type} · ₹{Math.round(fare.totalFare)}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {soldOut ? (
+              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">Sold Out</span>
+            ) : (
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${tripStatusMeta.chipClass}`}>{tripStatusMeta.label}</span>
+            )}
+            {!soldOut && availableSeats !== null && (
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${availableSeats < 5 ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'}`}>
+                {availableSeats < 5 ? `${availableSeats} left` : `${availableSeats} seats`}
+              </span>
+            )}
+            {bus.amenities?.slice(0, 2).map(a => (
+              <span key={a} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500 dark:bg-white/5 dark:text-slate-400">{a}</span>
+            ))}
+          </div>
           <button
             disabled={soldOut}
             onClick={() => !soldOut && navigate(ROUTES.BOOKING, { state: { bus, selectedType, selectedFare, searchParams } })}
-            className={`w-full rounded-2xl px-6 py-3 text-sm font-bold transition-all ${
-              soldOut
-                ? 'cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600'
+            className={`rounded-xl px-4 py-2 text-xs font-bold transition-all flex-shrink-0 ${
+              soldOut ? 'cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600'
                 : 'bg-slate-900 text-white hover:bg-primary hover:text-black dark:bg-white/10 dark:hover:bg-primary dark:hover:text-black'
             }`}>
-            {soldOut ? 'Sold Out' : 'Select Seat'}
+            {soldOut ? 'Sold Out' : 'Select'}
           </button>
+        </div>
+      </div>
+
+      {/* Desktop layout */}
+      <div className="hidden md:block p-6">
+        <div className="flex flex-row items-center gap-6">
+          <div className="flex items-center gap-4 w-48 flex-shrink-0">
+            <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${soldOut ? 'bg-slate-100 dark:bg-slate-800' : 'bg-primary/10'}`}>
+              <span className={`material-symbols-outlined text-2xl ${soldOut ? 'text-slate-400' : 'text-primary'}`}>directions_bus</span>
+            </div>
+            <div>
+              <h4 className="font-bold text-slate-900 dark:text-white">{bus.busName}</h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{bus.busType}</p>
+              <p className="text-xs text-slate-400 dark:text-slate-500">{bus.operatorName}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {soldOut ? (
+                  <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">Sold Out</span>
+                ) : (
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${tripStatusMeta.chipClass}`}>{tripStatusMeta.label}</span>
+                )}
+              </div>
+              {!soldOut && (
+                <p className={`mt-2 text-[11px] font-semibold ${tripStatusMeta.textClass}`}>
+                  {delayMins > 0 ? `Delay Time: ${delayMins} min` : 'Delay Time: 0 min'}
+                </p>
+              )}
+              {!soldOut && bus.delayReason ? (
+                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Reason: {bus.delayReason}</p>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="flex-1 grid grid-cols-3 items-center text-center">
+            <div>
+              <p className="text-xl font-extrabold text-slate-900 dark:text-white">{formatTime(bus.departureTime)}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">{searchParams.from}</p>
+            </div>
+            <div className="flex flex-col items-center">
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">{formatDuration(bus.departureTime, bus.arrivalTime)}</p>
+              <div className="relative h-px w-full bg-slate-200 dark:bg-white/10">
+                <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-primary/40 ring-2 ring-primary/80"></div>
+              </div>
+            </div>
+            <div>
+              <p className="text-xl font-extrabold text-slate-900 dark:text-white">{formatTime(bus.arrivalTime)}</p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">{searchParams.to}</p>
+            </div>
+          </div>
+
+          <div className="flex min-w-[180px] flex-col items-end gap-3 pl-2">
+            {!soldOut && fareEntries.length > 1 && (
+              <div className="flex gap-2 flex-wrap justify-end">
+                {fareEntries.map(([type, fare]) => (
+                  <button key={type} onClick={() => setSelectedType(type)}
+                    className={`rounded-full px-3 py-1 text-xs font-bold transition-all ${
+                      selectedType === type ? 'bg-primary/10 text-primary ring-1 ring-primary/30' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10'
+                    }`}>
+                    {type} · ₹{Math.round(fare.totalFare)}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!soldOut && fareEntries.length === 1 && (
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{fareEntries[0][0]}</p>
+            )}
+            <p className={`text-2xl font-black ${soldOut ? 'text-slate-400 line-through' : 'text-primary'}`}>
+              ₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}
+            </p>
+            {bus.amenities?.length > 0 && (
+              <div className="flex gap-1 flex-wrap justify-end">
+                {bus.amenities.slice(0, 4).map(a => (
+                  <span key={a} className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] text-slate-500 dark:bg-white/5 dark:text-slate-400">{a}</span>
+                ))}
+              </div>
+            )}
+            {soldOut ? (
+              <p className="rounded-full bg-rose-100 px-4 py-1.5 text-[11px] font-bold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">🚫 No seats available</p>
+            ) : availableSeats !== null ? (
+              <p className={`rounded-full px-3 py-1 text-[11px] font-semibold ${availableSeats < 5 ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'}`}>
+                {availableSeats < 5 ? `Only ${availableSeats} seats left!` : `${availableSeats} seats available`}
+              </p>
+            ) : null}
+            <button
+              disabled={soldOut}
+              onClick={() => !soldOut && navigate(ROUTES.BOOKING, { state: { bus, selectedType, selectedFare, searchParams } })}
+              className={`w-full rounded-2xl px-6 py-3 text-sm font-bold transition-all ${
+                soldOut ? 'cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600'
+                  : 'bg-slate-900 text-white hover:bg-primary hover:text-black dark:bg-white/10 dark:hover:bg-primary dark:hover:text-black'
+              }`}>
+              {soldOut ? 'Sold Out' : 'Select Seat'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -461,7 +522,7 @@ const SearchResults = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col gap-8 lg:flex-row">
 
-          <aside className="w-full flex-shrink-0 lg:w-72">
+          <aside className="hidden lg:block w-full flex-shrink-0 lg:w-72">
             <div className="space-y-6 lg:sticky lg:top-36 lg:max-h-[calc(100vh-10rem)] lg:overflow-y-auto lg:pr-1">
             <div className="rounded-[28px] bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-charcoal dark:ring-white/5">
               <h3 className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-400">Departure Time</h3>
@@ -530,6 +591,52 @@ const SearchResults = () => {
           </aside>
 
           <div className="flex-1 space-y-4">
+            {/* Mobile filter chips */}
+            <div className="lg:hidden">
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                <span className="flex-shrink-0 text-xs font-bold text-slate-500 dark:text-slate-400 pr-1">Filters:</span>
+                {DEPARTURE_SLOTS.map(({ label }) => {
+                  const shortLabel = label.split(' ')[0] + ' ' + label.split(' ')[1];
+                  return (
+                    <button key={label} onClick={() => toggleItem(setSelectedSlots, label)}
+                      className={`flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
+                        selectedSlots.includes(label)
+                          ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
+                          : 'bg-white dark:bg-charcoal text-slate-600 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-white/10'
+                      }`}>
+                      {shortLabel}
+                    </button>
+                  );
+                })}
+                {[...new Set(buses.map(b => b.busType).filter(Boolean))].map(type => (
+                  <button key={type} onClick={() => toggleItem(setSelectedBusTypes, type)}
+                    className={`flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
+                      selectedBusTypes.includes(type)
+                        ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
+                        : 'bg-white dark:bg-charcoal text-slate-600 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-white/10'
+                    }`}>
+                    {type}
+                  </button>
+                ))}
+                {AMENITY_OPTIONS.map(a => (
+                  <button key={a} onClick={() => toggleItem(setSelectedAmenities, a)}
+                    className={`flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-all ${
+                      selectedAmenities.includes(a)
+                        ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
+                        : 'bg-white dark:bg-charcoal text-slate-600 dark:text-slate-300 ring-1 ring-slate-200 dark:ring-white/10'
+                    }`}>
+                    {a}
+                  </button>
+                ))}
+                {(selectedSlots.length > 0 || selectedBusTypes.length > 0 || selectedAmenities.length > 0) && (
+                  <button onClick={() => { setSelectedSlots([]); setSelectedBusTypes([]); setSelectedAmenities([]); setMaxPrice(allMaxPrice); }}
+                    className="flex-shrink-0 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap bg-red-50 text-red-600 ring-1 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/20">
+                    Clear all
+                  </button>
+                )}
+              </div>
+            </div>
+
             <div className="rounded-[28px] bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-charcoal dark:ring-white/5">
               <SearchBar
                 showQuickDates={false}

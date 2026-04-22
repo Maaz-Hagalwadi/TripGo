@@ -299,22 +299,25 @@ const RatingModal = ({ booking, onClose, onSubmit, submitting }) => {
 
         <div className="mt-6">
           <p className="text-sm font-semibold text-slate-900 dark:text-white">How was your trip?</p>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex items-center gap-1">
             {[1, 2, 3, 4, 5].map((value) => (
               <button
                 key={value}
                 type="button"
                 onClick={() => setRating(value)}
-                className={`rounded-2xl px-4 py-3 text-lg font-bold transition ${
-                  rating === value
-                    ? 'bg-primary text-black'
-                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/15'
-                }`}
+                className="transition-transform hover:scale-110 active:scale-95 p-1"
               >
-                {value}
+                <span className={`material-symbols-outlined text-4xl transition-colors ${rating >= value ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600'}`}
+                  style={{ fontVariationSettings: rating >= value ? "'FILL' 1" : "'FILL' 0" }}>
+                  star
+                </span>
               </button>
             ))}
+            <span className="ml-2 text-sm font-semibold text-slate-600 dark:text-slate-300">{rating}/5</span>
           </div>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            {rating === 1 ? 'Poor' : rating === 2 ? 'Fair' : rating === 3 ? 'Good' : rating === 4 ? 'Very Good' : 'Excellent'}
+          </p>
         </div>
 
         <div className="mt-5">
@@ -718,39 +721,40 @@ const UserBookings = () => {
     <UserLayout activeItem="bookings" title="My Bookings">
       <div className="space-y-6">
         <div className="rounded-[30px] bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,rgba(12,12,12,0.96)_0%,rgba(6,6,6,0.98)_100%)] dark:ring-white/10">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary/80">Traveler Dashboard</p>
-              <h1 className="mt-2 text-3xl font-black text-slate-900 dark:text-white">My bookings</h1>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] md:text-xs font-semibold uppercase tracking-[0.24em] text-primary/80">Traveler Dashboard</p>
+              <h1 className="mt-1 text-xl md:text-3xl font-black text-slate-900 dark:text-white">My bookings</h1>
+              <p className="mt-1 text-xs md:text-sm text-slate-500 dark:text-slate-400 hidden md:block">
                 Track confirmed trips, seat numbers, travel details, and payment summary in one place.
               </p>
-              <div className="mt-4 inline-flex rounded-2xl bg-slate-100 p-1 dark:bg-white/5">
+              <div className="mt-3 inline-flex rounded-2xl bg-slate-100 p-1 dark:bg-white/5">
                 {[
-                  { id: 'upcoming', label: `Upcoming (${upcomingBookings.length})` },
-                  { id: 'completed', label: `Completed (${normalizedCompletedTrips.length})` },
-                  { id: 'cancelled', label: `Cancelled (${cancelledBookings.length})` },
+                  { id: 'upcoming', label: 'Upcoming', count: upcomingBookings.length },
+                  { id: 'completed', label: 'Completed', count: normalizedCompletedTrips.length },
+                  { id: 'cancelled', label: 'Cancelled', count: cancelledBookings.length },
                 ].map((tab) => (
                   <button
                     key={tab.id}
                     type="button"
                     onClick={() => setTripTab(tab.id)}
-                    className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${tripTab === tab.id ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-white' : 'text-slate-500 dark:text-slate-300'}`}
+                    className={`rounded-xl px-2.5 md:px-4 py-2 text-xs md:text-sm font-semibold transition ${tripTab === tab.id ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-white' : 'text-slate-500 dark:text-slate-300'}`}
                   >
-                    {tab.label}
+                    {tab.label} <span className="opacity-70">({tab.count})</span>
                   </button>
                 ))}
               </div>
             </div>
-            <div className="inline-flex rounded-2xl bg-slate-100 p-1 dark:bg-white/5">
+            <div className="hidden sm:flex flex-shrink-0 rounded-2xl bg-slate-100 p-1 dark:bg-white/5 self-start">
               {['grid', 'list'].map((mode) => (
                 <button
                   key={mode}
                   type="button"
                   onClick={() => setViewMode(mode)}
-                  className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${viewMode === mode ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-white' : 'text-slate-500 dark:text-slate-300'}`}
+                  className={`rounded-xl px-3 py-2 text-xs md:text-sm font-semibold transition flex items-center gap-1.5 ${viewMode === mode ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-white' : 'text-slate-500 dark:text-slate-300'}`}
                 >
-                  {mode === 'grid' ? 'Grid' : 'List'}
+                  <span className="material-symbols-outlined text-[16px]">{mode === 'grid' ? 'grid_view' : 'view_list'}</span>
+                  <span>{mode === 'grid' ? 'Grid' : 'List'}</span>
                 </button>
               ))}
             </div>
@@ -801,7 +805,7 @@ const UserBookings = () => {
               </p>
             </div>
 
-            <div className={viewMode === 'grid' ? 'grid gap-4 xl:grid-cols-2' : 'space-y-4'}>
+            <div className={viewMode === 'grid' ? 'grid gap-4 sm:grid-cols-1 xl:grid-cols-2' : 'space-y-4'}>
               {paginatedBookings.map((booking, index) => {
                 const bookingId = toDisplayBookingId(booking) || `TG-${index + 1}`;
               const { routeFrom, routeTo } = getBookingRouteSegment(booking);
@@ -817,17 +821,109 @@ const UserBookings = () => {
               const canRateTrip = tripTab === 'completed' && reviewableTrip && !reviewableTrip.alreadyRated;
               const canCancelBooking = tripTab === 'upcoming' && isConfirmedBooking(booking);
                 return (
-                  <div key={`${bookingId}-${index}`} className="rounded-[30px] bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,rgba(12,12,12,0.96)_0%,rgba(6,6,6,0.98)_100%)] dark:ring-white/10">
+                  <div key={`${bookingId}-${index}`} className="rounded-[24px] md:rounded-[30px] bg-white shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,rgba(12,12,12,0.96)_0%,rgba(6,6,6,0.98)_100%)] dark:ring-white/10 overflow-hidden">
+                  {/* Mobile card (RedBus style) */}
+                  <div className="md:hidden">
+                    <div className="p-4">
+                      {/* Row 1: Bus + Status */}
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
+                            <span className="material-symbols-outlined text-primary text-base">directions_bus</span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{busName || 'Bus'}</p>
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400">{bookingId}</p>
+                          </div>
+                        </div>
+                        <span className={`flex-shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold ${getStatusClass(displayStatus)}`}>
+                          {displayStatus === 'PAYMENT_SUCCESSFUL' ? 'PAID' : displayStatus === 'PAYMENT_RECEIVED' ? 'RECEIVED' : displayStatus}
+                        </span>
+                      </div>
+
+                      {/* Row 2: Route + Amount */}
+                      <div className="flex items-center justify-between mb-3 bg-slate-50 dark:bg-white/[0.04] rounded-xl px-3 py-2.5">
+                        <div className="text-center">
+                          <p className="text-base font-extrabold text-slate-900 dark:text-white">{routeFrom}</p>
+                        </div>
+                        <div className="flex-1 flex flex-col items-center px-2">
+                          <div className="relative h-px w-full bg-slate-300 dark:bg-white/10">
+                            <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-primary/40 ring-2 ring-primary/80" />
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-base font-extrabold text-slate-900 dark:text-white">{routeTo}</p>
+                        </div>
+                      </div>
+
+                      {/* Row 3: Chips (seats, travelers, amount) */}
+                      <div className="flex items-center gap-2 flex-wrap mb-3">
+                        {seats.length > 0 && (
+                          <span className="rounded-full bg-slate-100 dark:bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                            Seats: {seats.join(', ')}
+                          </span>
+                        )}
+                        <span className="rounded-full bg-slate-100 dark:bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                          {passengers.length || seats.length || 1} traveler{(passengers.length || seats.length || 1) !== 1 ? 's' : ''}
+                        </span>
+                        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-black text-primary">₹{amount}</span>
+                      </div>
+
+                      {/* Row 4: Schedule */}
+                      {scheduleLabel && scheduleLabel !== '--' && (
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">{scheduleLabel}</p>
+                      )}
+
+                      {/* Cancelled details */}
+                      {String(booking?.status || '').toUpperCase() === 'CANCELLED' && (
+                        <div className="mb-3 rounded-xl bg-rose-50 dark:bg-rose-500/10 px-3 py-2.5 text-xs space-y-1">
+                          <div className="flex justify-between"><span className="text-rose-600 dark:text-rose-300">Cancelled by</span><span className="font-semibold text-rose-700 dark:text-rose-200">{getCancelledByLabel(booking?.cancelledBy)}</span></div>
+                          <div className="flex justify-between"><span className="text-rose-600 dark:text-rose-300">Refund</span><span className="font-semibold text-rose-700 dark:text-rose-200">₹{Number(booking?.refundAmount ?? 0)} · {getRefundStatusMeta(booking?.refundStatus).label}</span></div>
+                        </div>
+                      )}
+
+                      {/* Passengers */}
+                      {passengers.length > 0 && (
+                        <div className="mb-3 space-y-1.5">
+                          {passengers.map((item, pi) => (
+                            <div key={`m-${bookingId}-p-${pi}`} className="flex items-center justify-between rounded-xl bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
+                              <div>
+                                <p className="text-xs font-semibold text-slate-900 dark:text-white">{[toTitleCase(item?.firstName), toTitleCase(item?.lastName)].filter(Boolean).join(' ') || `Traveler ${pi + 1}`}</p>
+                                <p className="text-[10px] text-slate-500">{item?.age ?? '--'} · {item?.gender || '--'}</p>
+                              </div>
+                              <span className="text-[11px] font-bold bg-slate-100 dark:bg-white/10 px-2 py-1 rounded-lg text-slate-700 dark:text-slate-200">Seat {item?.seatNumber || '--'}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => downloadTicket(booking)} className="flex-1 rounded-xl bg-primary px-3 py-2.5 text-xs font-bold text-black hover:bg-primary/90 text-center">
+                          Download Ticket
+                        </button>
+                        {canRateTrip && (
+                          <button onClick={() => setReviewModalBooking({ ...booking, scheduleId, from: routeFrom, to: routeTo })} className="rounded-xl bg-amber-100 dark:bg-amber-500/15 px-3 py-2.5 text-xs font-bold text-amber-800 dark:text-amber-200">
+                            ⭐ Rate
+                          </button>
+                        )}
+                        {canCancelBooking && (
+                          <button onClick={() => { setCancelModalBooking({ ...booking, from: routeFrom, to: routeTo }); setCancelReason(''); }} className="rounded-xl bg-red-100 dark:bg-red-500/15 px-3 py-2.5 text-xs font-bold text-red-700 dark:text-red-200">
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Desktop card (original design) */}
+                  <div className="hidden md:block p-6">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-3">
                         <h2 className="text-xl font-black text-slate-900 dark:text-white">{routeFrom} to {routeTo}</h2>
                         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusClass(displayStatus)}`}>
-                          {displayStatus === 'PAYMENT_SUCCESSFUL'
-                            ? 'PAYMENT SUCCESSFUL'
-                            : displayStatus === 'PAYMENT_RECEIVED'
-                              ? 'PAYMENT RECEIVED'
-                              : displayStatus}
+                          {displayStatus === 'PAYMENT_SUCCESSFUL' ? 'PAYMENT SUCCESSFUL' : displayStatus === 'PAYMENT_RECEIVED' ? 'PAYMENT RECEIVED' : displayStatus}
                         </span>
                       </div>
                       {busName ? <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">{busName}</p> : null}
@@ -863,28 +959,16 @@ const UserBookings = () => {
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         {canRateTrip ? (
-                          <button
-                            onClick={() => setReviewModalBooking({ ...booking, scheduleId, from: routeFrom, to: routeTo })}
-                            className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-bold text-amber-800 hover:bg-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:hover:bg-amber-500/25"
-                          >
+                          <button onClick={() => setReviewModalBooking({ ...booking, scheduleId, from: routeFrom, to: routeTo })} className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-bold text-amber-800 hover:bg-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:hover:bg-amber-500/25">
                             Rate this trip
                           </button>
                         ) : null}
                         {canCancelBooking ? (
-                          <button
-                            onClick={() => {
-                              setCancelModalBooking({ ...booking, from: routeFrom, to: routeTo });
-                              setCancelReason('');
-                            }}
-                            className="rounded-xl bg-red-100 px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-200 dark:bg-red-500/15 dark:text-red-200 dark:hover:bg-red-500/25"
-                          >
+                          <button onClick={() => { setCancelModalBooking({ ...booking, from: routeFrom, to: routeTo }); setCancelReason(''); }} className="rounded-xl bg-red-100 px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-200 dark:bg-red-500/15 dark:text-red-200 dark:hover:bg-red-500/25">
                             Cancel
                           </button>
                         ) : null}
-                        <button
-                          onClick={() => downloadTicket(booking)}
-                          className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-black hover:bg-primary/90"
-                        >
+                        <button onClick={() => downloadTicket(booking)} className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-black hover:bg-primary/90">
                           Download Ticket
                         </button>
                       </div>
@@ -936,6 +1020,7 @@ const UserBookings = () => {
                         <p className="text-sm text-slate-500 dark:text-slate-400">Passenger details will appear here once the booking API returns traveler information for this booking.</p>
                       )}
                     </div>
+                  </div>
                   </div>
                   </div>
                 );

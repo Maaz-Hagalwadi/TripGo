@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { fetchCurrentUser, loginRequest, pingHealth } from '../services/authService';
 import { API_BASE_URL } from '../../config/env';
 import { toast } from 'sonner';
+import { scheduleProactiveRefresh } from '../../api/apiClient';
 
 const AuthContext = createContext();
 
@@ -128,6 +129,7 @@ export const AuthProvider = ({ children }) => {
     if (result.error) return { success: false, error: result.error };
     localStorage.setItem('accessToken', result.accessToken);
     localStorage.setItem('refreshToken', result.refreshToken);
+    scheduleProactiveRefresh(result.accessToken);
     await checkAuth();
     return { success: true };
   };

@@ -398,7 +398,7 @@ const DummyPayment = () => {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.3fr_0.9fr]">
-          <div className="rounded-[24px] bg-[linear-gradient(140deg,#ffffff,#eef7ff)] p-4 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(135deg,#050404,#0b0b0b)] dark:ring-slate-950 sm:rounded-[28px] sm:p-6">
+          <div className="order-2 lg:order-1 rounded-[24px] bg-[linear-gradient(140deg,#ffffff,#eef7ff)] p-4 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(135deg,#050404,#0b0b0b)] dark:ring-slate-950 sm:rounded-[28px] sm:p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-primary/80">Payment Details</p>
@@ -459,7 +459,7 @@ const DummyPayment = () => {
             ) : null}
           </div>
 
-          <div className="rounded-[24px] bg-white p-4 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,#040404_0%,#0b0b0b_100%)] dark:ring-slate-950 sm:rounded-[28px] sm:p-6">
+          <div className="order-1 lg:order-2 rounded-[24px] bg-white p-4 shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,#040404_0%,#0b0b0b_100%)] dark:ring-slate-950 sm:rounded-[28px] sm:p-6">
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-xl font-black text-slate-900 dark:text-white">Fare Summary</h2>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold uppercase tracking-[0.18em] text-slate-500 dark:bg-slate-900 dark:text-slate-300">
