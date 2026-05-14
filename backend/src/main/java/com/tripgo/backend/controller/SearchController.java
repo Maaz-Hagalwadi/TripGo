@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 
 @RestController
 @RequestMapping("/search")
@@ -30,6 +32,18 @@ public class SearchController {
     @GetMapping("/cities")
     public List<String> getCities() {
         return routeRepository.findAllDistinctCities();
+    }
+
+    @GetMapping("/routes")
+    public List<Map<String, String>> getRoutes() {
+        return routeRepository.findAllDistinctRoutePairs().stream()
+                .map(row -> {
+                    Map<String, String> m = new LinkedHashMap<>();
+                    m.put("from", String.valueOf(row[0]));
+                    m.put("to", String.valueOf(row[1]));
+                    return m;
+                })
+                .toList();
     }
     @GetMapping
     public List<SearchResponse> search(

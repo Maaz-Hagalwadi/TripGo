@@ -130,7 +130,7 @@ const DesktopForgotPasswordForm = () => {
               <button 
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-black py-3 rounded-2xl font-extrabold text-lg flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(0,212,255,0.2)] transform hover:scale-[1.01] active:scale-[0.98] mt-6"
+                className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-white py-3 rounded-2xl font-extrabold text-lg flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(11,31,58,0.2)] transform hover:scale-[1.01] active:scale-[0.98] mt-6"
               >
                 {isLoading ? 'Sending...' : 'Send Reset Link'}
               </button>

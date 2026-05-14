@@ -60,7 +60,7 @@ const VerifyEmail = () => {
           right: '-10%',
           width: '60%',
           height: '40%',
-          background: 'radial-gradient(circle at center, rgba(0, 212, 255, 0.12) 0%, transparent 70%)',
+          background: 'radial-gradient(circle at center, rgba(11, 31, 58, 0.12) 0%, transparent 70%)',
           filter: 'blur(60px)',
           pointerEvents: 'none'
         }} />
@@ -75,7 +75,7 @@ const VerifyEmail = () => {
             p: 6
           }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 3 }}>
-              <Box sx={{ color: '#00d4ff' }}>
+              <Box sx={{ color: '#0B1F3A' }}>
                 <TripGoIcon style={{ width: 32, height: 32 }} />
               </Box>
               <Typography variant="h5" sx={{ fontWeight: 800, color: 'white' }}>
@@ -83,7 +83,7 @@ const VerifyEmail = () => {
               </Typography>
             </Box>
             
-            <CircularProgress sx={{ color: '#00d4ff', mb: 3 }} size={60} />
+            <CircularProgress sx={{ color: '#0B1F3A', mb: 3 }} size={60} />
             <Typography variant="h6" sx={{ color: 'white', mb: 1 }}>
               Verifying your email...
             </Typography>
@@ -111,7 +111,7 @@ const VerifyEmail = () => {
         right: '-10%',
         width: '60%',
         height: '40%',
-        background: 'radial-gradient(circle at center, rgba(0, 212, 255, 0.12) 0%, transparent 70%)',
+        background: 'radial-gradient(circle at center, rgba(11, 31, 58, 0.12) 0%, transparent 70%)',
         filter: 'blur(60px)',
         pointerEvents: 'none'
       }} />
@@ -126,7 +126,7 @@ const VerifyEmail = () => {
           p: 6
         }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 4 }}>
-            <Box sx={{ color: '#00d4ff' }}>
+            <Box sx={{ color: '#0B1F3A' }}>
               <TripGoIcon style={{ width: 32, height: 32 }} />
             </Box>
             <Typography variant="h5" sx={{ fontWeight: 800, color: 'white' }}>
@@ -147,16 +147,16 @@ const VerifyEmail = () => {
                 variant="contained"
                 onClick={() => navigate('/login')}
                 sx={{
-                  bgcolor: '#00d4ff',
-                  color: 'black',
+                  bgcolor: '#0B1F3A',
+                  color: 'white',
                   py: 1.5,
                   px: 4,
                   fontWeight: 800,
                   fontSize: '1rem',
                   borderRadius: 3,
-                  boxShadow: '0 4px 20px rgba(0,212,255,0.25)',
+                  boxShadow: '0 4px 20px rgba(11,31,58,0.25)',
                   '&:hover': {
-                    bgcolor: '#00b8e6',
+                    bgcolor: '#102A4C',
                   }
                 }}
               >
@@ -176,17 +176,17 @@ const VerifyEmail = () => {
                 variant="outlined"
                 onClick={() => navigate('/register')}
                 sx={{
-                  borderColor: '#00d4ff',
-                  color: '#00d4ff',
+                  borderColor: '#0B1F3A',
+                  color: '#0B1F3A',
                   py: 1.5,
                   px: 4,
                   fontWeight: 800,
                   fontSize: '1rem',
                   borderRadius: 3,
                   '&:hover': {
-                    borderColor: '#00b8e6',
-                    color: '#00b8e6',
-                    bgcolor: 'rgba(0,212,255,0.1)'
+                    borderColor: '#102A4C',
+                    color: '#102A4C',
+                    bgcolor: 'rgba(11,31,58,0.1)'
                   }
                 }}
               >

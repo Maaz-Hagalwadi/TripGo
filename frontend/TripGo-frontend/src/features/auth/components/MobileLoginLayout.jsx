@@ -125,7 +125,7 @@ const MobileLoginLayout = () => {
           right: '-10%',
           width: '60%',
           height: '40%',
-          background: 'radial-gradient(circle at center, rgba(0, 212, 255, 0.12) 0%, transparent 70%)',
+          background: 'radial-gradient(circle at center, rgba(11, 31, 58, 0.12) 0%, transparent 70%)',
           filter: 'blur(60px)',
           pointerEvents: 'none',
           zIndex: 0
@@ -136,7 +136,7 @@ const MobileLoginLayout = () => {
           left: '-10%',
           width: '60%',
           height: '40%',
-          background: 'radial-gradient(circle at center, rgba(0, 212, 255, 0.12) 0%, transparent 70%)',
+          background: 'radial-gradient(circle at center, rgba(11, 31, 58, 0.12) 0%, transparent 70%)',
           filter: 'blur(60px)',
           pointerEvents: 'none',
           zIndex: 0
@@ -155,7 +155,7 @@ const MobileLoginLayout = () => {
           }}>
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <Box sx={{ color: '#00d4ff', cursor: 'pointer' }} onClick={() => navigate('/')}>
+                <Box sx={{ color: '#0B1F3A', cursor: 'pointer' }} onClick={() => navigate('/')}>
                   <TripGoIcon style={{ width: 32, height: 32 }} />
                 </Box>
                 <Typography 
@@ -164,7 +164,7 @@ const MobileLoginLayout = () => {
                     fontWeight: 800, 
                     color: 'white', 
                     cursor: 'pointer',
-                    '&:hover': { color: '#00d4ff' },
+                    '&:hover': { color: '#0B1F3A' },
                     transition: 'color 0.2s'
                   }}
                   onClick={() => navigate('/')}
@@ -174,7 +174,7 @@ const MobileLoginLayout = () => {
               </Box>
               <Typography variant="h5" sx={{ fontWeight: 800, color: 'white' }}>
                 Travel Redefined.{' '}
-                <span style={{ color: '#00d4ff' }}>Experience Luxury.</span>
+                <span style={{ color: '#0B1F3A' }}>Experience Luxury.</span>
               </Typography>
             </Box>
           </Box>
@@ -194,7 +194,7 @@ const MobileLoginLayout = () => {
                 <span className="material-symbols-outlined" style={{ color: '#fb923c', fontSize: 20, marginTop: 2 }}>block</span>
                 <Typography variant="caption" sx={{ color: '#fdba74', lineHeight: 1.6 }}>
                   Your operator account has been suspended. Please contact our support team at{' '}
-                  <a href="mailto:support@tripgo.com" style={{ color: '#00d4ff', fontWeight: 700 }}>support@tripgo.com</a>
+                  <a href="mailto:support@tripgo.com" style={{ color: '#0B1F3A', fontWeight: 700 }}>support@tripgo.com</a>
                 </Typography>
               </Box>
             )}
@@ -254,7 +254,7 @@ const MobileLoginLayout = () => {
               <Box sx={{ textAlign: 'right', mb: 1 }}>
                 <Typography 
                   variant="caption" 
-                  sx={{ color: '#00d4ff', fontWeight: 700, cursor: 'pointer' }}
+                  sx={{ color: '#0B1F3A', fontWeight: 700, cursor: 'pointer' }}
                   onClick={() => navigate('/forgot-password')}
                 >
                   Forgot Password?
@@ -267,18 +267,18 @@ const MobileLoginLayout = () => {
                 variant="contained"
                 disabled={isLoading}
                 sx={{
-                  bgcolor: '#00d4ff',
-                  color: 'black',
+                  bgcolor: '#0B1F3A',
+                  color: 'white',
                   py: 1.5,
                   fontWeight: 800,
                   fontSize: '1rem',
-                  boxShadow: '0 4px 20px rgba(0,212,255,0.25)',
+                  boxShadow: '0 4px 20px rgba(11,31,58,0.25)',
                   '&:hover': {
-                    bgcolor: '#00b8e6',
+                    bgcolor: '#102A4C',
                   },
                   '&:disabled': {
-                    bgcolor: 'rgba(0,212,255,0.5)',
-                    color: 'black'
+                    bgcolor: 'rgba(11,31,58,0.5)',
+                    color: 'white'
                   }
                 }}
               >
@@ -336,7 +336,7 @@ const MobileLoginLayout = () => {
             <Typography variant="caption" sx={{ textAlign: 'center', mt: 5, color: '#64748b', display: 'block' }}>
               Don't have an account?{' '}
               <span 
-                style={{ color: '#00d4ff', fontWeight: 700, cursor: 'pointer' }}
+                style={{ color: '#0B1F3A', fontWeight: 700, cursor: 'pointer' }}
                 onClick={() => navigate('/register')}
               >
                 Sign Up

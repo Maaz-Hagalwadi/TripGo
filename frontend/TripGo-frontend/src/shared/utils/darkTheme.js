@@ -4,7 +4,7 @@ export const darkTheme = createTheme({
   palette: {
     mode: 'dark',
     primary: {
-      main: '#00d4ff',
+      main: '#0B1F3A',
     },
     background: {
       default: '#050505',
@@ -24,7 +24,7 @@ export const darkTheme = createTheme({
             backgroundColor: '#1A1A1A',
             '& fieldset': { borderColor: 'rgba(255, 255, 255, 0.05)' },
             '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.1)' },
-            '&.Mui-focused fieldset': { borderColor: '#00d4ff' },
+            '&.Mui-focused fieldset': { borderColor: '#0B1F3A' },
           },
         },
       },

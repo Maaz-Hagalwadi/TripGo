@@ -29,6 +29,20 @@ export const getCities = async () => {
 };
 
 /**
+ * Get all available route pairs (origin → destination) from the public search API.
+ * @returns {Promise<Array<{from: string, to: string}>>}
+ */
+export const getSearchRoutes = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/search/routes`);
+    if (!response.ok) return [];
+    return await response.json();
+  } catch {
+    return [];
+  }
+};
+
+/**
  * Create a new route.
  * @param {{name: string, origin: string, destination: string}} routeData
  * @returns {Promise<{id: number, name: string, origin: string, destination: string}>}

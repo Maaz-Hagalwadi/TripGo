@@ -1,11 +1,11 @@
 const FeatureCard = ({ icon, title, description }) => {
   return (
-    <div className="flex flex-col items-center text-center p-10 rounded-3xl bg-charcoal border border-white/5 hover:border-primary/30 transition-all duration-300 group">
-      <div className="w-20 h-20 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-8 group-hover:bg-primary group-hover:text-black transition-all">
-        <span className="material-symbols-outlined !text-4xl">{icon}</span>
+    <div className="flex flex-col items-center text-center p-8 md:p-10 rounded-3xl bg-white border border-slate-100 shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-300 group">
+      <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-6 group-hover:bg-primary group-hover:text-black transition-all duration-300">
+        <span className="material-symbols-outlined !text-3xl">{icon}</span>
       </div>
-      <h3 className="text-2xl font-bold text-white mb-4">{title}</h3>
-      <p className="text-slate-400 leading-relaxed text-lg">
+      <h3 className="text-xl font-bold text-slate-900 mb-3">{title}</h3>
+      <p className="text-slate-500 leading-relaxed text-sm md:text-base">
         {description}
       </p>
     </div>

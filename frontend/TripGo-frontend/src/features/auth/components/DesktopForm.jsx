@@ -2,400 +2,302 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import TripGoIcon from '../../../assets/icons/TripGoIcon';
-
 import { API_BASE_URL } from '../../../config/env';
+
+const BUS_IMG = 'https://lh3.googleusercontent.com/aida-public/AB6AXuBn8Xu6YxgTm5MyWzn7d6Rl_cxu8YTmtjqgy0nYJP5Vh2kEeVlUNjVps6hzkLOTjgVOKBP4GDXQpbxUUvUkrqOwENA_tYK7J8Skr9kxzSSGwX-CUzXUXwjOS3XFejwT18N285GQidhRXHAQ7sWjw_I8-slj3CJDnoWDDgf8gmOchEhN7NqncJYuVZwWl8iXr63k-nmF3uAm0prUmXBg0fIKzG_IwSq0gf3scYz5nXofG_ywlfMF8A8O44VsvjWbW3fv9jgpHFEGZ1WD';
+
+const inputCls = (err) =>
+  `w-full pl-12 pr-4 py-3.5 bg-[#fbfcfe] border rounded-lg text-sm text-[#111827] placeholder:text-[#8a94a6] focus:ring-4 focus:ring-[#0B1F3A]/10 focus:border-[#0B1F3A] transition-all outline-none ${
+    err ? 'border-[#0B1F3A]' : 'border-[#d8dde8]'
+  }`;
 
 const DesktopForm = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    password: '',
-    confirmPassword: '',
-    agreeToTerms: false
+    firstName: '', lastName: '', email: '', phone: '',
+    password: '', confirmPassword: '', agreeToTerms: false,
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
 
-  const registerUser = async (formData) => {
+  const set = (key) => (e) => {
+    const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    setFormData(p => ({ ...p, [key]: val }));
+    setErrors(p => ({ ...p, [key]: '' }));
+  };
+
+  const registerUser = async (data) => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 90000);
-      
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      const tid = setTimeout(() => controller.abort(), 90000);
+      const res = await fetch(`${API_BASE_URL}/auth/register`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-          phone: formData.phone,
-          password: formData.password
-        }),
-        signal: controller.signal
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firstName: data.firstName, lastName: data.lastName, email: data.email, phone: data.phone, password: data.password }),
+        signal: controller.signal,
       });
-      
-      clearTimeout(timeoutId);
-
-      
-      if (response.ok) {
-        toast.success('Registration successful! Please check your email to verify your account.');
+      clearTimeout(tid);
+      if (res.ok) {
+        toast.success('Account created! Please check your email to verify.');
         setTimeout(() => navigate('/login'), 2000);
       } else {
-        const errorText = await response.text();
+        const txt = await res.text();
         try {
-          const errorObj = JSON.parse(errorText);
-          if (errorObj.message?.includes('phone:')) setErrors({ phone: 'Phone must be exactly 10 digits' });
-          else if (errorObj.message?.includes('email:')) setErrors({ email: errorObj.message.split('email: ')[1] });
-          else if (errorText.includes('Email already in use')) setErrors({ email: 'Email already in use' });
-          else if (errorText.includes('Phone already in use')) setErrors({ phone: 'Phone already in use' });
-          else toast.error(errorObj.message || 'Registration failed');
+          const obj = JSON.parse(txt);
+          if (obj.message?.includes('phone:')) setErrors({ phone: 'Phone must be exactly 10 digits' });
+          else if (obj.message?.includes('email:')) setErrors({ email: obj.message.split('email: ')[1] });
+          else if (txt.includes('Email already in use')) setErrors({ email: 'Email already in use' });
+          else if (txt.includes('Phone already in use')) setErrors({ phone: 'Phone already in use' });
+          else toast.error(obj.message || 'Registration failed');
         } catch {
-          if (errorText.includes('Email already in use')) setErrors({ email: 'Email already in use' });
-          else if (errorText.includes('Phone already in use')) setErrors({ phone: 'Phone already in use' });
+          if (txt.includes('Email already in use')) setErrors({ email: 'Email already in use' });
+          else if (txt.includes('Phone already in use')) setErrors({ phone: 'Phone already in use' });
           else toast.error('Registration failed. Please try again.');
         }
       }
-    } catch (error) {
-      toast.error(`Network error: ${error.message}`);
+    } catch (err) {
+      toast.error(`Network error: ${err.message}`);
     }
   };
 
-  const validateForm = () => {
-    const newErrors = {};
-    
-    // First name validation
-    if (!formData.firstName.trim()) {
-      newErrors.firstName = 'First name is required';
-    }
-    
-    // Last name validation
-    if (!formData.lastName.trim()) {
-      newErrors.lastName = 'Last name is required';
-    }
-    
-    // Email validation
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
-    }
-    
-    // Phone validation
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone number is required';
-    } else if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ''))) {
-      newErrors.phone = 'Phone must be exactly 10 digits';
-    }
-    
-    // Password validation
-    if (!formData.password.trim()) {
-      newErrors.password = 'Password is required';
-    } else {
-      const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-      if (!passwordRegex.test(formData.password)) {
-        newErrors.password = 'Password must be at least 8 characters with letters, numbers, and symbols';
-      }
-    }
-    
-    // Confirm password validation
-    if (!formData.confirmPassword.trim()) {
-      newErrors.confirmPassword = 'Please confirm your password';
-    } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
-    }
-    
-    // Terms validation
-    if (!formData.agreeToTerms) {
-      newErrors.agreeToTerms = 'You must agree to the terms and conditions';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  const validate = () => {
+    const e = {};
+    if (!formData.firstName.trim()) e.firstName = 'First name is required';
+    if (!formData.lastName.trim())  e.lastName  = 'Last name is required';
+    if (!formData.email.trim()) e.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) e.email = 'Enter a valid email';
+    if (!formData.phone.trim()) e.phone = 'Phone is required';
+    else if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ''))) e.phone = 'Must be 10 digits';
+    if (!formData.password.trim()) e.password = 'Password is required';
+    else if (!/^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(formData.password))
+      e.password = 'Min 8 chars with letters, numbers & symbols';
+    if (!formData.confirmPassword.trim()) e.confirmPassword = 'Please confirm your password';
+    else if (formData.password !== formData.confirmPassword) e.confirmPassword = 'Passwords do not match';
+    if (!formData.agreeToTerms) e.agreeToTerms = 'You must agree to the terms';
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setErrors({}); // Clear previous errors
-    if (validateForm()) {
-      setIsLoading(true);
-      await registerUser(formData);
-      setIsLoading(false);
-    }
+    setErrors({});
+    if (!validate()) return;
+    setIsLoading(true);
+    await registerUser(formData);
+    setIsLoading(false);
   };
 
   return (
-    <div className="bg-deep-black text-slate-100 min-h-screen flex">
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] glow-accent blur-3xl"></div>
-        <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] glow-accent blur-3xl"></div>
-      </div>
-      <div className="w-full flex flex-row min-h-screen">
+    <div className="min-h-screen flex bg-[#f5f7fb] text-[#111827]" style={{ fontFamily: 'Inter, sans-serif' }}>
+
+      {/* ── Left brand panel ── */}
+      <div className="hidden lg:flex lg:w-[46%] relative bg-[#121826] items-center overflow-hidden">
+        <img src={BUS_IMG} className="absolute inset-0 h-full w-full object-cover opacity-45" alt="" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(18,24,38,0.98)_0%,rgba(18,24,38,0.86)_44%,rgba(18,24,38,0.42)_100%)]" />
         <div
-          className="hidden md:flex flex-col w-1/2 relative bg-cover bg-center p-12 overflow-hidden"
-          style={{
-            backgroundImage: "linear-gradient(rgba(5, 5, 5, 0.6), rgba(5, 5, 5, 0.8)), url('https://lh3.googleusercontent.com/aida-public/AB6AXuBaWdLvirFLq9gQIzc79yRfhZecULRAzSPQ-Eev3IdORsc2x4lKQEngg0b6iKpxyeUMQ3F3ndbAaochZqTN2xApDbxj_p_cT4_9gOtcKGLnxNMztUuDqUAxUgkV3wbpWpD8twOaCcLb8D_afIznu8gxsBjvhKgjQjMYKn5mpo-cqf4sRm8EXrrYZ9PM2LGiIp1wpostxaih0VJ2ZAvymjAewnAa1CusAzdfLA84hhKCwvxAteOK4ie_JUSDj4zUqp_62VUoc0FM7qvk')"
-          }}
-        >
-          <div className="relative z-10 flex items-center gap-3">
-            <div className="text-primary cursor-pointer" onClick={() => navigate('/')}>
-              <TripGoIcon className="w-10 h-10" />
-            </div>
-            <span
-              className="text-3xl font-extrabold tracking-tight text-white cursor-pointer hover:text-primary transition-colors"
-              onClick={() => navigate('/')}
-            >
-              TripGo
+          className="absolute inset-0 opacity-25 pointer-events-none"
+          style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.32) 1px, transparent 0)', backgroundSize: '34px 34px' }}
+        />
+        <div className="absolute left-0 top-0 h-full w-1.5 bg-[#0B1F3A]" />
+
+        <div className="relative z-10 p-14 xl:p-16 max-w-xl text-white">
+          <button onClick={() => navigate('/')} className="flex items-center gap-3 mb-12">
+            <span className="h-11 w-11 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center">
+              <TripGoIcon className="w-7 h-7 text-white" />
             </span>
-          </div>
-          <div className="relative z-10 flex-1 flex flex-col items-center justify-center text-center space-y-6">
-            <h2 className="text-4xl lg:text-5xl font-extrabold text-white leading-tight">Start Your Premium Journey Today.</h2>
-            <p className="text-slate-300 text-lg max-w-md">Join over 2 million travelers booking seamless bus journeys across 500+ cities.</p>
-            <div className="pt-4 space-y-4 text-left">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary">
-                  <span className="material-symbols-outlined !text-xl">verified_user</span>
+            <span className="font-black text-2xl tracking-tight text-white">TripGo</span>
+          </button>
+          <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/80 mb-6">
+            <span className="material-symbols-outlined text-[16px] text-[#D6E8FF]">confirmation_number</span>
+            Fast e-ticket booking
+          </p>
+          <h1 className="text-5xl font-bold leading-tight mb-5 text-white">
+            Start travelling with a cleaner way to book.
+          </h1>
+          <p className="text-white/72 text-lg leading-relaxed mb-9">
+            Create your TripGo account to compare routes, save traveller details, and keep every ticket in one place.
+          </p>
+          <div className="grid gap-3">
+            {[
+              { icon: 'route', title: '500+ Connected Routes', sub: 'Find convenient departures across major cities.' },
+              { icon: 'payments', title: 'Secure Checkout', sub: 'Pay safely and receive instant booking confirmation.' },
+            ].map(({ icon, title, sub }) => (
+              <div key={title} className="flex items-center gap-4 p-4 rounded-xl border border-white/10 bg-white/[0.07] backdrop-blur-sm">
+                <span className="material-symbols-outlined text-[#D6E8FF]">{icon}</span>
+                <div>
+                  <p className="text-sm font-semibold text-white">{title}</p>
+                  <p className="text-xs text-white/58 mt-0.5">{sub}</p>
                 </div>
-                <span className="text-slate-200 font-medium">Safe & Secure Booking</span>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary">
-                  <span className="material-symbols-outlined !text-xl">stars</span>
-                </div>
-                <span className="text-slate-200 font-medium">VIP Fleet Access</span>
-              </div>
-            </div>
+            ))}
           </div>
-          <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-deep-black to-transparent opacity-60"></div>
+          <div className="mt-10 grid grid-cols-3 gap-4 border-t border-white/10 pt-6">
+            {[
+              ['Fast', 'search'],
+              ['Secure', 'payments'],
+              ['Easy', 'refunds'],
+            ].map(([value, label]) => (
+              <div key={label}>
+                <p className="text-xl font-black text-white">{value}</p>
+                <p className="text-xs text-white/52 mt-1">{label}</p>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="w-full md:w-1/2 p-6 md:p-16 flex flex-col justify-center bg-deep-black/60">
-          <div className="max-w-md w-full mx-auto">
-            <div className="md:hidden flex justify-end mb-6">
-              <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
-                <TripGoIcon className="w-7 h-7 text-primary" />
-                <span className="text-lg font-extrabold tracking-tight text-white">TripGo</span>
-              </div>
+      </div>
+
+      {/* ── Right form panel ── */}
+      <div className="w-full lg:w-[54%] flex flex-col bg-[#f5f7fb]">
+        {/* Header */}
+        <div className="p-8 lg:px-12 flex justify-between items-center">
+          <button onClick={() => navigate('/')} className="flex items-center gap-2 text-[#111827]">
+            <TripGoIcon className="w-7 h-7 text-[#0B1F3A] lg:hidden" />
+            <span className="font-black text-xl lg:text-2xl tracking-tight">TripGo</span>
+          </button>
+          <a href="#" className="text-sm font-semibold text-[#44474e] hover:text-[#0B1F3A] transition-colors">Support</a>
+        </div>
+
+        {/* Main form */}
+        <div className="flex-grow flex items-center justify-center p-5 sm:p-8 lg:p-12">
+          <div className="w-full max-w-[500px] bg-white border border-[#e4e8f0] rounded-2xl shadow-[0_24px_70px_rgba(17,24,39,0.10)] p-6 sm:p-8">
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold text-[#111827] mb-2">Create your account</h2>
+              <p className="text-sm text-[#667085]">Book faster, save traveller details, and manage every trip in one place.</p>
             </div>
-            <div className="mb-6">
-              <h1 className="text-3xl font-extrabold text-white mb-3">Create Account</h1>
-              <p className="text-slate-400">Choose your account type and enter your details.</p>
-              
-              <div className="flex gap-4 mt-4 p-3 bg-input-gray/50 rounded-xl border border-white/5">
-                <button 
-                  type="button"
-                  onClick={() => navigate('/register')}
-                  className="flex-1 py-2 px-4 bg-primary text-black rounded-lg font-bold text-sm transition-all"
-                >
-                  Regular User
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => navigate('/operator-register')}
-                  className="flex-1 py-2 px-4 bg-white/10 text-white rounded-lg font-bold text-sm hover:bg-white/20 transition-all"
-                >
-                  Bus Operator
-                </button>
-              </div>
+
+            {/* Toggle */}
+            <div className="flex p-1 bg-[#f2f4f7] rounded-xl mb-8 gap-1">
+              <button className="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all bg-white text-[#0B1F3A] shadow-sm">
+                Traveler
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/operator-register')}
+                className="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all text-[#667085] hover:bg-white"
+              >
+                Operator
+              </button>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">First Name</label>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {/* Row 1: First + Last */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-[#111827]">First Name</label>
                   <div className="relative">
-                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">person</span>
-                    <input 
-                      className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.firstName ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="First Name" 
-                      type="text"
-                      value={formData.firstName}
-                      onChange={(e) => {
-                        setFormData(prev => ({ ...prev, firstName: e.target.value }));
-                        if (errors.firstName) setErrors(prev => ({ ...prev, firstName: '' }));
-                      }}
-                    />
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">person</span>
+                    <input className={inputCls(errors.firstName)} placeholder="John" type="text" value={formData.firstName} onChange={set('firstName')} />
                   </div>
-                  {errors.firstName && (
-                    <p className="text-red-400 text-xs mt-1 ml-1">{errors.firstName}</p>
-                  )}
+                  {errors.firstName && <p className="text-red-500 text-xs">{errors.firstName}</p>}
                 </div>
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Last Name</label>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-[#111827]">Last Name</label>
                   <div className="relative">
-                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">person</span>
-                    <input 
-                      className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.lastName ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="Last Name" 
-                      type="text"
-                      value={formData.lastName}
-                      onChange={(e) => {
-                        setFormData(prev => ({ ...prev, lastName: e.target.value }));
-                        if (errors.lastName) setErrors(prev => ({ ...prev, lastName: '' }));
-                      }}
-                    />
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">person</span>
+                    <input className={inputCls(errors.lastName)} placeholder="Doe" type="text" value={formData.lastName} onChange={set('lastName')} />
                   </div>
-                  {errors.lastName && (
-                    <p className="text-red-400 text-xs mt-1 ml-1">{errors.lastName}</p>
-                  )}
+                  {errors.lastName && <p className="text-red-500 text-xs">{errors.lastName}</p>}
                 </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
+
+              {/* Email */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-[#111827]">Email Address</label>
                 <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">mail</span>
-                  <input 
-                    className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.email ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="Enter your email" 
-                    type="email"
-                    autoComplete="off"
-                    value={formData.email}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, email: e.target.value }));
-                      if (errors.email) setErrors(prev => ({ ...prev, email: '' }));
-                    }}
-                  />
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">mail</span>
+                  <input className={inputCls(errors.email)} placeholder="name@example.com" type="email" autoComplete="off" value={formData.email} onChange={set('email')} />
                 </div>
-                {errors.email && (
-                  <p className="text-red-400 text-xs mt-1 ml-1">{errors.email}</p>
-                )}
+                {errors.email && <p className="text-red-500 text-xs">{errors.email}</p>}
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
+
+              {/* Row 2: Phone + Password */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-[#111827]">Phone Number</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">call</span>
+                    <input className={inputCls(errors.phone)} placeholder="10-digit number" type="tel" value={formData.phone} onChange={set('phone')} />
+                  </div>
+                  {errors.phone && <p className="text-red-500 text-xs">{errors.phone}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-[#111827]">Password</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">lock</span>
+                    <input className={`${inputCls(errors.password)} pr-12`} placeholder="••••••••" type={showPassword ? 'text' : 'password'} autoComplete="new-password" value={formData.password} onChange={set('password')} />
+                    <button type="button" onClick={() => setShowPassword(v => !v)} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#98a2b3] hover:text-[#111827] transition-colors">
+                      <span className="material-symbols-outlined text-[20px]">{showPassword ? 'visibility_off' : 'visibility'}</span>
+                    </button>
+                  </div>
+                  {errors.password && <p className="text-red-500 text-xs">{errors.password}</p>}
+                </div>
+              </div>
+
+              {/* Confirm Password */}
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-[#111827]">Confirm Password</label>
                 <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">call</span>
-                  <input 
-                    className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.phone ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                    placeholder="10-digit number" 
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, phone: e.target.value }));
-                      if (errors.phone) setErrors(prev => ({ ...prev, phone: '' }));
-                    }}
-                  />
+                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">lock</span>
+                  <input className={inputCls(errors.confirmPassword)} placeholder="Re-enter password" type="password" autoComplete="new-password" value={formData.confirmPassword} onChange={set('confirmPassword')} />
                 </div>
-                {errors.phone && (
-                  <p className="text-red-400 text-xs mt-1 ml-1">{errors.phone}</p>
-                )}
+                {errors.confirmPassword && <p className="text-red-500 text-xs">{errors.confirmPassword}</p>}
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Password</label>
-                <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">lock</span>
-                  <input 
-                    className={`w-full pl-12 pr-12 py-3 bg-input-gray border ${errors.password ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                    placeholder="Enter password" 
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="new-password"
-                    value={formData.password}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, password: e.target.value }));
-                      if (errors.password) setErrors(prev => ({ ...prev, password: '' }));
-                    }}
-                  />
-                  <button 
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors" 
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    <span className="material-symbols-outlined">visibility</span>
-                  </button>
-                </div>
-                {errors.password && (
-                  <p className="text-red-400 text-xs mt-1 ml-1">{errors.password}</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Confirm Password</label>
-                <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none">lock</span>
-                  <input 
-                    className={`w-full pl-12 pr-4 py-3 bg-input-gray border ${errors.confirmPassword ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                    placeholder="Re-enter password" 
-                    type="password"
-                    autoComplete="new-password"
-                    value={formData.confirmPassword}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, confirmPassword: e.target.value }));
-                      if (errors.confirmPassword) setErrors(prev => ({ ...prev, confirmPassword: '' }));
-                    }}
-                  />
-                </div>
-                {errors.confirmPassword && (
-                  <p className="text-red-400 text-xs mt-1 ml-1">{errors.confirmPassword}</p>
-                )}
-              </div>
-              <div className="flex items-start gap-3 py-2">
-                <div className="flex items-center h-5">
-                  <input 
-                    className="w-5 h-5 rounded border-white/10 bg-input-gray text-primary focus:ring-primary focus:ring-offset-deep-black transition-all cursor-pointer" 
-                    id="terms" 
-                    type="checkbox"
-                    checked={formData.agreeToTerms}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, agreeToTerms: e.target.checked }));
-                      if (errors.agreeToTerms) setErrors(prev => ({ ...prev, agreeToTerms: '' }));
-                    }}
-                  />
-                </div>
-                <label className="text-sm text-slate-400 leading-tight" htmlFor="terms">
-                  I agree to the <a className="text-primary hover:underline font-medium" href="#">Terms and Conditions</a> and <a className="text-primary hover:underline font-medium" href="#">Privacy Policy</a>.
+
+              {/* Terms */}
+              <div className="flex items-start gap-3 py-1">
+                <input
+                  id="terms"
+                  type="checkbox"
+                  checked={formData.agreeToTerms}
+                  onChange={set('agreeToTerms')}
+                  className="mt-1 w-5 h-5 rounded border-[#d8dde8] cursor-pointer"
+                  style={{ accentColor: '#0B1F3A' }}
+                />
+                <label htmlFor="terms" className="text-sm text-[#667085] leading-relaxed select-none cursor-pointer">
+                  By creating an account, I agree to the{' '}
+                  <a href="#" className="text-[#0B1F3A] font-semibold hover:underline">Terms of Service</a>
+                  {' '}and{' '}
+                  <a href="#" className="text-[#0B1F3A] font-semibold hover:underline">Privacy Policy</a>.
                 </label>
               </div>
-              {errors.agreeToTerms && (
-                <p className="text-red-400 text-xs mt-1 ml-1">{errors.agreeToTerms}</p>
-              )}
-              <button 
+              {errors.agreeToTerms && <p className="text-red-500 text-xs -mt-2">{errors.agreeToTerms}</p>}
+
+              <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 disabled:cursor-not-allowed text-black py-3 rounded-2xl font-extrabold text-lg flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(0,212,255,0.2)] transform hover:scale-[1.01] active:scale-[0.98] disabled:transform-none"
+                className="w-full py-4 px-6 bg-[#0B1F3A] text-white text-sm font-bold rounded-xl hover:bg-[#102A4C] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 shadow-[0_14px_30px_rgba(11,31,58,0.22)]"
               >
-                {isLoading && (
-                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
+                {isLoading ? (
+                  <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Creating Account…</>
+                ) : (
+                  <><span>Create Account</span><span className="material-symbols-outlined text-[20px]">arrow_forward</span></>
                 )}
-                {isLoading ? 'Creating Account...' : 'Create Account'}
               </button>
-              {isLoading && <p className="text-center text-xs text-slate-400 mt-2">First registration may take up to 60 seconds...</p>}
+              {isLoading && <p className="text-center text-xs text-[#8a94a6]">First registration may take up to 60 seconds…</p>}
             </form>
-            <div className="relative my-3">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-white/10"></div>
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-deep-black px-2 text-slate-500 font-bold tracking-widest">Or sign up with</span>
-              </div>
+
+            <div className="mt-8 pt-8 border-t border-[#e4e8f0] text-center">
+              <p className="text-sm text-[#667085]">
+                Already have an account?{' '}
+                <button onClick={() => navigate('/login')} className="text-[#0B1F3A] font-bold hover:underline ml-1">
+                  Sign in instead
+                </button>
+              </p>
             </div>
-            <button 
-              onClick={() => window.location.href = `${API_BASE_URL}/oauth2/authorization/google`}
-              className="w-full flex items-center justify-center gap-2 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl transition-all"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.66l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-              </svg>
-              <span className="text-xs font-bold">Google</span>
-            </button>
-            <p className="text-center mt-3 text-slate-400">
-              Already have an account? 
-              <button 
-                onClick={() => navigate('/login')}
-                className="text-primary hover:underline font-bold ml-1"
-              >
-                Log In
-              </button>
-            </p>
           </div>
         </div>
+
+        <footer className="p-8 lg:px-12 flex flex-col md:flex-row justify-between items-center gap-4">
+          <p className="text-xs text-[#8a94a6]">© {new Date().getFullYear()} TripGo. All rights reserved.</p>
+          <div className="flex gap-6">
+            {['Status', 'Privacy', 'Terms'].map(l => (
+              <a key={l} href="#" className="text-xs text-[#8a94a6] hover:text-[#111827] transition-colors">{l}</a>
+            ))}
+          </div>
+        </footer>
       </div>
+
     </div>
   );
 };

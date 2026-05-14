@@ -2,15 +2,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import UserLayout from '../../../shared/components/UserLayout';
-import PaginationControls from '../../../shared/components/ui/PaginationControls';
-import { cancelMyBooking, getMyBookings, downloadTicketFromApi } from '../../../api/bookingService';
+import { cancelMyBooking, getMyBookings, downloadTicketFromApi, viewTicketFromApi } from '../../../api/bookingService';
 import { getMyCompletedTrips, submitTripRating } from '../../../api/reviewService';
 import { ROUTES } from '../../../shared/constants/routes';
 import { formatUtcDateTime } from '../../../shared/utils/scheduleSearchUtils';
 
 const PAYMENT_STORAGE_KEY = 'tripgo_pending_payment';
 const REVIEW_PROMPT_STORAGE_KEY = 'tripgo_last_review_prompt';
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 10;
 
 const normalizeList = (data) => {
   if (Array.isArray(data)) return data;
@@ -145,21 +144,12 @@ const getDisplayStatus = (booking, pendingPayment) => {
   return rawStatus;
 };
 
-const getStatusClass = (status) => {
-  const upper = String(status || '').toUpperCase();
-  if (upper === 'CONFIRMED') return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300';
-  if (upper === 'PAYMENT_SUCCESSFUL') return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300';
-  if (upper === 'PAYMENT_RECEIVED') return 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300';
-  if (upper === 'COMPLETED') return 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300';
-  if (upper === 'CANCELLED') return 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300';
-  return 'bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300';
-};
 
 const getRefundStatusMeta = (refundStatus) => {
   const upper = String(refundStatus || 'NA').toUpperCase();
-  if (upper === 'PROCESSED') return { label: 'Processed ✅', className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' };
-  if (upper === 'PENDING') return { label: 'Pending ⏳', className: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300' };
-  return { label: 'No Refund ❌', className: 'bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300' };
+  if (upper === 'PROCESSED') return { label: 'Refund processed', className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' };
+  if (upper === 'PENDING') return { label: 'Refund pending', className: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300' };
+  return { label: 'No refund', className: 'bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300' };
 };
 
 const getCancelledByLabel = (cancelledBy) => {
@@ -171,13 +161,6 @@ const getCancelledByLabel = (cancelledBy) => {
   return upper;
 };
 
-const getCancelledTimestamp = (booking) => (
-  booking?.cancelledAt ||
-  booking?.updatedAt ||
-  booking?.modifiedAt ||
-  booking?.lastUpdatedAt ||
-  null
-);
 
 const getDepartureValue = (booking) => (
   booking?.departureTime ||
@@ -536,6 +519,125 @@ const downloadTicket = async (booking) => {
   URL.revokeObjectURL(url);
 };
 
+const EMPTY_FILTERS = { statuses: [], dateFrom: '', dateTo: '', minFare: '', maxFare: '' };
+const STATUS_FILTER_OPTIONS = [
+  { id: 'confirmed', label: 'Confirmed / Paid', dot: 'bg-emerald-500', text: 'text-emerald-700' },
+  { id: 'completed', label: 'Completed', dot: 'bg-sky-500', text: 'text-sky-700' },
+  { id: 'cancelled', label: 'Cancelled', dot: 'bg-rose-500', text: 'text-rose-700' },
+  { id: 'pending', label: 'Pending Payment', dot: 'bg-amber-500', text: 'text-amber-700' },
+];
+
+const FilterModal = ({ open, filters, onChange, onApply, onReset, onClose }) => {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl ring-1 ring-slate-200 overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Filter Bookings</h2>
+            <p className="text-xs text-slate-400 mt-0.5">Narrow results by status, date or fare</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors">
+            <span className="material-symbols-outlined text-sm text-slate-600">close</span>
+          </button>
+        </div>
+
+        <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+          {/* Status */}
+          <div>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Booking Status</p>
+            <div className="grid grid-cols-2 gap-2">
+              {STATUS_FILTER_OPTIONS.map((opt) => {
+                const checked = filters.statuses.includes(opt.id);
+                return (
+                  <label key={opt.id} className={`flex items-center gap-2.5 cursor-pointer rounded-xl px-3 py-2.5 border transition-colors ${checked ? 'border-[#002046]/30 bg-[#002046]/[0.04]' : 'border-slate-200 bg-slate-50 hover:bg-slate-100'}`}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        const next = checked
+                          ? filters.statuses.filter((s) => s !== opt.id)
+                          : [...filters.statuses, opt.id];
+                        onChange({ ...filters, statuses: next });
+                      }}
+                      className="rounded border-slate-300 accent-[#002046]"
+                    />
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${opt.dot}`} />
+                    <span className={`text-xs font-semibold ${opt.text}`}>{opt.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Date range */}
+          <div>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Travel Date</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block">From</label>
+                <input
+                  type="date"
+                  value={filters.dateFrom}
+                  onChange={(e) => onChange({ ...filters, dateFrom: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[#002046] focus:ring-1 focus:ring-[#002046]/20"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block">To</label>
+                <input
+                  type="date"
+                  value={filters.dateTo}
+                  onChange={(e) => onChange({ ...filters, dateTo: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[#002046] focus:ring-1 focus:ring-[#002046]/20"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Fare range */}
+          <div>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Fare Range (₹)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block">Min fare</label>
+                <input
+                  type="number"
+                  value={filters.minFare}
+                  placeholder="₹ 0"
+                  min="0"
+                  onChange={(e) => onChange({ ...filters, minFare: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[#002046] focus:ring-1 focus:ring-[#002046]/20"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 block">Max fare</label>
+                <input
+                  type="number"
+                  value={filters.maxFare}
+                  placeholder="Any"
+                  min="0"
+                  onChange={(e) => onChange({ ...filters, maxFare: e.target.value })}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-[#002046] focus:ring-1 focus:ring-[#002046]/20"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
+          <button onClick={onReset} className="flex-1 rounded-xl bg-slate-100 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-colors">
+            Reset all
+          </button>
+          <button onClick={onApply} className="flex-1 rounded-xl bg-[#002046] py-2.5 text-sm font-bold text-white hover:bg-[#001533] transition-colors">
+            Apply filters
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const UserBookings = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -544,12 +646,16 @@ const UserBookings = () => {
   const [completedTrips, setCompletedTrips] = useState([]);
   const [reviewModalBooking, setReviewModalBooking] = useState(null);
   const [submittingReview, setSubmittingReview] = useState(false);
-  const [viewMode, setViewMode] = useState('grid');
-  const [tripTab, setTripTab] = useState('upcoming');
+  const [tripTab, setTripTab] = useState('all');
   const [cancelModalBooking, setCancelModalBooking] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancellingBookingId, setCancellingBookingId] = useState('');
   const [page, setPage] = useState(0);
+  const [selectedBookings, setSelectedBookings] = useState(new Set());
+  const [viewMode, setViewMode] = useState(() => window.innerWidth < 768 ? 'grid' : 'list');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [pendingFilters, setPendingFilters] = useState(EMPTY_FILTERS);
+  const [activeFilters, setActiveFilters] = useState(EMPTY_FILTERS);
   const pendingPayment = useMemo(() => getPendingPayment(), []);
 
   const fetchBookings = async () => {
@@ -670,29 +776,104 @@ const UserBookings = () => {
     [visibleBookings]
   );
 
-  const tabbedBookings = useMemo(
-    () => {
-      if (tripTab === 'completed') return normalizedCompletedTrips;
-      if (tripTab === 'cancelled') return cancelledBookings;
-      return upcomingBookings;
-    },
-    [cancelledBookings, normalizedCompletedTrips, tripTab, upcomingBookings]
+  const tabbedBookings = useMemo(() => {
+    if (tripTab === 'all') return visibleBookings;
+    if (tripTab === 'completed') return normalizedCompletedTrips;
+    if (tripTab === 'cancelled') return cancelledBookings;
+    return upcomingBookings;
+  }, [cancelledBookings, normalizedCompletedTrips, tripTab, upcomingBookings, visibleBookings]);
+
+  const totalSpend = useMemo(
+    () => visibleBookings.reduce((sum, b) => sum + Number(b?.payableAmount ?? b?.totalAmount ?? b?.amount ?? 0), 0),
+    [visibleBookings]
   );
-  const totalPages = Math.max(1, Math.ceil(tabbedBookings.length / PAGE_SIZE));
+
+  const toggleSelect = (id) => {
+    setSelectedBookings((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const activeFilterCount = useMemo(() => (
+    activeFilters.statuses.length +
+    (activeFilters.dateFrom ? 1 : 0) +
+    (activeFilters.dateTo ? 1 : 0) +
+    (activeFilters.minFare ? 1 : 0) +
+    (activeFilters.maxFare ? 1 : 0)
+  ), [activeFilters]);
+
+  const filteredBookings = useMemo(() => {
+    const hasFilters = activeFilterCount > 0;
+    if (!hasFilters) return tabbedBookings;
+    return tabbedBookings.filter((booking) => {
+      const displayStatus = booking?.__displayStatus || getDisplayStatus(booking, pendingPayment);
+      const upper = String(displayStatus).toUpperCase();
+      if (activeFilters.statuses.length > 0) {
+        const matched = activeFilters.statuses.some((s) => {
+          if (s === 'confirmed') return ['CONFIRMED', 'PAYMENT_SUCCESSFUL'].includes(upper);
+          if (s === 'completed') return upper === 'COMPLETED';
+          if (s === 'cancelled') return upper === 'CANCELLED';
+          if (s === 'pending') return ['PENDING', 'PAYMENT_RECEIVED'].includes(upper);
+          return false;
+        });
+        if (!matched) return false;
+      }
+      const travelDate = getTravelDateKey(booking);
+      if (activeFilters.dateFrom && travelDate && travelDate < activeFilters.dateFrom) return false;
+      if (activeFilters.dateTo && travelDate && travelDate > activeFilters.dateTo) return false;
+      const amount = Number(booking?.payableAmount ?? booking?.totalAmount ?? booking?.amount ?? 0);
+      if (activeFilters.minFare && amount < Number(activeFilters.minFare)) return false;
+      if (activeFilters.maxFare && amount > Number(activeFilters.maxFare)) return false;
+      return true;
+    });
+  }, [tabbedBookings, activeFilters, activeFilterCount, pendingPayment]);
+
+  const viewTicket = async (booking) => {
+    const rawId = String(booking?.bookingId || booking?.id || booking?.publicBookingId || booking?.bookingCode || '').trim();
+    if (rawId) {
+      const success = await viewTicketFromApi(rawId);
+      if (success) return;
+    }
+    const bookingId = toDisplayBookingId(booking);
+    const { routeFrom, routeTo } = getBookingRouteSegment(booking);
+    const seats = extractSeats(booking);
+    const passengers = extractPassengers(booking);
+    const passengerLines = passengers.length
+      ? passengers.map((p, i) => `${i + 1}. ${[toTitleCase(p?.firstName), toTitleCase(p?.lastName)].filter(Boolean).join(' ') || 'Traveler'} | Seat: ${p?.seatNumber || '--'}`).join('\n')
+      : 'Passenger details not available';
+    const text = ['TripGo Ticket', '', `Booking ID: ${bookingId}`, `Route: ${routeFrom} → ${routeTo}`, `Status: ${booking?.status || 'CONFIRMED'}`, `Amount: ₹${Number(booking?.payableAmount ?? booking?.totalAmount ?? booking?.amount ?? 0)}`, `Seats: ${seats.length ? seats.join(', ') : '--'}`, '', 'Passengers', passengerLines].join('\n');
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  };
+
+  const totalPages = Math.max(1, Math.ceil(filteredBookings.length / PAGE_SIZE));
   const paginatedBookings = useMemo(
-    () => tabbedBookings.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
-    [page, tabbedBookings]
+    () => filteredBookings.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
+    [page, filteredBookings]
   );
 
   useEffect(() => {
     setPage(0);
-  }, [tripTab]);
+  }, [tripTab, activeFilters]);
 
   useEffect(() => {
     if (page >= totalPages) {
       setPage(Math.max(totalPages - 1, 0));
     }
   }, [page, totalPages]);
+
+  const gridActionBooking = viewMode === 'grid' && selectedBookings.size > 0
+    ? paginatedBookings.find((b, i) => selectedBookings.has(toDisplayBookingId(b) || String(i))) ?? null
+    : null;
+
+  const listActionBooking = viewMode === 'list' && selectedBookings.size === 1
+    ? paginatedBookings.find((b, i) => selectedBookings.has(toDisplayBookingId(b) || String(i))) ?? null
+    : null;
 
   useEffect(() => {
     if (!latestBooking) return;
@@ -719,326 +900,446 @@ const UserBookings = () => {
 
   return (
     <UserLayout activeItem="bookings" title="My Bookings">
-      <div className="space-y-6">
-        <div className="rounded-[30px] bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,rgba(12,12,12,0.96)_0%,rgba(6,6,6,0.98)_100%)] dark:ring-white/10">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] md:text-xs font-semibold uppercase tracking-[0.24em] text-primary/80">Traveler Dashboard</p>
-              <h1 className="mt-1 text-xl md:text-3xl font-black text-slate-900 dark:text-white">My bookings</h1>
-              <p className="mt-1 text-xs md:text-sm text-slate-500 dark:text-slate-400 hidden md:block">
-                Track confirmed trips, seat numbers, travel details, and payment summary in one place.
-              </p>
-              <div className="mt-3 inline-flex rounded-2xl bg-slate-100 p-1 dark:bg-white/5">
-                {[
-                  { id: 'upcoming', label: 'Upcoming', count: upcomingBookings.length },
-                  { id: 'completed', label: 'Completed', count: normalizedCompletedTrips.length },
-                  { id: 'cancelled', label: 'Cancelled', count: cancelledBookings.length },
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => setTripTab(tab.id)}
-                    className={`rounded-xl px-2.5 md:px-4 py-2 text-xs md:text-sm font-semibold transition ${tripTab === tab.id ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-white' : 'text-slate-500 dark:text-slate-300'}`}
-                  >
-                    {tab.label} <span className="opacity-70">({tab.count})</span>
-                  </button>
-                ))}
+      <div className="space-y-5">
+
+        {/* Page header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-black text-slate-900">My Bookings</h1>
+            <p className="text-sm text-slate-500 mt-0.5">Track and manage all your bus trips</p>
+          </div>
+          {hasFreshBooking && (
+            <div className="rounded-2xl bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 ring-1 ring-emerald-200 flex items-center gap-2">
+              <span className="material-symbols-outlined text-base">check_circle</span>
+              Booking confirmed
+            </div>
+          )}
+        </div>
+
+        {/* Bento widgets */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="rounded-2xl bg-white ring-1 ring-slate-200 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Spend</p>
+              <div className="w-9 h-9 rounded-xl bg-[#002046]/8 flex items-center justify-center">
+                <span className="material-symbols-outlined text-base text-[#002046]">payments</span>
               </div>
             </div>
-            <div className="hidden sm:flex flex-shrink-0 rounded-2xl bg-slate-100 p-1 dark:bg-white/5 self-start">
-              {['grid', 'list'].map((mode) => (
+            <p className="text-3xl font-black text-slate-900">₹{totalSpend.toLocaleString()}</p>
+            <p className="text-xs text-slate-400 mt-1.5">across {visibleBookings.length} booking{visibleBookings.length !== 1 ? 's' : ''}</p>
+          </div>
+
+          <div className="rounded-2xl bg-white ring-1 ring-slate-200 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Trips Overview</p>
+              <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center">
+                <span className="material-symbols-outlined text-base text-sky-600">route</span>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {[
+                { label: 'Upcoming', count: upcomingBookings.length, dot: 'bg-emerald-500' },
+                { label: 'Completed', count: normalizedCompletedTrips.length, dot: 'bg-sky-500' },
+                { label: 'Cancelled', count: cancelledBookings.length, dot: 'bg-rose-500' },
+              ].map((item) => (
+                <div key={item.label} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${item.dot}`} />
+                    <span className="text-sm text-slate-500">{item.label}</span>
+                  </div>
+                  <span className="text-sm font-bold text-slate-900">{item.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] p-5 text-white shadow-sm relative overflow-hidden">
+            <div className="absolute -top-2 -right-2 text-5xl opacity-10 select-none">★</div>
+            <p className="text-[10px] font-semibold opacity-60 uppercase tracking-wider mb-2">TripGo Premium</p>
+            <h3 className="text-lg font-black leading-snug">Priority seats &amp; zero cancellation fees</h3>
+            <p className="text-xs opacity-50 mt-1.5 mb-5">Upgrade for exclusive benefits on every trip</p>
+            <button className="rounded-xl bg-white/15 hover:bg-white/25 px-4 py-2 text-xs font-bold transition-colors">
+              Upgrade now →
+            </button>
+          </div>
+        </div>
+
+        {/* Tab filter + view toggle */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-1 rounded-2xl bg-white p-1.5 ring-1 ring-slate-200 shadow-sm flex-wrap">
+            {[
+              { id: 'all', label: 'All', count: visibleBookings.length },
+              { id: 'upcoming', label: 'Upcoming', count: upcomingBookings.length },
+              { id: 'completed', label: 'Completed', count: normalizedCompletedTrips.length },
+              { id: 'cancelled', label: 'Cancelled', count: cancelledBookings.length },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setTripTab(tab.id)}
+                className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all whitespace-nowrap ${tripTab === tab.id ? 'bg-[#002046] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              >
+                {tab.label}
+                <span className={`ml-1.5 text-xs ${tripTab === tab.id ? 'opacity-60' : 'opacity-40'}`}>({tab.count})</span>
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => { setPendingFilters(activeFilters); setFilterOpen(true); }}
+              className={`relative flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all ring-1 shadow-sm ${activeFilterCount > 0 ? 'bg-[#002046] text-white ring-[#002046]' : 'bg-white text-slate-600 ring-slate-200 hover:text-slate-900'}`}
+            >
+              <span className="material-symbols-outlined text-base">tune</span>
+              Filter
+              {activeFilterCount > 0 && (
+                <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] font-black text-[#002046]">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+            <div className="flex items-center gap-1 rounded-2xl bg-white p-1.5 ring-1 ring-slate-200 shadow-sm">
+              {[
+                { id: 'list', icon: 'view_list', label: 'List' },
+                { id: 'grid', icon: 'grid_view', label: 'Grid' },
+              ].map((mode) => (
                 <button
-                  key={mode}
+                  key={mode.id}
                   type="button"
-                  onClick={() => setViewMode(mode)}
-                  className={`rounded-xl px-3 py-2 text-xs md:text-sm font-semibold transition flex items-center gap-1.5 ${viewMode === mode ? 'bg-white text-slate-900 shadow-sm dark:bg-black/40 dark:text-white' : 'text-slate-500 dark:text-slate-300'}`}
+                  onClick={() => setViewMode(mode.id)}
+                  className={`rounded-xl px-3 py-2 text-sm font-semibold transition-all flex items-center gap-1.5 ${viewMode === mode.id ? 'bg-[#002046] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
                 >
-                  <span className="material-symbols-outlined text-[16px]">{mode === 'grid' ? 'grid_view' : 'view_list'}</span>
-                  <span>{mode === 'grid' ? 'Grid' : 'List'}</span>
+                  <span className="material-symbols-outlined text-base">{mode.icon}</span>
+                  {mode.label}
                 </button>
               ))}
             </div>
           </div>
-          {hasFreshBooking ? (
-            <div className="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:ring-emerald-500/20">
-              Your latest booking was confirmed successfully and is shown below.
-            </div>
-          ) : null}
         </div>
 
-        {loading ? (
-          <div className="rounded-[30px] bg-white p-6 text-sm text-slate-500 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,rgba(12,12,12,0.96)_0%,rgba(6,6,6,0.98)_100%)] dark:text-slate-400 dark:ring-white/10">
-            <InlineLoader label="Loading your bookings..." />
-          </div>
-        ) : tabbedBookings.length === 0 ? (
-          <div className="rounded-[30px] bg-white p-8 text-center shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,rgba(12,12,12,0.96)_0%,rgba(6,6,6,0.98)_100%)] dark:ring-white/10">
-            <span className="material-symbols-outlined text-5xl text-slate-300 dark:text-slate-600">
-              {tripTab === 'completed' ? 'task_alt' : tripTab === 'cancelled' ? 'event_busy' : 'confirmation_number'}
-            </span>
-            <h2 className="mt-4 text-xl font-bold text-slate-900 dark:text-white">
-              {tripTab === 'completed' ? 'No completed trips yet' : tripTab === 'cancelled' ? 'No cancelled bookings' : 'No upcoming bookings'}
-            </h2>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-              {tripTab === 'completed'
-                ? 'Completed trips will appear here once the backend auto-completes them after arrival.'
-                : tripTab === 'cancelled'
-                  ? 'Cancelled trips will appear here with the reason, cancelled date, and refund status.'
-                : 'Search for a route, lock your seats, and complete payment to create your next trip.'}
-            </p>
-            {tripTab === 'upcoming' ? (
-              <button
-                onClick={() => navigate(ROUTES.DASHBOARD)}
-                className="mt-5 rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-black hover:bg-primary/90"
-              >
-                Search buses
+        {/* Grid selection action bar */}
+        {gridActionBooking && (() => {
+          const { routeFrom: selFrom, routeTo: selTo } = getBookingRouteSegment(gridActionBooking);
+          const selCanCancel = (tripTab === 'upcoming' || tripTab === 'all') && isConfirmedBooking(gridActionBooking);
+          return (
+            <div className="flex items-center gap-3 bg-white ring-1 ring-slate-200 rounded-2xl px-5 py-3 shadow-sm">
+              <span className="material-symbols-outlined text-base text-slate-400 flex-shrink-0">confirmation_number</span>
+              <span className="text-sm font-bold text-slate-800 truncate flex-1">{selFrom} → {selTo}</span>
+              <button onClick={() => viewTicket(gridActionBooking)} className="flex items-center gap-1.5 rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-colors whitespace-nowrap">
+                <span className="material-symbols-outlined text-base">visibility</span>
+                View Ticket
               </button>
-            ) : null}
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex flex-col gap-3 rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200/70 dark:bg-white/[0.03] dark:ring-white/10 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                Showing {(page * PAGE_SIZE) + 1}-{Math.min(tabbedBookings.length, (page + 1) * PAGE_SIZE)} of {tabbedBookings.length} bookings
-              </p>
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                Page {page + 1} / {totalPages}
-              </p>
+              {selCanCancel && (
+                <button onClick={() => { setCancelModalBooking({ ...gridActionBooking, from: selFrom, to: selTo }); setCancelReason(''); }} className="flex items-center gap-1.5 rounded-xl bg-rose-50 border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-100 transition-colors whitespace-nowrap">
+                  Cancel
+                </button>
+              )}
+              <button onClick={() => setSelectedBookings(new Set())} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center flex-shrink-0 transition-colors">
+                <span className="material-symbols-outlined text-sm text-slate-500">close</span>
+              </button>
             </div>
+          );
+        })()}
 
-            <div className={viewMode === 'grid' ? 'grid gap-4 sm:grid-cols-1 xl:grid-cols-2' : 'space-y-4'}>
-              {paginatedBookings.map((booking, index) => {
-                const bookingId = toDisplayBookingId(booking) || `TG-${index + 1}`;
-              const { routeFrom, routeTo } = getBookingRouteSegment(booking);
-              const seats = extractSeats(booking);
-              const passengers = extractPassengers(booking);
-              const bookedAt = booking?.bookedAt || booking?.createdAt || booking?.bookingTime;
-              const amount = Number(booking?.payableAmount ?? booking?.totalAmount ?? booking?.amount ?? 0);
-              const busName = getBookingBusName(booking);
-              const scheduleLabel = getBookingScheduleLabel(booking);
-              const scheduleId = getScheduleId(booking);
-              const reviewableTrip = reviewableByScheduleId.get(scheduleId);
-              const displayStatus = booking?.__displayStatus || getDisplayStatus(booking, pendingPayment);
-              const canRateTrip = tripTab === 'completed' && reviewableTrip && !reviewableTrip.alreadyRated;
-              const canCancelBooking = tripTab === 'upcoming' && isConfirmedBooking(booking);
-                return (
-                  <div key={`${bookingId}-${index}`} className="rounded-[24px] md:rounded-[30px] bg-white shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,rgba(12,12,12,0.96)_0%,rgba(6,6,6,0.98)_100%)] dark:ring-white/10 overflow-hidden">
-                  {/* Mobile card (RedBus style) */}
-                  <div className="md:hidden">
-                    <div className="p-4">
-                      {/* Row 1: Bus + Status */}
-                      <div className="flex items-center justify-between gap-2 mb-3">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="flex-shrink-0 w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center">
-                            <span className="material-symbols-outlined text-primary text-base">directions_bus</span>
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{busName || 'Bus'}</p>
-                            <p className="text-[10px] text-slate-500 dark:text-slate-400">{bookingId}</p>
-                          </div>
+        {/* Table card */}
+        <div className="rounded-2xl bg-white ring-1 ring-slate-200 overflow-hidden shadow-sm">
+          {loading ? (
+            <div className="p-10 flex justify-center">
+              <InlineLoader label="Loading your bookings..." />
+            </div>
+          ) : tabbedBookings.length === 0 ? (
+            <div className="p-12 text-center">
+              <span className="material-symbols-outlined text-5xl text-slate-300">
+                {tripTab === 'completed' ? 'task_alt' : tripTab === 'cancelled' ? 'event_busy' : 'confirmation_number'}
+              </span>
+              <h2 className="mt-4 text-lg font-bold text-slate-900">
+                {tripTab === 'completed' ? 'No completed trips yet' : tripTab === 'cancelled' ? 'No cancelled bookings' : tripTab === 'all' ? 'No bookings yet' : 'No upcoming bookings'}
+              </h2>
+              <p className="mt-2 text-sm text-slate-500 max-w-sm mx-auto">
+                {tripTab === 'completed'
+                  ? 'Completed trips will appear here once the backend auto-completes them.'
+                  : tripTab === 'cancelled'
+                    ? 'Cancelled trips will appear here with refund status.'
+                    : 'Search for a route and complete payment to create your first trip.'}
+              </p>
+              {(tripTab === 'upcoming' || tripTab === 'all') && (
+                <button
+                  onClick={() => navigate(ROUTES.DASHBOARD)}
+                  className="mt-5 rounded-2xl bg-[#002046] px-6 py-3 text-sm font-bold text-white hover:bg-[#001533] transition-colors"
+                >
+                  Search buses
+                </button>
+              )}
+            </div>
+          ) : viewMode === 'grid' ? (
+            <>
+              <div className="p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {paginatedBookings.map((booking, index) => {
+                  const bookingId = toDisplayBookingId(booking) || `TG-${index + 1}`;
+                  const { routeFrom, routeTo } = getBookingRouteSegment(booking);
+                  const amount = Number(booking?.payableAmount ?? booking?.totalAmount ?? booking?.amount ?? 0);
+                  const busName = getBookingBusName(booking);
+                  const scheduleLabel = getBookingScheduleLabel(booking);
+                  const displayStatus = booking?.__displayStatus || getDisplayStatus(booking, pendingPayment);
+
+                  const upper = String(displayStatus).toUpperCase();
+                  const dotClass = ['CONFIRMED', 'PAYMENT_SUCCESSFUL'].includes(upper) ? 'bg-emerald-500'
+                    : upper === 'COMPLETED' ? 'bg-sky-500'
+                    : upper === 'CANCELLED' ? 'bg-rose-500' : 'bg-amber-500';
+                  const statusBadgeClass = ['CONFIRMED', 'PAYMENT_SUCCESSFUL'].includes(upper) ? 'bg-emerald-50 text-emerald-700'
+                    : upper === 'COMPLETED' ? 'bg-sky-50 text-sky-700'
+                    : upper === 'CANCELLED' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700';
+                  const statusLabel = upper === 'PAYMENT_SUCCESSFUL' ? 'Paid'
+                    : upper === 'PAYMENT_RECEIVED' ? 'Received' : toTitleCase(displayStatus);
+                  const gridCanCancel = (tripTab === 'upcoming' || tripTab === 'all') && isConfirmedBooking(booking);
+                  const { routeFrom: gFrom, routeTo: gTo } = getBookingRouteSegment(booking);
+                  const isGridSelected = selectedBookings.has(bookingId);
+
+                  return (
+                    <div key={`${bookingId}-${index}`} onClick={() => toggleSelect(bookingId)} className={`rounded-xl ring-1 p-4 hover:shadow-md transition-all cursor-pointer ${isGridSelected ? 'bg-slate-50 ring-[#002046]/40 shadow-sm' : 'bg-white ring-slate-200'}`}>
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-slate-900 text-sm truncate">{routeFrom} → {routeTo}</p>
+                          <p className="text-xs text-slate-400 mt-0.5 truncate">{busName || bookingId}</p>
                         </div>
-                        <span className={`flex-shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold ${getStatusClass(displayStatus)}`}>
-                          {displayStatus === 'PAYMENT_SUCCESSFUL' ? 'PAID' : displayStatus === 'PAYMENT_RECEIVED' ? 'RECEIVED' : displayStatus}
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold flex-shrink-0 ${statusBadgeClass}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />
+                          {statusLabel}
                         </span>
                       </div>
-
-                      {/* Row 2: Route + Amount */}
-                      <div className="flex items-center justify-between mb-3 bg-slate-50 dark:bg-white/[0.04] rounded-xl px-3 py-2.5">
-                        <div className="text-center">
-                          <p className="text-base font-extrabold text-slate-900 dark:text-white">{routeFrom}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-slate-400 truncate max-w-[130px]">{scheduleLabel !== '--' ? scheduleLabel : bookingId}</p>
+                          <p className="text-base font-black text-slate-900 mt-0.5">₹{amount.toLocaleString()}</p>
                         </div>
-                        <div className="flex-1 flex flex-col items-center px-2">
-                          <div className="relative h-px w-full bg-slate-300 dark:bg-white/10">
-                            <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-primary/40 ring-2 ring-primary/80" />
-                          </div>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-base font-extrabold text-slate-900 dark:text-white">{routeTo}</p>
-                        </div>
-                      </div>
-
-                      {/* Row 3: Chips (seats, travelers, amount) */}
-                      <div className="flex items-center gap-2 flex-wrap mb-3">
-                        {seats.length > 0 && (
-                          <span className="rounded-full bg-slate-100 dark:bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200">
-                            Seats: {seats.join(', ')}
-                          </span>
-                        )}
-                        <span className="rounded-full bg-slate-100 dark:bg-white/[0.06] px-2.5 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200">
-                          {passengers.length || seats.length || 1} traveler{(passengers.length || seats.length || 1) !== 1 ? 's' : ''}
-                        </span>
-                        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-black text-primary">₹{amount}</span>
-                      </div>
-
-                      {/* Row 4: Schedule */}
-                      {scheduleLabel && scheduleLabel !== '--' && (
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-3">{scheduleLabel}</p>
-                      )}
-
-                      {/* Cancelled details */}
-                      {String(booking?.status || '').toUpperCase() === 'CANCELLED' && (
-                        <div className="mb-3 rounded-xl bg-rose-50 dark:bg-rose-500/10 px-3 py-2.5 text-xs space-y-1">
-                          <div className="flex justify-between"><span className="text-rose-600 dark:text-rose-300">Cancelled by</span><span className="font-semibold text-rose-700 dark:text-rose-200">{getCancelledByLabel(booking?.cancelledBy)}</span></div>
-                          <div className="flex justify-between"><span className="text-rose-600 dark:text-rose-300">Refund</span><span className="font-semibold text-rose-700 dark:text-rose-200">₹{Number(booking?.refundAmount ?? 0)} · {getRefundStatusMeta(booking?.refundStatus).label}</span></div>
-                        </div>
-                      )}
-
-                      {/* Passengers */}
-                      {passengers.length > 0 && (
-                        <div className="mb-3 space-y-1.5">
-                          {passengers.map((item, pi) => (
-                            <div key={`m-${bookingId}-p-${pi}`} className="flex items-center justify-between rounded-xl bg-slate-50 dark:bg-white/[0.03] px-3 py-2">
-                              <div>
-                                <p className="text-xs font-semibold text-slate-900 dark:text-white">{[toTitleCase(item?.firstName), toTitleCase(item?.lastName)].filter(Boolean).join(' ') || `Traveler ${pi + 1}`}</p>
-                                <p className="text-[10px] text-slate-500">{item?.age ?? '--'} · {item?.gender || '--'}</p>
-                              </div>
-                              <span className="text-[11px] font-bold bg-slate-100 dark:bg-white/10 px-2 py-1 rounded-lg text-slate-700 dark:text-slate-200">Seat {item?.seatNumber || '--'}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => downloadTicket(booking)} className="flex-1 rounded-xl bg-primary px-3 py-2.5 text-xs font-bold text-black hover:bg-primary/90 text-center">
-                          Download Ticket
-                        </button>
-                        {canRateTrip && (
-                          <button onClick={() => setReviewModalBooking({ ...booking, scheduleId, from: routeFrom, to: routeTo })} className="rounded-xl bg-amber-100 dark:bg-amber-500/15 px-3 py-2.5 text-xs font-bold text-amber-800 dark:text-amber-200">
-                            ⭐ Rate
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button onClick={(e) => { e.stopPropagation(); viewTicket(booking); }} title="View Ticket" className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200 transition-colors">
+                            <span className="material-symbols-outlined text-sm">visibility</span>
                           </button>
-                        )}
-                        {canCancelBooking && (
-                          <button onClick={() => { setCancelModalBooking({ ...booking, from: routeFrom, to: routeTo }); setCancelReason(''); }} className="rounded-xl bg-red-100 dark:bg-red-500/15 px-3 py-2.5 text-xs font-bold text-red-700 dark:text-red-200">
-                            Cancel
+                          <button onClick={(e) => { e.stopPropagation(); downloadTicket(booking); }} title="Download Ticket" className="w-8 h-8 rounded-lg bg-[#002046] text-white flex items-center justify-center hover:bg-[#001533] transition-colors">
+                            <span className="material-symbols-outlined text-sm">download</span>
                           </button>
-                        )}
+                          {gridCanCancel && (
+                            <button onClick={(e) => { e.stopPropagation(); setCancelModalBooking({ ...booking, from: gFrom, to: gTo }); setCancelReason(''); }} className="flex items-center gap-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 px-2 h-8 text-xs font-semibold hover:bg-rose-100 transition-colors whitespace-nowrap">
+                              Cancel
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  );
+                })}
+              </div>
+              <div className="border-t border-slate-100 px-5 py-3.5 flex items-center justify-between gap-4">
+                <p className="text-sm text-slate-400">
+                  Showing {(page * PAGE_SIZE) + 1}–{Math.min(filteredBookings.length, (page + 1) * PAGE_SIZE)} of {filteredBookings.length}{activeFilterCount > 0 ? ' (filtered)' : ''}
+                </p>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30 transition-colors">
+                    <span className="material-symbols-outlined text-sm">chevron_left</span>
+                  </button>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const pageNum = totalPages <= 5 ? i : Math.max(0, Math.min(totalPages - 5, page - 2)) + i;
+                    return (
+                      <button key={pageNum} onClick={() => setPage(pageNum)} className={`w-8 h-8 rounded-lg text-sm font-semibold transition-colors ${page === pageNum ? 'bg-[#002046] text-white' : 'text-slate-500 hover:bg-slate-100'}`}>{pageNum + 1}</button>
+                    );
+                  })}
+                  <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30 transition-colors">
+                    <span className="material-symbols-outlined text-sm">chevron_right</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {selectedBookings.size > 0 && (
+                <div className="flex items-center gap-2 bg-[#002046] text-white px-5 py-3 border-b border-white/10 flex-wrap">
+                  {listActionBooking && (
+                    <button
+                      onClick={() => viewTicket(listActionBooking)}
+                      className="flex items-center gap-1.5 rounded-lg bg-white/15 hover:bg-white/25 px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap"
+                    >
+                      <span className="material-symbols-outlined text-sm">visibility</span>
+                      View Ticket
+                    </button>
+                  )}
+                  {listActionBooking && (tripTab === 'upcoming' || tripTab === 'all') && isConfirmedBooking(listActionBooking) && (() => {
+                    const { routeFrom: lf, routeTo: lt } = getBookingRouteSegment(listActionBooking);
+                    return (
+                      <button
+                        onClick={() => { setCancelModalBooking({ ...listActionBooking, from: lf, to: lt }); setCancelReason(''); }}
+                        className="flex items-center gap-1.5 rounded-lg bg-rose-500/70 hover:bg-rose-500 px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap"
+                      >
+                        <span className="material-symbols-outlined text-sm">cancel</span>
+                        Cancel
+                      </button>
+                    );
+                  })()}
+                  <button
+                    onClick={async () => {
+                      for (const booking of paginatedBookings) {
+                        const id = toDisplayBookingId(booking) || '';
+                        if (selectedBookings.has(id)) await downloadTicket(booking);
+                      }
+                    }}
+                    className="flex items-center gap-1.5 rounded-lg bg-white text-[#002046] px-3 py-1.5 text-xs font-bold hover:bg-slate-100 transition-colors whitespace-nowrap"
+                  >
+                    <span className="material-symbols-outlined text-sm">download</span>
+                    Download Tickets
+                  </button>
+                  <button
+                    onClick={() => setSelectedBookings(new Set())}
+                    className="ml-auto flex items-center gap-1 rounded-lg bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs font-semibold transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-sm">close</span>
+                  </button>
+                </div>
+              )}
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/80">
+                      <th className="w-12 px-4 py-3.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedBookings.size === paginatedBookings.length && paginatedBookings.length > 0}
+                          onChange={() => {
+                            if (selectedBookings.size === paginatedBookings.length && paginatedBookings.length > 0) {
+                              setSelectedBookings(new Set());
+                            } else {
+                              setSelectedBookings(new Set(paginatedBookings.map((b, i) => toDisplayBookingId(b) || String(i))));
+                            }
+                          }}
+                          className="rounded border-slate-300 accent-[#002046] cursor-pointer"
+                        />
+                      </th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Booking ID</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Trip</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">Date</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden lg:table-cell">Bus Type</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Fare</th>
+                      <th className="px-4 py-3.5 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {paginatedBookings.map((booking, index) => {
+                      const bookingId = toDisplayBookingId(booking) || `TG-${index + 1}`;
+                      const { routeFrom, routeTo } = getBookingRouteSegment(booking);
+                      const seats = extractSeats(booking);
+                      const passengers = extractPassengers(booking);
+                      const amount = Number(booking?.payableAmount ?? booking?.totalAmount ?? booking?.amount ?? 0);
+                      const busName = getBookingBusName(booking);
+                      const scheduleLabel = getBookingScheduleLabel(booking);
+                      const scheduleId = getScheduleId(booking);
+                      const reviewableTrip = reviewableByScheduleId.get(scheduleId);
+                      const displayStatus = booking?.__displayStatus || getDisplayStatus(booking, pendingPayment);
+                      const canRateTrip = (tripTab === 'completed' || tripTab === 'all') && reviewableTrip && !reviewableTrip.alreadyRated;
+                      const canCancelBooking = (tripTab === 'upcoming' || tripTab === 'all') && isConfirmedBooking(booking);
+                      const isCancelled = String(booking?.status || '').toUpperCase() === 'CANCELLED';
+                      const busType = booking?.selectedType || booking?.busType || booking?.bus?.type || 'Standard';
+                      const isSelected = selectedBookings.has(bookingId);
 
-                  {/* Desktop card (original design) */}
-                  <div className="hidden md:block p-6">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h2 className="text-xl font-black text-slate-900 dark:text-white">{routeFrom} to {routeTo}</h2>
-                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusClass(displayStatus)}`}>
-                          {displayStatus === 'PAYMENT_SUCCESSFUL' ? 'PAYMENT SUCCESSFUL' : displayStatus === 'PAYMENT_RECEIVED' ? 'PAYMENT RECEIVED' : displayStatus}
-                        </span>
-                      </div>
-                      {busName ? <p className="mt-2 text-sm font-semibold text-slate-700 dark:text-slate-200">{busName}</p> : null}
-                      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Booking ID: {bookingId}</p>
-                      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Booked on {formatDateTime(bookedAt)}</p>
-                    </div>
-                    <div className="rounded-2xl bg-primary/10 px-4 py-3 text-right dark:bg-primary/12 dark:ring-1 dark:ring-primary/20">
-                      <p className="text-xs uppercase tracking-[0.18em] text-primary/80">Amount paid</p>
-                      <p className="mt-1 text-2xl font-black text-slate-900 dark:text-white">₹{amount}</p>
-                    </div>
-                  </div>
+                      const upper = String(displayStatus).toUpperCase();
+                      const dotClass = ['CONFIRMED', 'PAYMENT_SUCCESSFUL'].includes(upper) ? 'bg-emerald-500'
+                        : upper === 'COMPLETED' ? 'bg-sky-500'
+                        : upper === 'CANCELLED' ? 'bg-rose-500' : 'bg-amber-500';
+                      const statusBadgeClass = ['CONFIRMED', 'PAYMENT_SUCCESSFUL'].includes(upper) ? 'bg-emerald-50 text-emerald-700'
+                        : upper === 'COMPLETED' ? 'bg-sky-50 text-sky-700'
+                        : upper === 'CANCELLED' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700';
+                      const statusLabel = upper === 'PAYMENT_SUCCESSFUL' ? 'Paid'
+                        : upper === 'PAYMENT_RECEIVED' ? 'Received' : toTitleCase(displayStatus);
 
-                  <div className="mt-5 grid gap-4 md:grid-cols-3">
-                    <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-white/[0.03] dark:ring-white/10">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Seats</p>
-                      <p className="mt-2 text-base font-bold text-slate-900 dark:text-white">{seats.length ? seats.join(', ') : '--'}</p>
-                    </div>
-                    <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-white/[0.03] dark:ring-white/10">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Passengers</p>
-                      <p className="mt-2 text-base font-bold text-slate-900 dark:text-white">{passengers.length ? `${passengers.length} traveler(s)` : `${seats.length || 1} traveler(s)`}</p>
-                    </div>
-                    <div className="rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-white/[0.03] dark:ring-white/10">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Schedule</p>
-                      <p className="mt-2 text-base font-bold text-slate-900 dark:text-white">{scheduleLabel}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-white/[0.03] dark:ring-white/10">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Passenger Details</p>
-                        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Seat number, traveler name, age, gender, and phone.</p>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {canRateTrip ? (
-                          <button onClick={() => setReviewModalBooking({ ...booking, scheduleId, from: routeFrom, to: routeTo })} className="rounded-xl bg-amber-100 px-4 py-2 text-sm font-bold text-amber-800 hover:bg-amber-200 dark:bg-amber-500/15 dark:text-amber-200 dark:hover:bg-amber-500/25">
-                            Rate this trip
-                          </button>
-                        ) : null}
-                        {canCancelBooking ? (
-                          <button onClick={() => { setCancelModalBooking({ ...booking, from: routeFrom, to: routeTo }); setCancelReason(''); }} className="rounded-xl bg-red-100 px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-200 dark:bg-red-500/15 dark:text-red-200 dark:hover:bg-red-500/25">
-                            Cancel
-                          </button>
-                        ) : null}
-                        <button onClick={() => downloadTicket(booking)} className="rounded-xl bg-primary px-4 py-2 text-sm font-bold text-black hover:bg-primary/90">
-                          Download Ticket
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 space-y-3">
-                      {String(booking?.status || '').toUpperCase() === 'CANCELLED' ? (
-                        <div className="rounded-2xl bg-white px-4 py-4 ring-1 ring-slate-200/70 dark:bg-black/40 dark:ring-white/10">
-                          <div className="grid gap-3 md:grid-cols-2">
-                            <div>
-                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Cancelled By</p>
-                              <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{getCancelledByLabel(booking?.cancelledBy)}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Cancelled On</p>
-                              <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{formatDateTime(getCancelledTimestamp(booking))}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Reason</p>
-                              <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">{booking?.cancelReason || '--'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Refund Amount</p>
-                              <p className="mt-1 text-sm font-semibold text-slate-900 dark:text-white">₹{Number(booking?.refundAmount ?? 0)}</p>
-                            </div>
-                          </div>
-                          <div className="mt-4">
-                            <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getRefundStatusMeta(booking?.refundStatus).className}`}>
-                              Refund Status: {getRefundStatusMeta(booking?.refundStatus).label}
+                      return (
+                        <tr key={`${bookingId}-${index}`} className={`group transition-colors ${isSelected ? 'bg-blue-50/60' : 'hover:bg-slate-50/70'}`}>
+                          <td className="px-4 py-4 text-center">
+                            <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(bookingId)} className="rounded border-slate-300 accent-[#002046] cursor-pointer" />
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className="text-sm font-mono font-semibold text-slate-600">{bookingId}</span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadgeClass}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotClass}`} />
+                              {statusLabel}
                             </span>
-                          </div>
-                        </div>
-                      ) : null}
-                      {passengers.length ? passengers.map((item, passengerIndex) => (
-                        <div key={`${bookingId}-passenger-${passengerIndex}`} className="rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200/70 dark:bg-black/40 dark:ring-white/10">
-                          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                            <div>
-                              <p className="font-semibold text-slate-900 dark:text-white">{[toTitleCase(item?.firstName), toTitleCase(item?.lastName)].filter(Boolean).join(' ') || `Traveler ${passengerIndex + 1}`}</p>
-                              <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                                Age: {item?.age ?? '--'} • Gender: {item?.gender || '--'} • Phone: {item?.phone || '--'}
-                              </p>
+                            {isCancelled && <p className="text-[10px] text-rose-400 mt-1 whitespace-nowrap">by {getCancelledByLabel(booking?.cancelledBy)}</p>}
+                          </td>
+                          <td className="px-4 py-4 min-w-[180px]">
+                            <p className="text-sm font-bold text-slate-900">{routeFrom} → {routeTo}</p>
+                            <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[200px]">
+                              {busName || '—'}{seats.length > 0 ? ` · Seat ${seats.join(', ')}` : ''}
+                            </p>
+                            {isCancelled && <p className="text-[10px] text-slate-400 mt-0.5">Refund ₹{Number(booking?.refundAmount ?? 0)} · {getRefundStatusMeta(booking?.refundStatus).label}</p>}
+                          </td>
+                          <td className="px-4 py-4 hidden md:table-cell">
+                            <p className="text-sm text-slate-600 whitespace-nowrap max-w-[160px] truncate">{scheduleLabel !== '--' ? scheduleLabel : '—'}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">{passengers.length || seats.length || 1} pax</p>
+                          </td>
+                          <td className="px-4 py-4 hidden lg:table-cell">
+                            <span className="text-sm text-slate-500 capitalize">{String(busType).toLowerCase()}</span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className="text-sm font-bold text-slate-900">₹{amount.toLocaleString()}</span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex items-center justify-end gap-1">
+                              <button onClick={() => viewTicket(booking)} title="View Ticket" className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200 transition-colors">
+                                <span className="material-symbols-outlined text-sm">visibility</span>
+                              </button>
+                              <button onClick={() => downloadTicket(booking)} title="Download Ticket" className="w-8 h-8 rounded-lg bg-[#002046] text-white flex items-center justify-center hover:bg-[#001533] transition-colors">
+                                <span className="material-symbols-outlined text-sm">download</span>
+                              </button>
+                              {canRateTrip && (
+                                <button onClick={() => setReviewModalBooking({ ...booking, scheduleId, from: routeFrom, to: routeTo })} title="Rate this trip" className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center hover:bg-amber-100 transition-colors">
+                                  <span className="material-symbols-outlined text-sm">star</span>
+                                </button>
+                              )}
+                              {canCancelBooking && (
+                                <button onClick={() => { setCancelModalBooking({ ...booking, from: routeFrom, to: routeTo }); setCancelReason(''); }} className="flex items-center gap-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 px-2.5 h-8 text-xs font-semibold hover:bg-rose-100 transition-colors whitespace-nowrap">
+                                  Cancel
+                                </button>
+                              )}
                             </div>
-                            <div className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 dark:bg-white/10 dark:text-slate-200">
-                              Seat {item?.seatNumber || '--'}
-                            </div>
-                          </div>
-                        </div>
-                      )) : (
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Passenger details will appear here once the booking API returns traveler information for this booking.</p>
-                      )}
-                    </div>
-                  </div>
-                  </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="border-t border-slate-100 px-5 py-3.5 flex items-center justify-between gap-4">
+                <p className="text-sm text-slate-400">
+                  Showing {(page * PAGE_SIZE) + 1}–{Math.min(filteredBookings.length, (page + 1) * PAGE_SIZE)} of {filteredBookings.length}{activeFilterCount > 0 ? ' (filtered)' : ''}
+                </p>
+                <div className="flex items-center gap-1">
+                  <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30 transition-colors">
+                    <span className="material-symbols-outlined text-sm">chevron_left</span>
+                  </button>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const pageNum = totalPages <= 5 ? i : Math.max(0, Math.min(totalPages - 5, page - 2)) + i;
+                    return (
+                      <button key={pageNum} onClick={() => setPage(pageNum)} className={`w-8 h-8 rounded-lg text-sm font-semibold transition-colors ${page === pageNum ? 'bg-[#002046] text-white' : 'text-slate-500 hover:bg-slate-100'}`}>{pageNum + 1}</button>
+                    );
+                  })}
+                  <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30 transition-colors">
+                    <span className="material-symbols-outlined text-sm">chevron_right</span>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
 
-        {!loading && tabbedBookings.length > 0 ? (
-          <PaginationControls
-            page={page}
-            pageSize={PAGE_SIZE}
-            totalItems={tabbedBookings.length}
-            onPageChange={setPage}
-            itemLabel="bookings"
-          />
-        ) : null}
       </div>
+      <FilterModal
+        open={filterOpen}
+        filters={pendingFilters}
+        onChange={setPendingFilters}
+        onClose={() => setFilterOpen(false)}
+        onApply={() => { setActiveFilters(pendingFilters); setFilterOpen(false); }}
+        onReset={() => { setPendingFilters(EMPTY_FILTERS); setActiveFilters(EMPTY_FILTERS); setFilterOpen(false); }}
+      />
       {reviewModalBooking ? (
         <RatingModal
           booking={reviewModalBooking}

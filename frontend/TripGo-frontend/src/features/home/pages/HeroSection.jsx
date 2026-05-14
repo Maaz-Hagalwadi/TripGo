@@ -2,24 +2,68 @@ import SearchBar from '../../../shared/components/ui/SearchBar';
 
 const HeroSection = () => {
   return (
-    <section className="relative w-full h-[700px] flex items-center justify-center overflow-visible">
-      <div 
-        className="absolute inset-0 bg-cover bg-center" 
+    <section
+      className="relative w-full"
+      style={{ background: 'linear-gradient(180deg, #0d1117 0%, #0d1f3c 60%, #0a2847 100%)' }}
+    >
+      {/* Subtle dot texture */}
+      <div
+        className="absolute inset-0 pointer-events-none"
         style={{
-          backgroundImage: "linear-gradient(rgba(5, 5, 5, 0.7), rgba(5, 5, 5, 0.9)), url('https://lh3.googleusercontent.com/aida-public/AB6AXuBaWdLvirFLq9gQIzc79yRfhZecULRAzSPQ-Eev3IdORsc2x4lKQEngg0b6iKpxyeUMQ3F3ndbAaochZqTN2xApDbxj_p_cT4_9gOtcKGLnxNMztUuDqUAxUgkV3wbpWpD8twOaCcLb8D_afIznu8gxsBjvhKgjQjMYKn5mpo-cqf4sRm8EXrrYZ9PM2LGiIp1wpostxaih0VJ2ZAvymjAewnAa1CusAzdfLA84hhKCwvxAteOK4ie_JUSDj4zUqp_62VUoc0FM7qvk')"
+          backgroundImage: 'radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
         }}
       />
-      
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <h1 className="text-3xl md:text-5xl lg:text-7xl font-extrabold text-white mb-6 md:mb-8 tracking-tight leading-tight">
-          Your Journey, <span className="text-primary">Simplified.</span>
-        </h1>
+      {/* Soft glow — neutral blue, not cyan */}
+      <div className="absolute top-0 left-1/3 w-96 h-72 bg-blue-900/30 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 right-1/4 w-72 h-72 bg-slate-700/20 rounded-full blur-3xl pointer-events-none" />
 
-        <p className="text-sm md:text-xl lg:text-2xl text-slate-300 mb-8 md:mb-12 max-w-3xl mx-auto font-medium">
-          Book premium bus tickets across 500+ cities. Experience comfort at every mile.
-        </p>
-        
-        <SearchBar showQuickDates={false} persistDraft={false} />
+      <div className="relative z-10 max-w-screen-xl mx-auto px-4 sm:px-6 pt-14 pb-16">
+
+        {/* Headline */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-2 bg-white/8 border border-white/15 rounded-full px-4 py-1.5 mb-6 backdrop-blur-sm">
+            <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+            <span className="text-white/80 text-xs font-semibold uppercase tracking-widest">
+              Trusted by 50,000+ Travelers
+            </span>
+          </div>
+
+          <h1 className="text-4xl md:text-5xl lg:text-[3.4rem] font-black text-white leading-tight tracking-tight mb-4">
+            Book Bus Tickets{' '}
+            <span className="text-white/90 italic">Instantly</span>
+          </h1>
+
+          <p className="text-slate-400 text-base md:text-lg max-w-xl mx-auto font-medium">
+            500+ cities &middot; 1,000+ bus operators &middot; Best prices guaranteed
+          </p>
+        </div>
+
+        {/* Search widget */}
+        <div className="max-w-5xl mx-auto">
+          <div
+            className="rounded-2xl border border-white/10 shadow-[0_8px_60px_rgba(0,0,0,0.6)]"
+            style={{ background: 'rgba(255,255,255,0.03)', backdropFilter: 'blur(10px)' }}
+          >
+            <SearchBar showQuickDates={true} persistDraft={false} submitLabel="Search Buses" />
+          </div>
+        </div>
+
+        {/* Stats row — no cyan */}
+        <div className="flex flex-wrap justify-center gap-x-10 gap-y-4 mt-10">
+          {[
+            { value: '500+', label: 'Cities' },
+            { value: '50K+', label: 'Happy Travelers' },
+            { value: '1000+', label: 'Bus Operators' },
+            { value: '4.8 ★', label: 'Avg Rating' },
+          ].map((s, i) => (
+            <div key={i} className="text-center">
+              <div className="text-xl font-extrabold text-white">{s.value}</div>
+              <div className="text-[11px] text-slate-500 mt-0.5 uppercase tracking-widest">{s.label}</div>
+            </div>
+          ))}
+        </div>
+
       </div>
     </section>
   );

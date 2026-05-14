@@ -1,32 +1,76 @@
-import { API_BASE_URL } from '../../../config/env';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import TripGoIcon from '../../../assets/icons/TripGoIcon';
+import { API_BASE_URL } from '../../../config/env';
+
+const BUS_IMG = 'https://lh3.googleusercontent.com/aida-public/AB6AXuBn8Xu6YxgTm5MyWzn7d6Rl_cxu8YTmtjqgy0nYJP5Vh2kEeVlUNjVps6hzkLOTjgVOKBP4GDXQpbxUUvUkrqOwENA_tYK7J8Skr9kxzSSGwX-CUzXUXwjOS3XFejwT18N285GQidhRXHAQ7sWjw_I8-slj3CJDnoWDDgf8gmOchEhN7NqncJYuVZwWl8iXr63k-nmF3uAm0prUmXBg0fIKzG_IwSq0gf3scYz5nXofG_ywlfMF8A8O44VsvjWbW3fv9jgpHFEGZ1WD';
+
+const inputCls = (err) =>
+  `w-full pl-12 pr-4 py-3.5 bg-[#fbfcfe] border rounded-lg text-sm text-[#111827] placeholder:text-[#8a94a6] focus:ring-4 focus:ring-[#0B1F3A]/10 focus:border-[#0B1F3A] transition-all outline-none ${
+    err ? 'border-[#B42318]' : 'border-[#d8dde8]'
+  }`;
+
+const textareaCls = (err) =>
+  `w-full pl-12 pr-4 py-3.5 bg-[#fbfcfe] border rounded-lg text-sm text-[#111827] placeholder:text-[#8a94a6] focus:ring-4 focus:ring-[#0B1F3A]/10 focus:border-[#0B1F3A] transition-all outline-none resize-none ${
+    err ? 'border-[#B42318]' : 'border-[#d8dde8]'
+  }`;
+
+const FieldError = ({ children }) => (
+  children ? <p className="text-[#B42318] text-xs">{children}</p> : null
+);
 
 const DesktopOperatorForm = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    password: '',
-    confirmPassword: '',
-    operatorName: '',
-    shortName: '',
-    contactPhone: '',
-    contactEmail: '',
-    address: '',
-    agreeToTerms: false
+    firstName: '', lastName: '', email: '', phone: '',
+    password: '', confirmPassword: '',
+    operatorName: '', shortName: '', contactPhone: '', contactEmail: '', address: '',
+    agreeToTerms: false,
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
 
-  const registerOperator = async (formData) => {
+  const set = (field) => (e) => {
+    const val = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    setFormData((p) => ({ ...p, [field]: val }));
+    setErrors((p) => ({ ...p, [field]: '' }));
+  };
+
+  const validateForm = () => {
+    const e = {};
+    if (!formData.firstName.trim()) e.firstName = 'First name is required';
+    if (!formData.lastName.trim()) e.lastName = 'Last name is required';
+    if (!formData.email.trim()) e.email = 'Email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) e.email = 'Enter a valid email';
+    if (!formData.phone.trim()) e.phone = 'Phone is required';
+    else if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ''))) e.phone = 'Must be 10 digits';
+    if (!formData.password.trim()) e.password = 'Password is required';
+    else if (!/^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(formData.password)) {
+      e.password = 'Min 8 chars with letters, numbers & symbols';
+    }
+    if (!formData.confirmPassword.trim()) e.confirmPassword = 'Confirm your password';
+    else if (formData.password !== formData.confirmPassword) e.confirmPassword = 'Passwords do not match';
+    if (!formData.operatorName.trim()) e.operatorName = 'Company name is required';
+    if (!formData.shortName.trim()) e.shortName = 'Short name is required';
+    if (!formData.contactPhone.trim()) e.contactPhone = 'Contact phone is required';
+    else if (!/^\d{10}$/.test(formData.contactPhone.replace(/\D/g, ''))) e.contactPhone = 'Must be 10 digits';
+    if (!formData.contactEmail.trim()) e.contactEmail = 'Contact email is required';
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contactEmail)) e.contactEmail = 'Enter a valid email';
+    if (!formData.address.trim()) e.address = 'Address is required';
+    if (!formData.agreeToTerms) e.agreeToTerms = 'You must agree to the terms';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = async (ev) => {
+    ev.preventDefault();
+    setErrors({});
+    if (!validateForm()) return;
+    setIsLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/operators/register`, {
+      const res = await fetch(`${API_BASE_URL}/operators/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -39,22 +83,22 @@ const DesktopOperatorForm = () => {
           shortName: formData.shortName,
           contactPhone: formData.contactPhone,
           contactEmail: formData.contactEmail,
-          address: formData.address
-        })
+          address: formData.address,
+        }),
       });
 
-      if (response.ok) {
-        toast.success('Operator registration successful! Awaiting admin approval.');
+      if (res.ok) {
+        toast.success('Registration successful! Awaiting admin approval.');
         setTimeout(() => navigate('/login'), 3000);
       } else {
-        const errorText = await response.text();
+        const text = await res.text();
         try {
-          const errorObj = JSON.parse(errorText);
-          if (errorObj.message?.includes('email:')) setErrors({ email: errorObj.message.split('email: ')[1] });
-          else if (errorObj.message?.includes('phone:')) setErrors({ phone: 'Phone must be exactly 10 digits' });
-          else if (errorText.includes('Email already in use')) setErrors({ email: 'Email already in use' });
-          else if (errorText.includes('Phone already in use')) setErrors({ phone: 'Phone already in use' });
-          else toast.error(errorObj.message || 'Registration failed');
+          const obj = JSON.parse(text);
+          if (obj.message?.includes('email:')) setErrors({ email: obj.message.split('email: ')[1] });
+          else if (obj.message?.includes('phone:')) setErrors({ phone: 'Phone must be exactly 10 digits' });
+          else if (text.includes('Email already in use')) setErrors({ email: 'Email already in use' });
+          else if (text.includes('Phone already in use')) setErrors({ phone: 'Phone already in use' });
+          else toast.error(obj.message || 'Registration failed');
         } catch {
           toast.error('Registration failed. Please try again.');
         }
@@ -62,365 +106,267 @@ const DesktopOperatorForm = () => {
     } catch {
       toast.error('Network error. Please try again.');
     }
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-    
-    if (!formData.firstName.trim()) newErrors.firstName = 'First name is required';
-    if (!formData.lastName.trim()) newErrors.lastName = 'Last name is required';
-    
-    if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email address';
-    }
-    
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone number is required';
-    } else if (!/^\d{10}$/.test(formData.phone.replace(/\D/g, ''))) {
-      newErrors.phone = 'Phone must be exactly 10 digits';
-    }
-    
-    if (!formData.password.trim()) {
-      newErrors.password = 'Password is required';
-    } else {
-      const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-      if (!passwordRegex.test(formData.password)) {
-        newErrors.password = 'Password must be at least 8 characters with letters, numbers, and symbols';
-      }
-    }
-    
-    if (!formData.confirmPassword.trim()) {
-      newErrors.confirmPassword = 'Please confirm your password';
-    } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
-    }
-    
-    if (!formData.operatorName.trim()) newErrors.operatorName = 'Company name is required';
-    if (!formData.shortName.trim()) newErrors.shortName = 'Short name is required';
-    if (!formData.contactPhone.trim()) {
-      newErrors.contactPhone = 'Contact phone is required';
-    } else if (!/^\d{10}$/.test(formData.contactPhone.replace(/\D/g, ''))) {
-      newErrors.contactPhone = 'Contact phone must be exactly 10 digits';
-    }
-    if (!formData.contactEmail.trim()) {
-      newErrors.contactEmail = 'Contact email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.contactEmail)) {
-      newErrors.contactEmail = 'Please enter a valid contact email';
-    }
-    if (!formData.address.trim()) newErrors.address = 'Address is required';
-    if (!formData.agreeToTerms) newErrors.agreeToTerms = 'You must agree to the terms and conditions';
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setErrors({});
-    if (validateForm()) {
-      setIsLoading(true);
-      await registerOperator(formData);
-      setIsLoading(false);
-    }
+    setIsLoading(false);
   };
 
   return (
-    <div className="bg-deep-black text-slate-100 min-h-screen flex items-center justify-center p-4">
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] glow-accent blur-3xl"></div>
-        <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] glow-accent blur-3xl"></div>
-      </div>
-      <div className="max-w-7xl w-full bg-charcoal/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl flex flex-row min-h-[900px]">
-        <div 
-          className="flex w-1/2 relative bg-cover bg-center items-center p-12 overflow-hidden"
-          style={{
-            backgroundImage: "linear-gradient(rgba(5, 5, 5, 0.6), rgba(5, 5, 5, 0.8)), url('https://lh3.googleusercontent.com/aida-public/AB6AXuBaWdLvirFLq9gQIzc79yRfhZecULRAzSPQ-Eev3IdORsc2x4lKQEngg0b6iKpxyeUMQ3F3ndbAaochZqTN2xApDbxj_p_cT4_9gOtcKGLnxNMztUuDqUAxUgkV3wbpWpD8twOaCcLb8D_afIznu8gxsBjvhKgjQjMYKn5mpo-cqf4sRm8EXrrYZ9PM2LGiIp1wpostxaih0VJ2ZAvymjAewnAa1CusAzdfLA84hhKCwvxAteOK4ie_JUSDj4zUqp_62VUoc0FM7qvk')"
-          }}
-        >
-          <div className="relative z-10 space-y-6">
-            <div className="flex items-center gap-3 mb-12">
-              <div className="text-primary cursor-pointer" onClick={() => navigate('/')}>
-                <TripGoIcon className="w-10 h-10" />
-              </div>
-              <span 
-                className="text-3xl font-extrabold tracking-tight text-white cursor-pointer hover:text-primary transition-colors" 
-                onClick={() => navigate('/')}
-              >
-                TripGo
-              </span>
-            </div>
-            <h2 className="text-4xl lg:text-5xl font-extrabold text-white leading-tight">Partner With TripGo.</h2>
-            <p className="text-slate-300 text-lg max-w-md">Join our network of premium bus operators and expand your business reach.</p>
-            <div className="pt-8 space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary">
-                  <span className="material-symbols-outlined !text-xl">business</span>
+    <div className="min-h-screen flex bg-[#f5f7fb] text-[#111827]" style={{ fontFamily: 'Inter, sans-serif' }}>
+      <div className="hidden lg:flex lg:w-[46%] relative bg-[#121826] items-center overflow-hidden">
+        <img src={BUS_IMG} className="absolute inset-0 h-full w-full object-cover opacity-45" alt="" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(18,24,38,0.98)_0%,rgba(18,24,38,0.86)_44%,rgba(18,24,38,0.42)_100%)]" />
+        <div
+          className="absolute inset-0 opacity-25 pointer-events-none"
+          style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.32) 1px, transparent 0)', backgroundSize: '34px 34px' }}
+        />
+        <div className="absolute left-0 top-0 h-full w-1.5 bg-[#0B1F3A]" />
+
+        <div className="relative z-10 p-14 xl:p-16 max-w-xl text-white">
+          <button onClick={() => navigate('/')} className="flex items-center gap-3 mb-12">
+            <span className="h-11 w-11 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center">
+              <TripGoIcon className="w-7 h-7 text-white" />
+            </span>
+            <span className="font-black text-2xl tracking-tight text-white">TripGo</span>
+          </button>
+          <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/80 mb-6">
+            <span className="material-symbols-outlined text-[16px] text-[#D6E8FF]">directions_bus</span>
+            Operator partner registration
+          </p>
+          <h1 className="text-5xl font-bold leading-tight mb-5 text-white">
+            Bring your bus routes onto TripGo.
+          </h1>
+          <p className="text-white/72 text-lg leading-relaxed mb-9">
+            Register your company, verify your contact details, and start preparing your fleet for online bookings.
+          </p>
+          <div className="grid gap-3">
+            {[
+              { icon: 'route', title: 'Route Management', sub: 'List routes, schedules, seats, and boarding points.' },
+              { icon: 'verified_user', title: 'Admin Approval', sub: 'Operator accounts are reviewed before going live.' },
+            ].map(({ icon, title, sub }) => (
+              <div key={title} className="flex items-center gap-4 p-4 rounded-xl border border-white/10 bg-white/[0.07] backdrop-blur-sm">
+                <span className="material-symbols-outlined text-[#D6E8FF]">{icon}</span>
+                <div>
+                  <p className="text-sm font-semibold text-white">{title}</p>
+                  <p className="text-xs text-white/58 mt-0.5">{sub}</p>
                 </div>
-                <span className="text-slate-200 font-medium">Business Growth</span>
               </div>
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary">
-                  <span className="material-symbols-outlined !text-xl">analytics</span>
-                </div>
-                <span className="text-slate-200 font-medium">Advanced Analytics</span>
+            ))}
+          </div>
+          <div className="mt-10 grid grid-cols-3 gap-4 border-t border-white/10 pt-6">
+            {[
+              ['Fleet', 'tools'],
+              ['Secure', 'access'],
+              ['Live', 'routes'],
+            ].map(([value, label]) => (
+              <div key={label}>
+                <p className="text-xl font-black text-white">{value}</p>
+                <p className="text-xs text-white/52 mt-1">{label}</p>
               </div>
-            </div>
+            ))}
           </div>
         </div>
-        <div className="w-1/2 p-8 md:p-12 flex flex-col justify-center bg-deep-black/60 overflow-y-auto">
-          <div className="max-w-md w-full mx-auto">
-            <div className="mb-6">
-              <h1 className="text-3xl font-extrabold text-white mb-3">Operator Registration</h1>
-              <p className="text-slate-400">Register your bus company with TripGo.</p>
-              
-              <div className="flex gap-4 mt-4 p-3 bg-input-gray/50 rounded-xl border border-white/5">
-                <button 
-                  type="button"
-                  onClick={() => navigate('/register')}
-                  className="flex-1 py-2 px-4 bg-white/10 text-white rounded-lg font-bold text-sm hover:bg-white/20 transition-all"
-                >
-                  Regular User
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => navigate('/operator-register')}
-                  className="flex-1 py-2 px-4 bg-primary text-black rounded-lg font-bold text-sm transition-all"
-                >
-                  Bus Operator
-                </button>
-              </div>
+      </div>
+
+      <div className="w-full lg:w-[54%] flex flex-col bg-[#f5f7fb]">
+        <div className="p-8 lg:px-12 flex justify-between items-center">
+          <button onClick={() => navigate('/')} className="flex items-center gap-2 text-[#111827]">
+            <TripGoIcon className="w-7 h-7 text-[#0B1F3A] lg:hidden" />
+            <span className="font-black text-xl lg:text-2xl tracking-tight">TripGo</span>
+          </button>
+          <a href="#" className="text-sm font-semibold text-[#44474e] hover:text-[#0B1F3A] transition-colors">Support</a>
+        </div>
+
+        <div className="flex-grow flex items-center justify-center p-5 sm:p-8 lg:p-12">
+          <div className="w-full max-w-[560px] bg-white border border-[#e4e8f0] rounded-2xl shadow-[0_24px_70px_rgba(17,24,39,0.10)] p-6 sm:p-8">
+            <div className="mb-8">
+              <h2 className="text-3xl font-bold text-[#111827] mb-2">Register as operator</h2>
+              <p className="text-sm text-[#667085]">Create your partner profile and submit company details for approval.</p>
             </div>
-            
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="mb-4">
-                <h3 className="text-lg font-bold text-white mb-3">Personal Information</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">First Name</label>
-                    <input 
-                      className={`w-full px-4 py-3 bg-input-gray border ${errors.firstName ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="First Name" 
-                      type="text"
-                      value={formData.firstName}
-                      onChange={(e) => {
-                        setFormData(prev => ({ ...prev, firstName: e.target.value }));
-                        if (errors.firstName) setErrors(prev => ({ ...prev, firstName: '' }));
-                      }}
-                    />
-                    {errors.firstName && <p className="text-red-400 text-xs mt-1 ml-1">{errors.firstName}</p>}
+
+            <div className="flex p-1 bg-[#f2f4f7] rounded-xl mb-8 gap-1">
+              <button
+                type="button"
+                onClick={() => navigate('/register')}
+                className="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all text-[#667085] hover:bg-white"
+              >
+                Traveller
+              </button>
+              <button type="button" className="flex-1 py-2.5 px-4 rounded-lg text-sm font-semibold transition-all bg-white text-[#0B1F3A] shadow-sm">
+                Operator
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <p className="text-xs font-semibold text-[#8a94a6] uppercase tracking-widest">Personal Information</p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-[#111827]">First Name</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">person</span>
+                    <input className={inputCls(errors.firstName)} placeholder="John" type="text" value={formData.firstName} onChange={set('firstName')} />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Last Name</label>
-                    <input 
-                      className={`w-full px-4 py-3 bg-input-gray border ${errors.lastName ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="Last Name" 
-                      type="text"
-                      value={formData.lastName}
-                      onChange={(e) => {
-                        setFormData(prev => ({ ...prev, lastName: e.target.value }));
-                        if (errors.lastName) setErrors(prev => ({ ...prev, lastName: '' }));
-                      }}
-                    />
-                    {errors.lastName && <p className="text-red-400 text-xs mt-1 ml-1">{errors.lastName}</p>}
-                  </div>
+                  <FieldError>{errors.firstName}</FieldError>
                 </div>
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Email</label>
-                    <input 
-                      className={`w-full px-4 py-3 bg-input-gray border ${errors.email ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="Enter your email" 
-                      type="email"
-                      autoComplete="off"
-                      value={formData.email}
-                      onChange={(e) => {
-                        setFormData(prev => ({ ...prev, email: e.target.value }));
-                        if (errors.email) setErrors(prev => ({ ...prev, email: '' }));
-                      }}
-                    />
-                    {errors.email && <p className="text-red-400 text-xs mt-1 ml-1">{errors.email}</p>}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-[#111827]">Last Name</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">person</span>
+                    <input className={inputCls(errors.lastName)} placeholder="Doe" type="text" value={formData.lastName} onChange={set('lastName')} />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Phone</label>
-                    <input 
-                      className={`w-full px-4 py-3 bg-input-gray border ${errors.phone ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="10-digit number" 
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => {
-                        setFormData(prev => ({ ...prev, phone: e.target.value }));
-                        if (errors.phone) setErrors(prev => ({ ...prev, phone: '' }));
-                      }}
-                    />
-                    {errors.phone && <p className="text-red-400 text-xs mt-1 ml-1">{errors.phone}</p>}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Password</label>
-                    <div className="relative">
-                      <input 
-                        className={`w-full px-4 py-3 pr-12 bg-input-gray border ${errors.password ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                        placeholder="Enter password" 
-                        type={showPassword ? "text" : "password"}
-                        autoComplete="new-password"
-                        value={formData.password}
-                        onChange={(e) => {
-                          setFormData(prev => ({ ...prev, password: e.target.value }));
-                          if (errors.password) setErrors(prev => ({ ...prev, password: '' }));
-                        }}
-                      />
-                      <button 
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors mt-1" 
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        <span className="material-symbols-outlined">visibility</span>
-                      </button>
-                    </div>
-                    {errors.password && <p className="text-red-400 text-xs mt-1 ml-1">{errors.password}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Confirm Password</label>
-                    <input 
-                      className={`w-full px-4 py-3 bg-input-gray border ${errors.confirmPassword ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="Re-enter password" 
-                      type="password"
-                      autoComplete="new-password"
-                      value={formData.confirmPassword}
-                      onChange={(e) => {
-                        setFormData(prev => ({ ...prev, confirmPassword: e.target.value }));
-                        if (errors.confirmPassword) setErrors(prev => ({ ...prev, confirmPassword: '' }));
-                      }}
-                    />
-                    {errors.confirmPassword && <p className="text-red-400 text-xs mt-1 ml-1">{errors.confirmPassword}</p>}
-                  </div>
+                  <FieldError>{errors.lastName}</FieldError>
                 </div>
               </div>
 
-              <div className="mb-4">
-                <h3 className="text-lg font-bold text-white mb-3">Company Information</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Company Name</label>
-                    <input 
-                      className={`w-full px-4 py-3 bg-input-gray border ${errors.operatorName ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="Company Name" 
-                      type="text"
-                      value={formData.operatorName}
-                      onChange={(e) => {
-                        setFormData(prev => ({ ...prev, operatorName: e.target.value }));
-                        if (errors.operatorName) setErrors(prev => ({ ...prev, operatorName: '' }));
-                      }}
-                    />
-                    {errors.operatorName && <p className="text-red-400 text-xs mt-1 ml-1">{errors.operatorName}</p>}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-[#111827]">Email Address</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">mail</span>
+                    <input className={inputCls(errors.email)} placeholder="name@example.com" type="email" value={formData.email} onChange={set('email')} />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Short Name</label>
-                    <input 
-                      className={`w-full px-4 py-3 bg-input-gray border ${errors.shortName ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="Short Name" 
-                      type="text"
-                      value={formData.shortName}
-                      onChange={(e) => {
-                        setFormData(prev => ({ ...prev, shortName: e.target.value }));
-                        if (errors.shortName) setErrors(prev => ({ ...prev, shortName: '' }));
-                      }}
-                    />
-                    {errors.shortName && <p className="text-red-400 text-xs mt-1 ml-1">{errors.shortName}</p>}
-                  </div>
+                  <FieldError>{errors.email}</FieldError>
                 </div>
-                <div className="grid grid-cols-2 gap-3 mt-3">
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Contact Phone</label>
-                    <input 
-                      className={`w-full px-4 py-3 bg-input-gray border ${errors.contactPhone ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="10-digit number" 
-                      type="tel"
-                      value={formData.contactPhone}
-                      onChange={(e) => {
-                        setFormData(prev => ({ ...prev, contactPhone: e.target.value }));
-                        if (errors.contactPhone) setErrors(prev => ({ ...prev, contactPhone: '' }));
-                      }}
-                    />
-                    {errors.contactPhone && <p className="text-red-400 text-xs mt-1 ml-1">{errors.contactPhone}</p>}
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-[#111827]">Phone Number</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">call</span>
+                    <input className={inputCls(errors.phone)} placeholder="10-digit number" type="tel" value={formData.phone} onChange={set('phone')} />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Contact Email</label>
-                    <input 
-                      className={`w-full px-4 py-3 bg-input-gray border ${errors.contactEmail ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none`} 
-                      placeholder="Enter contact email" 
-                      type="email"
-                      value={formData.contactEmail}
-                      onChange={(e) => {
-                        setFormData(prev => ({ ...prev, contactEmail: e.target.value }));
-                        if (errors.contactEmail) setErrors(prev => ({ ...prev, contactEmail: '' }));
-                      }}
-                    />
-                    {errors.contactEmail && <p className="text-red-400 text-xs mt-1 ml-1">{errors.contactEmail}</p>}
-                  </div>
-                </div>
-                <div className="space-y-2 mt-3">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">Address</label>
-                  <textarea 
-                    className={`w-full px-4 py-3 bg-input-gray border ${errors.address ? 'border-red-500' : 'border-white/5'} rounded-2xl text-white placeholder-slate-500 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none resize-none`} 
-                    placeholder="Enter company address" 
-                    rows="2"
-                    value={formData.address}
-                    onChange={(e) => {
-                      setFormData(prev => ({ ...prev, address: e.target.value }));
-                      if (errors.address) setErrors(prev => ({ ...prev, address: '' }));
-                    }}
-                  />
-                  {errors.address && <p className="text-red-400 text-xs mt-1 ml-1">{errors.address}</p>}
+                  <FieldError>{errors.phone}</FieldError>
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 py-2">
-                <input 
-                  className="w-5 h-5 rounded border-white/10 bg-input-gray text-primary focus:ring-primary focus:ring-offset-deep-black transition-all cursor-pointer mt-1" 
-                  id="terms" 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-[#111827]">Password</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">lock</span>
+                    <input className={`${inputCls(errors.password)} pr-12`} placeholder="Enter password" type={showPassword ? 'text' : 'password'} value={formData.password} onChange={set('password')} />
+                    <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#98a2b3] hover:text-[#111827] transition-colors">
+                      <span className="material-symbols-outlined text-[20px]">{showPassword ? 'visibility_off' : 'visibility'}</span>
+                    </button>
+                  </div>
+                  <FieldError>{errors.password}</FieldError>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-[#111827]">Confirm Password</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">lock</span>
+                    <input className={inputCls(errors.confirmPassword)} placeholder="Re-enter password" type="password" value={formData.confirmPassword} onChange={set('confirmPassword')} />
+                  </div>
+                  <FieldError>{errors.confirmPassword}</FieldError>
+                </div>
+              </div>
+
+              <p className="text-xs font-semibold text-[#8a94a6] uppercase tracking-widest pt-2">Company Information</p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-[#111827]">Company Name</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">business</span>
+                    <input className={inputCls(errors.operatorName)} placeholder="Sharma Travels" type="text" value={formData.operatorName} onChange={set('operatorName')} />
+                  </div>
+                  <FieldError>{errors.operatorName}</FieldError>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-[#111827]">Short Name</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">badge</span>
+                    <input className={inputCls(errors.shortName)} placeholder="SHARMA" type="text" value={formData.shortName} onChange={set('shortName')} />
+                  </div>
+                  <FieldError>{errors.shortName}</FieldError>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-[#111827]">Contact Phone</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">call</span>
+                    <input className={inputCls(errors.contactPhone)} placeholder="10-digit number" type="tel" value={formData.contactPhone} onChange={set('contactPhone')} />
+                  </div>
+                  <FieldError>{errors.contactPhone}</FieldError>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-[#111827]">Contact Email</label>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">mail</span>
+                    <input className={inputCls(errors.contactEmail)} placeholder="company@example.com" type="email" value={formData.contactEmail} onChange={set('contactEmail')} />
+                  </div>
+                  <FieldError>{errors.contactEmail}</FieldError>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-[#111827]">Company Address</label>
+                <div className="relative">
+                  <span className="material-symbols-outlined absolute left-4 top-4 text-[#98a2b3] text-[20px] pointer-events-none">location_on</span>
+                  <textarea className={textareaCls(errors.address)} placeholder="Enter your company address" rows={2} value={formData.address} onChange={set('address')} />
+                </div>
+                <FieldError>{errors.address}</FieldError>
+              </div>
+
+              <div className="flex items-start gap-3 py-1">
+                <input
+                  id="operator-terms"
                   type="checkbox"
                   checked={formData.agreeToTerms}
-                  onChange={(e) => {
-                    setFormData(prev => ({ ...prev, agreeToTerms: e.target.checked }));
-                    if (errors.agreeToTerms) setErrors(prev => ({ ...prev, agreeToTerms: '' }));
-                  }}
+                  onChange={set('agreeToTerms')}
+                  className="mt-1 w-5 h-5 rounded border-[#d8dde8] cursor-pointer"
+                  style={{ accentColor: '#0B1F3A' }}
                 />
-                <label className="text-sm text-slate-400 leading-tight" htmlFor="terms">
-                  I agree to the <a className="text-primary hover:underline font-medium" href="#">Terms and Conditions</a> and <a className="text-primary hover:underline font-medium" href="#">Privacy Policy</a>.
+                <label htmlFor="operator-terms" className="text-sm text-[#667085] leading-relaxed select-none cursor-pointer">
+                  By registering as an operator, I agree to the{' '}
+                  <a href="#" className="text-[#0B1F3A] font-semibold hover:underline">Terms of Service</a>
+                  {' '}and{' '}
+                  <a href="#" className="text-[#0B1F3A] font-semibold hover:underline">Privacy Policy</a>.
                 </label>
               </div>
-              {errors.agreeToTerms && <p className="text-red-400 text-xs mt-1 ml-1">{errors.agreeToTerms}</p>}
-              
-              <button 
+              {errors.agreeToTerms && <p className="text-[#B42318] text-xs -mt-2">{errors.agreeToTerms}</p>}
+
+              <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 disabled:cursor-not-allowed text-black py-3 rounded-2xl font-extrabold text-lg flex items-center justify-center gap-2 transition-all shadow-[0_0_20px_rgba(0,212,255,0.2)] transform hover:scale-[1.01] active:scale-[0.98] disabled:transform-none mt-4"
+                className="w-full py-4 px-6 bg-[#0B1F3A] text-white text-sm font-bold rounded-xl hover:bg-[#102A4C] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 shadow-[0_14px_30px_rgba(11,31,58,0.22)]"
               >
-                {isLoading && (
-                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
+                {isLoading ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Submitting Application...
+                  </>
+                ) : (
+                  <>
+                    <span>Register as Operator</span>
+                    <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+                  </>
                 )}
-                {isLoading ? 'Registering...' : 'Register as Operator'}
               </button>
+              {isLoading && <p className="text-center text-xs text-[#8a94a6]">Submitting your application...</p>}
             </form>
-            
-            <p className="text-center mt-6 text-slate-400">
-              Already have an account? 
-              <button 
-                onClick={() => navigate('/login')}
-                className="text-primary hover:underline font-bold ml-1"
-              >
-                Log In
-              </button>
-            </p>
+
+            <div className="mt-8 pt-8 border-t border-[#e4e8f0] text-center">
+              <p className="text-sm text-[#667085]">
+                Already have an account?{' '}
+                <button onClick={() => navigate('/login')} className="text-[#0B1F3A] font-bold hover:underline ml-1">
+                  Sign in instead
+                </button>
+              </p>
+            </div>
           </div>
         </div>
+
+        <footer className="p-8 lg:px-12 flex flex-col md:flex-row justify-between items-center gap-4">
+          <p className="text-xs text-[#8a94a6]">© {new Date().getFullYear()} TripGo. All rights reserved.</p>
+          <div className="flex gap-6">
+            {['Status', 'Privacy', 'Terms'].map((l) => (
+              <a key={l} href="#" className="text-xs text-[#8a94a6] hover:text-[#111827] transition-colors">{l}</a>
+            ))}
+          </div>
+        </footer>
       </div>
     </div>
   );

@@ -7,49 +7,36 @@ const Header = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
 
-  const handleProtectedNavigation = (path) => {
-    if (!isAuthenticated) {
-      navigate('/login');
-    } else {
-      navigate(path);
-    }
-  };
-
   return (
-    <header className="sticky top-0 z-50 w-full border-b theme-border theme-bg/80 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20">
-          {/* Logo - Left Corner */}
-          <div className="flex items-center gap-2 -ml-2 cursor-pointer" onClick={() => navigate('/')}>
-            <div className="text-primary">
-              <TripGoIcon className="w-10 h-10" />
+    <header className="sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
+      <div className="max-w-screen-xl mx-auto px-4 sm:px-6">
+        <div className="flex items-center justify-between h-16">
+
+          {/* Logo */}
+          <button onClick={() => navigate('/')} className="flex items-center gap-2.5 flex-shrink-0 group">
+            <div className="w-9 h-9 rounded-xl bg-[#002046] flex items-center justify-center shadow-sm group-hover:bg-[#001533] transition-colors">
+              <TripGoIcon className="w-6 h-5 text-white" />
             </div>
-            <span className="text-2xl font-extrabold tracking-tight text-white">TripGo</span>
-          </div>
-          
-          {/* Navigation - Center */}
-          <nav className="hidden md:flex items-center gap-10">
-            <a className="text-sm font-bold text-primary cursor-pointer" onClick={() => navigate('/')}>Home</a>
-            <a className="text-sm font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer" onClick={() => handleProtectedNavigation('/bookings')}>My Bookings</a>
-            <a className="text-sm font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer" onClick={() => handleProtectedNavigation('/support')}>Support</a>
-          </nav>
-          
-          {/* Auth Buttons - Right */}
-          <div className="flex items-center gap-3">
-            {isAuthenticated ? <NotificationBell /> : null}
-            <button 
+            <span className="text-base font-black text-[#002046] tracking-tight">TripGo</span>
+          </button>
+
+          {/* Right */}
+          <div className="flex items-center gap-2">
+            {isAuthenticated && <NotificationBell />}
+            <button
               onClick={() => navigate('/login')}
-              className="bg-white/10 hover:bg-white/20 text-white px-3 md:px-6 py-2.5 rounded-full text-xs md:text-sm font-bold transition-all"
+              className="text-sm font-semibold text-slate-600 hover:text-[#002046] transition-colors px-3 py-2 rounded-lg hover:bg-slate-50"
             >
-              Login
+              Log In
             </button>
-            <button 
+            <button
               onClick={() => navigate('/register')}
-              className="bg-primary hover:bg-primary/90 text-black px-3 md:px-6 py-2.5 rounded-full text-xs md:text-sm font-bold transition-all"
+              className="text-sm font-bold bg-[#002046] text-white px-4 py-2 rounded-lg hover:bg-[#001533] transition-all shadow-sm"
             >
-              Register
+              Sign Up
             </button>
           </div>
+
         </div>
       </div>
     </header>
