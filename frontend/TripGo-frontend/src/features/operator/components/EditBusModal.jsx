@@ -34,7 +34,7 @@ const EditBusModal = ({ busId, formData, errors, amenities, updating, onChange, 
           </div>
           <div>
             <h3 className="font-extrabold text-base">Edit Bus</h3>
-            <p className="text-xs text-slate-400">{formData.name} · ID: {busId}</p>
+            <p className="text-xs text-slate-400">{formData.name}</p>
           </div>
         </div>
         <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
@@ -119,10 +119,10 @@ const EditBusModal = ({ busId, formData, errors, amenities, updating, onChange, 
           Cancel
         </button>
         <button onClick={onSave} disabled={updating}
-          className="flex-1 py-2.5 rounded-xl bg-primary text-black text-sm font-extrabold hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+          className="flex-1 py-2.5 rounded-xl bg-primary text-white text-sm font-extrabold hover:bg-primary/90 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
           {updating
             ? <><span className="material-symbols-outlined animate-spin text-sm">progress_activity</span> Updating...</>
-            : <><span className="material-symbols-outlined text-sm">check_circle</span> Save Changes</>}
+            : <><span className="material-symbols-outlined color-white text-sm">check_circle</span> Save Changes</>}
         </button>
       </div>
     </div>

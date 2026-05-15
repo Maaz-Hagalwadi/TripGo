@@ -32,6 +32,7 @@ export const ROUTES = {
   OPERATOR_BUS_REVIEW: '/operator/bus-review',
   OPERATOR_CREATE_ROUTE: '/operator/create-route',
   OPERATOR_SCHEDULES: '/operator/schedules',
+  OPERATOR_ROUTE_DETAIL: '/operator/routes/:routeId',
   OPERATOR_POLICIES: '/operator/policies',
   OPERATOR_BOOKINGS: '/operator/bookings',
   OPERATOR_REVIEWS: '/operator/reviews',

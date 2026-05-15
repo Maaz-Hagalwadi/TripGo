@@ -7,7 +7,7 @@ import ProtectedRoute from './shared/components/ProtectedRoute';
 import { BusWizardProvider } from './features/operator/context/BusWizardContext';
 import { ROUTES } from './shared/constants/routes';
 import ErrorBoundary from './shared/components/ErrorBoundary';
-import CenterScreenLoader from './shared/components/ui/CenterScreenLoader';
+import TripGoLoader from './shared/components/ui/TripGoLoader';
 
 const Home = lazy(() => import('./features/home/pages/Home'));
 const Dashboard = lazy(() => import('./features/home/pages/Dashboard'));
@@ -32,6 +32,7 @@ const BusReview = lazy(() => import('./features/operator/pages/BusReview'));
 const MyBuses = lazy(() => import('./features/operator/pages/MyBuses'));
 const CreateRoute = lazy(() => import('./features/operator/pages/CreateRoute'));
 const Schedules = lazy(() => import('./features/operator/pages/Schedules'));
+const RouteDetail = lazy(() => import('./features/operator/pages/RouteDetail'));
 const OperatorPolicies = lazy(() => import('./features/operator/pages/OperatorPolicies'));
 const Bookings = lazy(() => import('./features/operator/pages/Bookings'));
 const OperatorReviews = lazy(() => import('./features/operator/pages/OperatorReviews'));
@@ -61,7 +62,7 @@ function App() {
     <AuthProvider>
       <Toaster position="top-right" richColors theme="dark" closeButton />
       <Router>
-        <Suspense fallback={<CenterScreenLoader label="Loading..." description="Please wait a moment." />}>
+        <Suspense fallback={<TripGoLoader />}>
         <Routes>
           {/* Public routes */}
           <Route path={ROUTES.HOME} element={<Home />} />
@@ -139,6 +140,9 @@ function App() {
           } />
           <Route path={ROUTES.OPERATOR_SCHEDULES} element={
             <ProtectedRoute allowedRoles={['OPERATOR']}><Schedules /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.OPERATOR_ROUTE_DETAIL} element={
+            <ProtectedRoute allowedRoles={['OPERATOR']}><RouteDetail /></ProtectedRoute>
           } />
           <Route path={ROUTES.OPERATOR_BOOKINGS} element={
             <ProtectedRoute allowedRoles={['OPERATOR']}><Bookings /></ProtectedRoute>

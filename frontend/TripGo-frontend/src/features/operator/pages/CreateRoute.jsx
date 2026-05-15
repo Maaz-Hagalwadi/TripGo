@@ -7,495 +7,417 @@ import { createRoute, addSegment, addFare, createSchedule } from '../../../api/r
 import { toast } from 'sonner';
 import { ROUTES } from '../../../shared/constants/routes';
 import CenterScreenLoader from '../../../shared/components/ui/CenterScreenLoader';
-import './OperatorDashboard.css';
+
+const STEPS = ['Route Details', 'Stops', 'Fares', 'Schedule'];
 
 const CreateRoute = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const [step, setStep] = useState(1);
   const [buses, setBuses] = useState([]);
-  
-  // Step 1: Route Details
+
   const [routeData, setRouteData] = useState({ name: '', origin: '', destination: '' });
   const [routeId, setRouteId] = useState(null);
-
-  // Step 2: Segments
   const [segments, setSegments] = useState([{ fromStop: '', toStop: '', distanceKm: '', durationMinutes: '' }]);
   const [segmentIds, setSegmentIds] = useState([]);
-
-  // Step 3: Fares
   const [fares, setFares] = useState([]);
+  const [scheduleData, setScheduleData] = useState({ busId: '', departureDate: '', departureTime: '', arrivalDate: '', arrivalTime: '', frequency: 'DAILY' });
+  const [submitting, setSubmitting] = useState(false);
+  const [submittingLabel, setSubmittingLabel] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
-  // Step 4: Schedule
-  const [scheduleData, setScheduleData] = useState({
-    busId: '',
-    departureDate: '',
-    departureTime: '',
-    arrivalDate: '',
-    arrivalTime: '',
-    frequency: 'DAILY'
-  });
-
-  // Derive seat type category from selected bus type
   const selectedBus = buses.find(b => String(b.id) === String(scheduleData.busId));
   const getFareSeatTypes = (busType = '') => {
     const t = busType.toUpperCase();
     if (t.includes('AC') && t.includes('SLEEPER')) return ['AC_SLEEPER'];
-    if (t.includes('SLEEPER'))                      return ['SLEEPER'];
-    if (t.includes('AC'))                           return ['AC_SEATER'];
+    if (t.includes('SLEEPER')) return ['SLEEPER'];
+    if (t.includes('AC')) return ['AC_SEATER'];
     return ['SEATER'];
   };
   const fareSeatTypes = selectedBus ? getFareSeatTypes(selectedBus.busType) : ['SEATER', 'SLEEPER', 'AC_SEATER', 'AC_SLEEPER'];
-  
-  const [submitting, setSubmitting] = useState(false);
-  const [submittingLabel, setSubmittingLabel] = useState('');
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     if (loading) return;
-    if (!user || user.role !== 'OPERATOR') {
-      navigate('/');
-    }
-    fetchBuses();
+    if (!user || user.role !== 'OPERATOR') { navigate('/'); return; }
+    getBuses().then(data => setBuses((data || []).filter(b => b.active))).catch(() => {});
   }, [user, loading, navigate]);
 
-  const fetchBuses = async () => {
-    try {
-      const data = await getBuses();
-      setBuses(data.filter(b => b.active) || []);
-    } catch (error) {
-    }
-  };
-
   const handleStep1Submit = async () => {
-    if (!routeData.name || !routeData.origin || !routeData.destination) {
-      setErrorMessage('Please fill all route details');
-      return;
-    }
-    
+    if (!routeData.name || !routeData.origin || !routeData.destination) { setErrorMessage('Please fill all route details'); return; }
     try {
-      setSubmitting(true);
-      setSubmittingLabel('Saving route details...');
-      setErrorMessage('');
+      setSubmitting(true); setSubmittingLabel('Saving route details...'); setErrorMessage('');
       const response = await createRoute(routeData);
       setRouteId(response.id);
-      setSegments([
-        { fromStop: routeData.origin, toStop: '', distanceKm: '', durationMinutes: '' }
-      ]);
+      setSegments([{ fromStop: routeData.origin, toStop: '', distanceKm: '', durationMinutes: '' }]);
       setStep(2);
-    } catch (error) {
-      setErrorMessage(error.message);
-    } finally {
-      setSubmitting(false);
-      setSubmittingLabel('');
-    }
+    } catch (e) { setErrorMessage(e.message); }
+    finally { setSubmitting(false); setSubmittingLabel(''); }
   };
 
   const addSegmentRow = () => {
-    const lastSegment = segments[segments.length - 1];
-    if (!lastSegment.toStop) {
-      setErrorMessage('Please fill the current stop before adding another');
-      return;
-    }
+    const last = segments[segments.length - 1];
+    if (!last.toStop) { setErrorMessage('Fill the current stop before adding another'); return; }
     setErrorMessage('');
-    setSegments([...segments, { fromStop: lastSegment.toStop, toStop: '', distanceKm: '', durationMinutes: '' }]);
+    setSegments([...segments, { fromStop: last.toStop, toStop: '', distanceKm: '', durationMinutes: '' }]);
   };
 
   const removeSegmentRow = (index) => {
     if (segments.length === 1) return;
     const updated = segments.filter((_, i) => i !== index);
-    // Re-chain fromStop after removal
-    for (let i = 1; i < updated.length; i++) {
-      updated[i].fromStop = updated[i - 1].toStop;
-    }
+    for (let i = 1; i < updated.length; i++) updated[i].fromStop = updated[i - 1].toStop;
     setSegments(updated);
   };
 
-  const updateSegment = (index, field, value) => {
+  const updateSegmentField = (index, field, value) => {
     const updated = [...segments];
     updated[index][field] = value;
-    // If toStop changes, update the next row's fromStop to keep the chain
-    if (field === 'toStop' && index + 1 < updated.length) {
-      updated[index + 1].fromStop = value;
-    }
+    if (field === 'toStop' && index + 1 < updated.length) updated[index + 1].fromStop = value;
     setSegments(updated);
   };
 
   const handleStep2Submit = async () => {
-    if (segments.some(s => !s.toStop || !s.distanceKm || !s.durationMinutes)) {
-      setErrorMessage('Please fill all segment details');
-      return;
-    }
-    
+    if (segments.some(s => !s.toStop || !s.distanceKm || !s.durationMinutes)) { setErrorMessage('Please fill all segment details'); return; }
     try {
-      setSubmitting(true);
-      setSubmittingLabel('Saving your stops...');
-      setErrorMessage('');
+      setSubmitting(true); setSubmittingLabel('Saving stops...'); setErrorMessage('');
       const ids = [];
-      for (const segment of segments) {
-        const response = await addSegment(routeId, segment);
-        ids.push(response.id);
-      }
+      for (const seg of segments) { const r = await addSegment(routeId, seg); ids.push(r.id); }
       setSegmentIds(ids);
-      
-      // Initialize fares for each segment — only for the relevant seat type(s)
       const initialFares = [];
       segments.forEach((seg, idx) => {
-        fareSeatTypes.forEach(type => {
-          initialFares.push({
-            segmentId: ids[idx],
-            seatType: type,
-            baseFare: '',
-            gstPercent: 5.0,
-            segmentName: `${seg.fromStop} → ${seg.toStop}`
-          });
-        });
+        fareSeatTypes.forEach(type => initialFares.push({ segmentId: ids[idx], seatType: type, baseFare: '', gstPercent: 5.0, segmentName: `${seg.fromStop} → ${seg.toStop}` }));
       });
       setFares(initialFares);
       setStep(3);
-    } catch (error) {
-      setErrorMessage(error.message);
-    } finally {
-      setSubmitting(false);
-      setSubmittingLabel('');
-    }
+    } catch (e) { setErrorMessage(e.message); }
+    finally { setSubmitting(false); setSubmittingLabel(''); }
   };
 
   const updateFare = (index, field, value) => {
-    const updated = [...fares];
-    updated[index][field] = value;
-    setFares(updated);
+    const updated = [...fares]; updated[index][field] = value; setFares(updated);
   };
 
-  const handleStep3Submit = async (skip = false) => {
+  const handleStep3Submit = async () => {
     try {
-      setSubmitting(true);
-      setSubmittingLabel('Saving your fares...');
-      setErrorMessage('');
+      setSubmitting(true); setSubmittingLabel('Saving fares...'); setErrorMessage('');
       for (const fare of fares.filter(f => f.baseFare)) {
-        await addFare(routeId, {
-          segmentId: fare.segmentId,
-          seatType: fare.seatType,
-          baseFare: parseFloat(fare.baseFare),
-          gstPercent: fare.gstPercent
-        });
+        await addFare(routeId, { segmentId: fare.segmentId, seatType: fare.seatType, baseFare: parseFloat(fare.baseFare), gstPercent: fare.gstPercent });
       }
       setStep(4);
-    } catch (error) {
-      setErrorMessage(error.message);
-    } finally {
-      setSubmitting(false);
-      setSubmittingLabel('');
-    }
+    } catch (e) { setErrorMessage(e.message); }
+    finally { setSubmitting(false); setSubmittingLabel(''); }
   };
 
   const handleStep4Submit = async () => {
-    if (!scheduleData.busId || !scheduleData.departureDate || !scheduleData.departureTime || !scheduleData.arrivalDate || !scheduleData.arrivalTime) {
-      setErrorMessage('Please fill all schedule details');
-      return;
-    }
+    const { busId, departureDate, departureTime, arrivalDate, arrivalTime, frequency } = scheduleData;
+    if (!busId || !departureDate || !departureTime || !arrivalDate || !arrivalTime) { setErrorMessage('Please fill all schedule details'); return; }
     try {
-      setSubmitting(true);
-      setSubmittingLabel('Creating your schedule...');
-      setErrorMessage('');
-      const payload = {
-        busId: scheduleData.busId,
-        departureTime: new Date(`${scheduleData.departureDate}T${scheduleData.departureTime}`).toISOString(),
-        arrivalTime: new Date(`${scheduleData.arrivalDate}T${scheduleData.arrivalTime}`).toISOString(),
-        frequency: scheduleData.frequency
-      };
-      await createSchedule(routeId, payload);
-      setShowSuccess(true);
+      setSubmitting(true); setSubmittingLabel('Creating schedule...'); setErrorMessage('');
+      await createSchedule(routeId, {
+        busId,
+        departureTime: new Date(`${departureDate}T${departureTime}`).toISOString(),
+        arrivalTime: new Date(`${arrivalDate}T${arrivalTime}`).toISOString(),
+        frequency,
+      });
       toast.success('Route & Schedule created successfully!');
-      setTimeout(() => navigate(ROUTES.OPERATOR_SCHEDULES), 2000);
-    } catch (error) {
-      setErrorMessage(error.message);
-    } finally {
-      setSubmitting(false);
-      setSubmittingLabel('');
-    }
+      navigate(ROUTES.OPERATOR_SCHEDULES);
+    } catch (e) { setErrorMessage(e.message); }
+    finally { setSubmitting(false); setSubmittingLabel(''); }
   };
+
+  const inputCls = 'w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white outline-none focus:ring-1 focus:ring-[#002046]';
+  const labelCls = 'block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5';
 
   return (
     <>
-      {submitting ? (
-        <CenterScreenLoader
-          label={submittingLabel || 'Processing your request...'}
-          description="Please wait while we save your route setup."
-        />
-      ) : null}
-      <OperatorLayout activeItem="schedules" title="Create Route & Schedule">
-          {/* Progress Steps */}
-          <div className="flex items-center justify-center mb-8">
-            {[1, 2, 3, 4].map((s) => (
-              <div key={s} className="flex items-center">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${step >= s ? 'bg-primary text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>
-                  {s}
-                </div>
-                {s < 4 && <div className={`w-20 h-1 ${step > s ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'}`} />}
-              </div>
-            ))}
+      {submitting && <CenterScreenLoader label={submittingLabel || 'Processing...'} description="Please wait while we save your route setup." />}
+      <OperatorLayout activeItem="schedules" title="Create Route">
+        <div className="space-y-5 max-w-2xl mx-auto">
+
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate(ROUTES.OPERATOR_SCHEDULES)} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 transition-colors flex-shrink-0">
+              <span className="material-symbols-outlined text-base">arrow_back</span>
+            </button>
+            <div>
+              <h1 className="text-lg font-black text-slate-900">Create Route</h1>
+              <p className="text-xs text-slate-500 mt-0.5">Set up a new route with stops, fares and a schedule</p>
+            </div>
           </div>
 
-          <div className="max-w-4xl mx-auto bg-white dark:bg-[#1a1a1a] rounded-xl p-6 border border-slate-200 dark:border-slate-800">
-            {errorMessage && (
-              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-500 text-sm">
-                {errorMessage}
+          {/* Stepper */}
+          <div className="rounded-xl bg-white ring-1 ring-slate-200 shadow-sm px-5 py-3.5">
+            <div className="flex items-center">
+              {STEPS.map((label, i) => {
+                const done = i + 1 < step, active = i + 1 === step;
+                return (
+                  <div key={label} className="flex items-center flex-1 last:flex-none">
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black ${done ? 'bg-emerald-500 text-white' : active ? 'bg-[#002046] text-white' : 'bg-slate-100 text-slate-400'}`}>
+                        {done ? <span className="material-symbols-outlined text-xs">check</span> : i + 1}
+                      </div>
+                      <span className={`text-xs font-semibold hidden sm:block ${done ? 'text-emerald-600' : active ? 'text-[#002046]' : 'text-slate-400'}`}>{label}</span>
+                    </div>
+                    {i < STEPS.length - 1 && <div className="flex-1 h-px mx-3 bg-slate-200" />}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Error */}
+          {errorMessage && (
+            <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 ring-1 ring-red-200 text-sm text-red-700">
+              <span className="material-symbols-outlined text-red-500 text-base">error</span>
+              {errorMessage}
+            </div>
+          )}
+
+          {/* Step 1: Route Details */}
+          {step === 1 && (
+            <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-5 py-4 relative">
+                <div className="absolute -top-1 -right-3 text-6xl opacity-[0.07] select-none pointer-events-none">★</div>
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-white text-lg">route</span>
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-black text-white">Route Details</h2>
+                    <p className="text-white/60 text-xs mt-0.5">Name your route and set the endpoints</p>
+                  </div>
+                </div>
               </div>
-            )}
-            {/* Step 1: Route Details */}
-            {step === 1 && (
-              <div className="space-y-4">
-                <h3 className="text-xl font-bold mb-4">Step 1: Route Details</h3>
+              <div className="px-5 py-5 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">Route Name</label>
-                  <input type="text" value={routeData.name}
-                    onChange={(e) => setRouteData({...routeData, name: e.target.value})}
-                    placeholder="Enter route name"
-                    className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800" />
+                  <label className={labelCls}>Route Name *</label>
+                  <input value={routeData.name} onChange={e => setRouteData({ ...routeData, name: e.target.value })} placeholder="e.g. Mumbai Express" className={inputCls} />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Origin</label>
-                    <input type="text" value={routeData.origin}
-                      onChange={(e) => setRouteData({...routeData, origin: e.target.value})}
-                      placeholder="Enter origin city"
-                      className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800" />
+                    <label className={labelCls}>Origin *</label>
+                    <input value={routeData.origin} onChange={e => setRouteData({ ...routeData, origin: e.target.value })} placeholder="e.g. Mumbai" className={inputCls} />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Destination</label>
-                    <input type="text" value={routeData.destination}
-                      onChange={(e) => setRouteData({...routeData, destination: e.target.value})}
-                      placeholder="Enter destination city"
-                      className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800" />
+                    <label className={labelCls}>Destination *</label>
+                    <input value={routeData.destination} onChange={e => setRouteData({ ...routeData, destination: e.target.value })} placeholder="e.g. Goa" className={inputCls} />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2">Select Bus</label>
-                  <select value={scheduleData.busId}
-                    onChange={(e) => setScheduleData({...scheduleData, busId: e.target.value})}
-                    className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
-                    <option value="">Choose a bus</option>
-                    {buses.map(bus => (
-                      <option key={bus.id} value={bus.id}>{bus.name} ({bus.busCode}) — {bus.busType}</option>
-                    ))}
+                  <label className={labelCls}>Select Bus (optional)</label>
+                  <select value={scheduleData.busId} onChange={e => setScheduleData({ ...scheduleData, busId: e.target.value })} className={inputCls}>
+                    <option value="">Choose a bus for fare calculation</option>
+                    {buses.map(bus => <option key={bus.id} value={bus.id}>{bus.name} ({bus.busCode}) — {bus.busType.replace(/_/g, ' ')}</option>)}
                   </select>
                   {selectedBus && (
-                    <p className="text-xs text-slate-400 mt-1">Fare will be set for: <span className="text-primary font-semibold">{getFareSeatTypes(selectedBus.busType).join(', ')}</span></p>
+                    <p className="text-xs text-slate-400 mt-1.5">Fares will be set for: <span className="text-[#002046] font-semibold">{getFareSeatTypes(selectedBus.busType).join(', ')}</span></p>
                   )}
-                  <p className="text-xs text-slate-400 mt-2">Need more buses on this route? Create the route first, then use `Add Schedule` from the Routes & Schedules page.</p>
+                  <p className="text-xs text-slate-400 mt-1.5">You can add more buses via "Add Schedule" after creating the route.</p>
                 </div>
-                <button onClick={handleStep1Submit} disabled={submitting}
-                  className="w-full bg-primary text-black px-6 py-3 rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 font-bold">
-                  {submitting ? 'Creating...' : 'Next: Add Stops'}
+              </div>
+              <div className="px-5 py-4 border-t border-slate-100 flex justify-end">
+                <button onClick={handleStep1Submit} disabled={submitting} className="px-6 py-2.5 rounded-xl bg-[#002046] text-white font-bold text-sm hover:bg-[#003a80] transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2">
+                  Next: Add Stops
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Step 2: Segments */}
-            {step === 2 && (
-              <div className="space-y-4">
-                <h3 className="text-xl font-bold mb-4">Step 2: Add Stops & Segments</h3>
+          {/* Step 2: Segments */}
+          {step === 2 && (
+            <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-5 py-4 relative">
+                <div className="absolute -top-1 -right-3 text-6xl opacity-[0.07] select-none pointer-events-none">★</div>
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-white text-lg">pin_drop</span>
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-black text-white">Stops & Segments</h2>
+                    <p className="text-white/60 text-xs mt-0.5">Define the stops along this route</p>
+                  </div>
+                </div>
+              </div>
+              <div className="px-5 py-5 space-y-3">
                 {segments.map((seg, idx) => (
-                  <div key={idx} className="p-4 border border-slate-200 dark:border-slate-700 rounded-lg space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Stop {idx + 1}</span>
+                  <div key={idx} className="rounded-xl ring-1 ring-slate-200 bg-slate-50/50 overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-[#002046] text-white text-[10px] font-black flex items-center justify-center">{idx + 1}</span>
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Segment {idx + 1}</span>
+                      </div>
                       {segments.length > 1 && (
-                        <button onClick={() => removeSegmentRow(idx)}
-                          className="text-red-400 hover:text-red-600 transition-colors">
+                        <button onClick={() => removeSegmentRow(idx)} className="text-red-400 hover:text-red-600 transition-colors">
                           <span className="material-symbols-outlined text-sm">delete</span>
                         </button>
                       )}
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-2">From</label>
-                        <input
-                          type="text"
-                          value={seg.fromStop}
-                          disabled
-                          className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-100 dark:bg-slate-800"
-                        />
+                    <div className="px-4 py-3 space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className={labelCls}>From</label>
+                          <input value={seg.fromStop} disabled className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-100 text-slate-500 outline-none" />
+                        </div>
+                        <div>
+                          <label className={labelCls}>To *</label>
+                          <input value={seg.toStop} onChange={e => updateSegmentField(idx, 'toStop', e.target.value)} placeholder="Next stop" className={inputCls} />
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-2">To</label>
-                        <input
-                          type="text"
-                          value={seg.toStop}
-                          onChange={(e) => updateSegment(idx, 'toStop', e.target.value)}
-                          placeholder="Enter stop name"
-                          className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Distance (km)</label>
-                        <input
-                          type="number"
-                          value={seg.distanceKm}
-                          onChange={(e) => updateSegment(idx, 'distanceKm', e.target.value)}
-                          placeholder="Enter distance"
-                          className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Duration (minutes)</label>
-                        <input
-                          type="number"
-                          value={seg.durationMinutes}
-                          onChange={(e) => updateSegment(idx, 'durationMinutes', e.target.value)}
-                          placeholder="Enter duration"
-                          className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                        />
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className={labelCls}>Distance (km) *</label>
+                          <input type="number" value={seg.distanceKm} onChange={e => updateSegmentField(idx, 'distanceKm', e.target.value)} placeholder="0" className={inputCls} />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Duration (min) *</label>
+                          <input type="number" value={seg.durationMinutes} onChange={e => updateSegmentField(idx, 'durationMinutes', e.target.value)} placeholder="0" className={inputCls} />
+                        </div>
                       </div>
                     </div>
                   </div>
                 ))}
-                <button
-                  onClick={addSegmentRow}
-                  className="w-full border-2 border-dashed border-slate-300 dark:border-slate-700 px-4 py-3 rounded-lg hover:border-primary transition-colors"
-                >
-                  + Add Another Stop
+                <button onClick={addSegmentRow} className="w-full py-3 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 text-sm font-semibold hover:border-[#002046] hover:text-[#002046] transition-colors flex items-center justify-center gap-1.5">
+                  <span className="material-symbols-outlined text-base">add</span>
+                  Add Another Stop
                 </button>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setStep(1)}
-                    className="flex-1 border border-slate-200 dark:border-slate-700 px-6 py-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800"
-                  >
-                    Back
-                  </button>
-                  <button
-                    onClick={handleStep2Submit}
-                    disabled={submitting}
-                    className="flex-1 bg-primary text-white px-6 py-3 rounded-lg hover:bg-primary-dark disabled:opacity-50"
-                  >
-                    {submitting ? 'Saving...' : 'Next: Set Fares'}
-                  </button>
-                </div>
               </div>
-            )}
+              <div className="px-5 py-4 border-t border-slate-100 flex gap-3">
+                <button onClick={() => setStep(1)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Back</button>
+                <button onClick={handleStep2Submit} disabled={submitting} className="flex-1 py-2.5 rounded-xl bg-[#002046] text-white font-bold text-sm hover:bg-[#003a80] transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  Next: Set Fares
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                </button>
+              </div>
+            </div>
+          )}
 
-            {/* Step 3: Fares */}
-            {step === 3 && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-bold">Step 3: Set Fares</h3>
-                  {selectedBus && (
-                    <span className="text-xs text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">
-                      {selectedBus.busType.replace(/_/g, ' ')} · {fareSeatTypes.join(', ')}
-                    </span>
-                  )}
-                </div>
-                <div className="space-y-4">
-                  {segments.map((seg, segIdx) => (
-                    <div key={segIdx} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                      <h4 className="font-semibold mb-3 text-sm">{seg.fromStop} → {seg.toStop}</h4>
-                      <div className="grid grid-cols-2 gap-3">
-                        {fareSeatTypes.map((type) => {
-                          const fareIdx = fares.findIndex(f => f.segmentId === segmentIds[segIdx] && f.seatType === type);
-                          return (
-                            <div key={type}>
-                              <label className="block text-xs font-medium mb-1 text-slate-500">{type.replace(/_/g, ' ')}</label>
-                              <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">₹</span>
-                                <input type="number" min="0"
-                                  value={fares[fareIdx]?.baseFare || ''}
-                                  onChange={(e) => updateFare(fareIdx, 'baseFare', e.target.value)}
-                                  placeholder="0.00"
-                                  className="w-full pl-7 pr-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm" />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
+          {/* Step 3: Fares */}
+          {step === 3 && (
+            <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-5 py-4 relative">
+                <div className="absolute -top-1 -right-3 text-6xl opacity-[0.07] select-none pointer-events-none">★</div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-white text-lg">payments</span>
                     </div>
-                  ))}
-                </div>
-                <div className="flex gap-3">
-                  <button onClick={() => setStep(2)}
-                    className="flex-1 border border-slate-200 dark:border-slate-700 px-6 py-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">
-                    Back
-                  </button>
-                  <button onClick={() => handleStep3Submit(false)} disabled={submitting}
-                    className="flex-1 bg-primary text-black px-6 py-3 rounded-lg hover:bg-primary/90 disabled:opacity-50 font-bold">
-                    {submitting ? 'Saving...' : 'Next: Schedule'}
-                  </button>
-                </div>
-                <p className="text-xs text-slate-400 text-center">You can also manage fares later from Routes &amp; Schedules page</p>
-              </div>
-            )}
-
-            {/* Step 4: Schedule */}
-            {step === 4 && (
-              <div className="space-y-4">
-                <h3 className="text-xl font-bold mb-4">Step 4: Create Schedule</h3>
-                {selectedBus && (
-                  <div className="flex items-center gap-3 p-3 bg-primary/5 border border-primary/20 rounded-lg">
-                    <span className="material-symbols-outlined text-primary text-sm">directions_bus</span>
                     <div>
-                      <p className="text-sm font-semibold">{selectedBus.name} ({selectedBus.busCode})</p>
-                      <p className="text-xs text-slate-400">{selectedBus.busType.replace(/_/g,' ')} · {selectedBus.totalSeats} seats</p>
+                      <h2 className="text-sm font-black text-white">Fares</h2>
+                      <p className="text-white/60 text-xs mt-0.5">Set base fares per segment (optional)</p>
                     </div>
                   </div>
-                )}
+                  {selectedBus && (
+                    <span className="text-[10px] font-bold text-white/60 bg-white/10 px-2.5 py-1 rounded-full">{selectedBus.busType.replace(/_/g, ' ')}</span>
+                  )}
+                </div>
+              </div>
+              <div className="px-5 py-5 space-y-4">
+                {segments.map((seg, segIdx) => (
+                  <div key={segIdx} className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-100">
+                      <span className="material-symbols-outlined text-slate-400 text-sm">arrow_right_alt</span>
+                      <span className="text-xs font-bold text-slate-600">{seg.fromStop} → {seg.toStop}</span>
+                    </div>
+                    <div className="px-4 py-3 grid grid-cols-2 gap-3">
+                      {fareSeatTypes.map(type => {
+                        const fareIdx = fares.findIndex(f => f.segmentId === segmentIds[segIdx] && f.seatType === type);
+                        return (
+                          <div key={type}>
+                            <label className={labelCls}>{type.replace(/_/g, ' ')}</label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">₹</span>
+                              <input type="number" min="0" value={fares[fareIdx]?.baseFare || ''} onChange={e => updateFare(fareIdx, 'baseFare', e.target.value)} placeholder="0.00" className="w-full pl-7 pr-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white outline-none focus:ring-1 focus:ring-[#002046]" />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                <p className="text-xs text-slate-400 text-center">Fares can also be managed later from the route detail page.</p>
+              </div>
+              <div className="px-5 py-4 border-t border-slate-100 flex gap-3">
+                <button onClick={() => setStep(2)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Back</button>
+                <button onClick={handleStep3Submit} disabled={submitting} className="flex-1 py-2.5 rounded-xl bg-[#002046] text-white font-bold text-sm hover:bg-[#003a80] transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  Next: Schedule
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Schedule */}
+          {step === 4 && (
+            <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
+              <div className="bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-5 py-4 relative">
+                <div className="absolute -top-1 -right-3 text-6xl opacity-[0.07] select-none pointer-events-none">★</div>
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-white text-lg">schedule</span>
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-black text-white">First Schedule</h2>
+                    <p className="text-white/60 text-xs mt-0.5">Add the first departure for this route</p>
+                  </div>
+                </div>
+              </div>
+              <div className="px-5 py-5 space-y-4">
+
+                {/* Bus selector */}
+                <div>
+                  <label className={labelCls}>Bus *</label>
+                  <select value={scheduleData.busId} onChange={e => setScheduleData({ ...scheduleData, busId: e.target.value })} className={inputCls}>
+                    <option value="">Choose a bus</option>
+                    {buses.map(bus => <option key={bus.id} value={bus.id}>{bus.name} ({bus.busCode}) — {bus.busType.replace(/_/g, ' ')}</option>)}
+                  </select>
+                  {selectedBus && (
+                    <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-xl bg-[#002046]/[0.05] ring-1 ring-[#002046]/10">
+                      <span className="material-symbols-outlined text-[#002046] text-sm">directions_bus</span>
+                      <span className="text-xs font-semibold text-[#002046]">{selectedBus.name} · {selectedBus.totalSeats} seats · {selectedBus.busType.replace(/_/g, ' ')}</span>
+                    </div>
+                  )}
+                </div>
 
                 {/* Departure */}
-                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
-                  <p className="text-sm font-semibold flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary text-sm">flight_takeoff</span>
-                    Departure
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-100">
+                    <span className="material-symbols-outlined text-slate-400 text-sm">flight_takeoff</span>
+                    <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Departure</span>
+                  </div>
+                  <div className="px-4 py-3 grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1">Date</label>
-                      <input type="date"
-                        value={scheduleData.departureDate}
-                        min={new Date().toISOString().split('T')[0]}
-                        onChange={e => setScheduleData({...scheduleData, departureDate: e.target.value})}
-                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm" />
+                      <label className={labelCls}>Date *</label>
+                      <input type="date" value={scheduleData.departureDate} min={new Date().toISOString().split('T')[0]} onChange={e => setScheduleData({ ...scheduleData, departureDate: e.target.value })} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1">Time</label>
-                      <input type="time"
-                        value={scheduleData.departureTime}
-                        onChange={e => setScheduleData({...scheduleData, departureTime: e.target.value})}
-                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm" />
+                      <label className={labelCls}>Time *</label>
+                      <input type="time" value={scheduleData.departureTime} onChange={e => setScheduleData({ ...scheduleData, departureTime: e.target.value })} className={inputCls} />
                     </div>
                   </div>
                 </div>
 
                 {/* Arrival */}
-                <div className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 space-y-3">
-                  <p className="text-sm font-semibold flex items-center gap-2">
-                    <span className="material-symbols-outlined text-primary text-sm">flight_land</span>
-                    Arrival
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-100">
+                    <span className="material-symbols-outlined text-slate-400 text-sm">flight_land</span>
+                    <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Arrival</span>
+                  </div>
+                  <div className="px-4 py-3 grid grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1">Date</label>
-                      <input type="date"
-                        value={scheduleData.arrivalDate}
-                        min={scheduleData.departureDate || new Date().toISOString().split('T')[0]}
-                        onChange={e => setScheduleData({...scheduleData, arrivalDate: e.target.value})}
-                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm" />
+                      <label className={labelCls}>Date *</label>
+                      <input type="date" value={scheduleData.arrivalDate} min={scheduleData.departureDate || new Date().toISOString().split('T')[0]} onChange={e => setScheduleData({ ...scheduleData, arrivalDate: e.target.value })} className={inputCls} />
                     </div>
                     <div>
-                      <label className="block text-xs text-slate-400 mb-1">Time</label>
-                      <input type="time"
-                        value={scheduleData.arrivalTime}
-                        onChange={e => setScheduleData({...scheduleData, arrivalTime: e.target.value})}
-                        className="w-full px-3 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm" />
+                      <label className={labelCls}>Time *</label>
+                      <input type="time" value={scheduleData.arrivalTime} onChange={e => setScheduleData({ ...scheduleData, arrivalTime: e.target.value })} className={inputCls} />
                     </div>
                   </div>
                 </div>
 
+                {/* Frequency */}
                 <div>
-                  <label className="block text-sm font-medium mb-2">Frequency</label>
-                  <select value={scheduleData.frequency}
-                    onChange={(e) => setScheduleData({...scheduleData, frequency: e.target.value})}
-                    className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800">
+                  <label className={labelCls}>Frequency</label>
+                  <select value={scheduleData.frequency} onChange={e => setScheduleData({ ...scheduleData, frequency: e.target.value })} className={inputCls}>
                     <option value="DAILY">Daily</option>
                     <option value="WEEKLY">Weekly</option>
                     <option value="WEEKDAYS">Weekdays Only</option>
@@ -503,31 +425,19 @@ const CreateRoute = () => {
                     <option value="ONCE">One Time</option>
                   </select>
                 </div>
-                <div className="flex gap-3">
-                  <button onClick={() => setStep(3)}
-                    className="flex-1 border border-slate-200 dark:border-slate-700 px-6 py-3 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800">
-                    Back
-                  </button>
-                  <button onClick={handleStep4Submit} disabled={submitting}
-                    className="flex-1 bg-primary text-black px-6 py-3 rounded-lg hover:bg-primary/90 disabled:opacity-50 font-bold">
-                    {submitting ? 'Creating...' : 'Create Schedule'}
-                  </button>
-                </div>
               </div>
-            )}
-          </div>
-      </OperatorLayout>
-
-      {showSuccess && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-op-card rounded-xl p-8 max-w-sm w-full mx-4 text-center">
-            <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="material-symbols-outlined text-green-600 text-4xl">check_circle</span>
+              <div className="px-5 py-4 border-t border-slate-100 flex gap-3">
+                <button onClick={() => setStep(3)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Back</button>
+                <button onClick={handleStep4Submit} disabled={submitting} className="flex-1 py-2.5 rounded-xl bg-[#002046] text-white font-bold text-sm hover:bg-[#003a80] transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                  <span className="material-symbols-outlined text-base">check_circle</span>
+                  Create Route & Schedule
+                </button>
+              </div>
             </div>
-            <p className="text-lg font-semibold">Route & Schedule Created Successfully!</p>
-          </div>
+          )}
+
         </div>
-      )}
+      </OperatorLayout>
     </>
   );
 };
