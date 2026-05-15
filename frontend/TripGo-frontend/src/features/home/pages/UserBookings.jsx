@@ -958,7 +958,7 @@ const UserBookings = () => {
             <p className="text-[10px] font-semibold opacity-60 uppercase tracking-wider mb-2">TripGo Premium</p>
             <h3 className="text-lg font-black leading-snug">Priority seats &amp; zero cancellation fees</h3>
             <p className="text-xs opacity-50 mt-1.5 mb-5">Upgrade for exclusive benefits on every trip</p>
-            <button className="rounded-xl bg-white/15 hover:bg-white/25 px-4 py-2 text-xs font-bold transition-colors">
+            <button onClick={() => navigate(ROUTES.USER_PREMIUM)} className="rounded-xl bg-white/15 hover:bg-white/25 px-4 py-2 text-xs font-bold transition-colors">
               Upgrade now →
             </button>
           </div>
@@ -1153,11 +1153,11 @@ const UserBookings = () => {
           ) : (
             <>
               {selectedBookings.size > 0 && (
-                <div className="flex items-center gap-2 bg-[#002046] text-white px-5 py-3 border-b border-white/10 flex-wrap">
+                <div className="flex items-center gap-2 bg-white px-5 py-3 border-b border-slate-200 flex-wrap">
                   {listActionBooking && (
                     <button
                       onClick={() => viewTicket(listActionBooking)}
-                      className="flex items-center gap-1.5 rounded-lg bg-white/15 hover:bg-white/25 px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap"
+                      className="flex items-center gap-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap"
                     >
                       <span className="material-symbols-outlined text-sm">visibility</span>
                       View Ticket
@@ -1168,7 +1168,7 @@ const UserBookings = () => {
                     return (
                       <button
                         onClick={() => { setCancelModalBooking({ ...listActionBooking, from: lf, to: lt }); setCancelReason(''); }}
-                        className="flex items-center gap-1.5 rounded-lg bg-rose-500/70 hover:bg-rose-500 px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap"
+                        className="flex items-center gap-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap"
                       >
                         <span className="material-symbols-outlined text-sm">cancel</span>
                         Cancel
@@ -1182,14 +1182,14 @@ const UserBookings = () => {
                         if (selectedBookings.has(id)) await downloadTicket(booking);
                       }
                     }}
-                    className="flex items-center gap-1.5 rounded-lg bg-white text-[#002046] px-3 py-1.5 text-xs font-bold hover:bg-slate-100 transition-colors whitespace-nowrap"
+                    className="flex items-center gap-1.5 rounded-lg bg-[#002046] text-white px-3 py-1.5 text-xs font-bold hover:bg-[#003a80] transition-colors whitespace-nowrap"
                   >
                     <span className="material-symbols-outlined text-sm">download</span>
                     Download Tickets
                   </button>
                   <button
                     onClick={() => setSelectedBookings(new Set())}
-                    className="ml-auto flex items-center gap-1 rounded-lg bg-white/10 hover:bg-white/20 px-3 py-1.5 text-xs font-semibold transition-colors"
+                    className="ml-auto flex items-center gap-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 px-3 py-1.5 text-xs font-semibold transition-colors"
                   >
                     <span className="material-symbols-outlined text-sm">close</span>
                   </button>
@@ -1293,11 +1293,6 @@ const UserBookings = () => {
                               {canRateTrip && (
                                 <button onClick={() => setReviewModalBooking({ ...booking, scheduleId, from: routeFrom, to: routeTo })} title="Rate this trip" className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center hover:bg-amber-100 transition-colors">
                                   <span className="material-symbols-outlined text-sm">star</span>
-                                </button>
-                              )}
-                              {canCancelBooking && (
-                                <button onClick={() => { setCancelModalBooking({ ...booking, from: routeFrom, to: routeTo }); setCancelReason(''); }} className="flex items-center gap-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 px-2.5 h-8 text-xs font-semibold hover:bg-rose-100 transition-colors whitespace-nowrap">
-                                  Cancel
                                 </button>
                               )}
                             </div>

@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '../../constants/routes';
 import { toast } from 'sonner';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -196,7 +197,13 @@ const OperatorHeader = ({
                   <span className="material-symbols-outlined text-lg">person</span>
                   My Profile
                 </button>
-
+                <button
+                  onClick={() => { setShowProfileDropdown(false); navigate(ROUTES.USER_SETTINGS); }}
+                  className="w-full px-4 py-3 text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-3"
+                >
+                  <span className="material-symbols-outlined text-lg">settings</span>
+                  Settings
+                </button>
               </div>
               <div className="border-t border-slate-200 dark:border-slate-800 p-2">
                 <button

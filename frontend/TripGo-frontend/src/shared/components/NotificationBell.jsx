@@ -4,17 +4,17 @@ import { useNotifications } from '../../hooks/useNotifications';
 import { useAuth } from '../contexts/AuthContext';
 
 const TYPE_ICON = {
-  BOOKING_CONFIRMED: '🎉',
-  BOOKING_CANCELLED: '❌',
-  PAYMENT_FAILED: '⚠️',
-  NEW_BOOKING: '📋',
-  REVIEW_RECEIVED: '⭐',
-  REVIEW_SUBMITTED: '✅',
-  TRIP_COMPLETED: '🏁',
-  BUS_APPROVED: '✅',
-  BUS_REJECTED: '❌',
-  OPERATOR_PENDING: '📄',
-  BUS_PENDING: '🚌',
+  BOOKING_CONFIRMED: { icon: 'confirmation_number', color: 'text-emerald-600 bg-emerald-50' },
+  BOOKING_CANCELLED: { icon: 'cancel', color: 'text-rose-600 bg-rose-50' },
+  PAYMENT_FAILED: { icon: 'error', color: 'text-amber-600 bg-amber-50' },
+  NEW_BOOKING: { icon: 'confirmation_number', color: 'text-sky-600 bg-sky-50' },
+  REVIEW_RECEIVED: { icon: 'star', color: 'text-amber-500 bg-amber-50' },
+  REVIEW_SUBMITTED: { icon: 'task_alt', color: 'text-emerald-600 bg-emerald-50' },
+  TRIP_COMPLETED: { icon: 'check_circle', color: 'text-sky-600 bg-sky-50' },
+  BUS_APPROVED: { icon: 'verified', color: 'text-emerald-600 bg-emerald-50' },
+  BUS_REJECTED: { icon: 'cancel', color: 'text-rose-600 bg-rose-50' },
+  OPERATOR_PENDING: { icon: 'pending', color: 'text-amber-600 bg-amber-50' },
+  BUS_PENDING: { icon: 'directions_bus', color: 'text-slate-600 bg-slate-100' },
 };
 
 export default function NotificationBell() {
@@ -90,7 +90,14 @@ export default function NotificationBell() {
             onClick={() => handleClick(notification)}
             className="flex cursor-pointer gap-3 border-b border-slate-50 bg-blue-50/50 px-4 py-3.5 transition-colors hover:bg-slate-50 active:bg-slate-100 dark:border-slate-800 dark:bg-blue-900/10 dark:hover:bg-slate-800"
           >
-            <span className="mt-0.5 text-xl flex-shrink-0">{TYPE_ICON[notification.type] || '🔔'}</span>
+            {(() => {
+              const meta = TYPE_ICON[notification.type] || { icon: 'notifications', color: 'text-slate-600 bg-slate-100' };
+              return (
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 ${meta.color}`}>
+                  <span className="material-symbols-outlined text-sm">{meta.icon}</span>
+                </div>
+              );
+            })()}
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-slate-900 dark:text-white leading-snug">
                 {notification.title}

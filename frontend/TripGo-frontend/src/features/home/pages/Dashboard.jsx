@@ -215,7 +215,7 @@ const Dashboard = () => {
             <p className="text-[10px] font-semibold opacity-60 uppercase tracking-wider mb-2">TripGo Premium</p>
             <h3 className="text-lg font-black leading-snug">Priority seats &amp; zero cancellation fees</h3>
             <p className="text-xs opacity-50 mt-1.5 mb-5">Upgrade for exclusive benefits on every trip</p>
-            <button className="rounded-xl bg-white/15 hover:bg-white/25 px-4 py-2 text-xs font-bold transition-colors">
+            <button onClick={() => navigate(ROUTES.USER_PREMIUM)} className="rounded-xl bg-white/15 hover:bg-white/25 px-4 py-2 text-xs font-bold transition-colors">
               Upgrade now →
             </button>
           </div>

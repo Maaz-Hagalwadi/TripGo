@@ -6,7 +6,6 @@ import Header from '../../../shared/components/layout/Header';
 import HeroSection from './HeroSection';
 import WhyChooseUs from './WhyChooseUs';
 import ExploreSection from './ExploreSection';
-import Footer from '../../../shared/components/layout/Footer';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -62,7 +61,6 @@ const Home = () => {
       <HeroSection />
       <WhyChooseUs />
       <ExploreSection />
-      <Footer />
     </div>
   );
 };

@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { ROUTES } from '../../../shared/constants/routes';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 
 const menuItems = [
   { id: 'dashboard', icon: 'dashboard',           label: 'Overview',    route: ROUTES.DASHBOARD },
@@ -16,7 +18,13 @@ const bottomItems = [
 
 const UserSidebar = ({ activeItem = 'dashboard', collapsed = true, onToggleCollapse }) => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
   const [isHovered, setIsHovered] = useState(false);
+
+  const handleLogout = () => {
+    logout();
+    navigate(ROUTES.LOGIN);
+  };
 
   // Visually open when explicitly expanded OR when collapsed but hovered
   const isOpen = !collapsed || isHovered;
@@ -92,6 +100,14 @@ const UserSidebar = ({ activeItem = 'dashboard', collapsed = true, onToggleColla
             </button>
           );
         })}
+        <button
+          onClick={handleLogout}
+          title={!isOpen ? 'Logout' : ''}
+          className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors text-rose-500 hover:bg-rose-50 ${!isOpen ? 'justify-center' : ''}`}
+        >
+          <span className="material-symbols-outlined text-xl flex-shrink-0">logout</span>
+          {isOpen && <span className="font-medium text-sm whitespace-nowrap">Logout</span>}
+        </button>
       </div>
     </aside>
   );

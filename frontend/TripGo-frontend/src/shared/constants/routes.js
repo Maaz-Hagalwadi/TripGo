@@ -23,6 +23,7 @@ export const ROUTES = {
   USER_PROFILE: '/user/profile',
   USER_SETTINGS: '/user/settings',
   USER_SUPPORT: '/user/support',
+  USER_PREMIUM: '/user/premium',
 
   OPERATOR_DASHBOARD: '/operator/dashboard',
   OPERATOR_MY_BUSES: '/operator/my-buses',

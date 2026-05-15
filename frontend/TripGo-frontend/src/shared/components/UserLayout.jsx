@@ -16,7 +16,7 @@ const UserLayout = ({ activeItem = 'dashboard', title = 'Dashboard', showHeaderT
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 text-slate-900">
+    <div className="h-full flex flex-col bg-slate-50 text-slate-900">
       {/* Full-width sticky header */}
       <OperatorHeader
         title={title}
@@ -26,15 +26,15 @@ const UserLayout = ({ activeItem = 'dashboard', title = 'Dashboard', showHeaderT
         roleLabel="Traveler"
       />
 
-      {/* Fixed sidebar — starts below header */}
+      {/* Fixed sidebar — desktop only */}
       <UserSidebar
         activeItem={activeItem}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(p => !p)}
       />
 
-      {/* Main content — left margin matches sidebar, NOT affected by hover */}
-      <main className={`flex-1 overflow-y-auto transition-all duration-200 pb-20 md:pb-0 p-4 lg:p-6 ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
+      {/* Main content */}
+      <main className={`flex-1 overflow-y-auto transition-all duration-200 px-4 pt-4 pb-20 md:pb-0 lg:px-6 lg:pt-6 ${sidebarCollapsed ? 'md:ml-20' : 'md:ml-64'}`}>
         {children}
       </main>
 
