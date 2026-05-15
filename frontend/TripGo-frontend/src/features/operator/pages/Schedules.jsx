@@ -2,86 +2,24 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
-import { getRoutes, getRouteSegments, getRouteSchedules, deleteSchedule, deleteRoute, getPoints, addPoint, updatePoint, deletePoint, getFares, addFare, deleteFare, updateFare, startTrip, completeTrip, markDelay, updateSchedule, createSchedule, updateRoute, copyPointsToSchedule, updateSegment, deleteSegment, getRoutePoints, importPointsFromRoute, addSegment } from '../../../api/routeService';
-import { getDrivers, assignDriverToSchedule } from '../../../api/operatorDriverService';
-import { getBuses } from '../../../api/busService';
+import { getRoutes, deleteRoute, updateRoute } from '../../../api/routeService';
 import { toast } from 'sonner';
 import { ROUTES } from '../../../shared/constants/routes';
 import CenterScreenLoader from '../../../shared/components/ui/CenterScreenLoader';
-import './OperatorDashboard.css';
-
-const isNumericValue = (value) => value !== null && value !== undefined && value !== '' && Number.isFinite(Number(value));
-const getLicenseDate = (driver) => {
-  if (!driver?.licenseExpiry) return null;
-  const expiry = new Date(driver.licenseExpiry);
-  if (Number.isNaN(expiry.getTime())) return null;
-  expiry.setHours(0, 0, 0, 0);
-  return expiry;
-};
-const isDriverLicenseExpired = (driver) => {
-  const expiry = getLicenseDate(driver);
-  if (!expiry) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return expiry < today;
-};
 
 const Schedules = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const [routes, setRoutes] = useState([]);
   const [loadingRoutes, setLoadingRoutes] = useState(true);
-  const [expandedRoute, setExpandedRoute] = useState(null);
-  const [segments, setSegments] = useState({});
-  const [schedules, setSchedules] = useState({});
-  const [deleteModal, setDeleteModal] = useState({ show: false, scheduleId: null, routeId: null, type: null });
-  const [points, setPoints] = useState({});
-  const [pointForm, setPointForm] = useState({});
-  const [fares, setFares] = useState({});           // { [routeId]: [...] }
-  const [fareForm, setFareForm] = useState({});     // { [routeId]: { segmentId, seatType, baseFare, gstPercent } }
-  const [editingFare, setEditingFare] = useState({}); // { [routeId]: { fareId, baseFare } }
-  const [editingPoint, setEditingPoint] = useState({}); // { [scheduleId]: { pointId, ...fields } }
-  const [fareModalRouteId, setFareModalRouteId] = useState(null);
-  const [pointModal, setPointModal] = useState({ routeId: null, scheduleId: null });
-  const [delayModal, setDelayModal] = useState({ routeId: null, scheduleId: null, delayMinutes: '', delayReason: '' });
-  const [drivers, setDrivers] = useState([]);
-  const [buses, setBuses] = useState([]);
-  const [assigningDriver, setAssigningDriver] = useState({});
   const [blockingLoader, setBlockingLoader] = useState(null);
-  const [expandingRoute, setExpandingRoute] = useState(null);
-  const [driverAssignModal, setDriverAssignModal] = useState({
-    routeId: null,
-    scheduleId: null,
-    selectedDriverId: ''
-  });
-  const [editRouteModal, setEditRouteModal] = useState(null); // { id, name, origin, destination }
-  const [copyPointsModal, setCopyPointsModal] = useState({ scheduleId: null, routeId: null, targetScheduleId: '' });
-  const [editingSegment, setEditingSegment] = useState({}); // { [routeId]: { segmentId, fromStop, toStop, distanceKm, durationMinutes } }
-  const [routePoints, setRoutePoints] = useState({}); // { [routeId]: [...] } — all unique points on route
-  const [addSegmentForm, setAddSegmentForm] = useState({}); // { [routeId]: { fromStop, toStop, distanceKm, durationMinutes } }
-  const [showAddSegment, setShowAddSegment] = useState({}); // { [routeId]: bool }
-  const [editScheduleModal, setEditScheduleModal] = useState({
-    routeId: null,
-    scheduleId: null,
-    busId: '',
-    departureTime: '',
-    arrivalTime: '',
-    frequency: 'DAILY'
-  });
-  const [addScheduleModal, setAddScheduleModal] = useState({
-    routeId: null,
-    busId: '',
-    departureTime: '',
-    arrivalTime: '',
-    frequency: 'DAILY'
-  });
+  const [deleteModal, setDeleteModal] = useState({ show: false, routeId: null });
+  const [editModal, setEditModal] = useState(null);
 
   useEffect(() => {
     if (loading) return;
     if (!user || user.role !== 'OPERATOR') { navigate('/'); return; }
     fetchRoutes();
-    fetchDrivers();
-    fetchBuses();
   }, [user, loading, navigate]);
 
   const fetchRoutes = async () => {
@@ -96,1777 +34,196 @@ const Schedules = () => {
     }
   };
 
-  const normalizeList = (data) => {
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data?.content)) return data.content;
-    if (Array.isArray(data?.data)) return data.data;
-    return [];
-  };
-
-  const fetchDrivers = async () => {
+  const handleDelete = async () => {
+    setBlockingLoader('Deleting route...');
     try {
-      const data = await getDrivers();
-      setDrivers(normalizeList(data));
-    } catch {
-      setDrivers([]);
-    }
-  };
-
-  const fetchBuses = async () => {
-    try {
-      const data = await getBuses();
-      setBuses(Array.isArray(data) ? data.filter((bus) => bus?.active) : []);
-    } catch {
-      setBuses([]);
-    }
-  };
-
-  const runBlockingAction = async (label, action) => {
-    setBlockingLoader(label);
-    try {
-      return await action();
+      await deleteRoute(deleteModal.routeId);
+      setRoutes(prev => prev.filter(r => r.id !== deleteModal.routeId));
+      setDeleteModal({ show: false, routeId: null });
+      toast.success('Route deleted.');
+    } catch (e) {
+      toast.error(e.message || 'Failed to delete route.');
     } finally {
       setBlockingLoader(null);
     }
   };
 
-  const normalizeTripStatus = (schedule) => String(
-    schedule?.tripStatus ||
-    schedule?.status ||
-    schedule?.tripState ||
-    schedule?.currentStatus ||
-    'SCHEDULED'
-  ).toUpperCase();
-
-  const getScheduleDelayMinutes = (schedule) => {
-    const values = [
-      schedule?.delayMinutes,
-      schedule?.delayedMinutes,
-      schedule?.currentDelayMinutes,
-      schedule?.delayInMinutes,
-    ];
-    const match = values.find(isNumericValue);
-    return match === undefined ? 0 : Number(match);
-  };
-
-  const normalizeSchedule = (schedule) => {
-    const bus = schedule?.bus || buses.find((item) => String(item.id) === String(schedule?.busId)) || null;
-    const tripStatus = normalizeTripStatus(schedule);
-    const delayMinutes = getScheduleDelayMinutes(schedule);
-    return {
-      ...schedule,
-      bus,
-      busId: schedule?.busId || bus?.id || schedule?.bus?.id || '',
-      tripStatus,
-      status: tripStatus,
-      driverId: schedule?.driverId || schedule?.assignedDriverId || schedule?.driver?.id || schedule?.assignedDriver?.id || '',
-      assignedDriverId: schedule?.assignedDriverId || schedule?.driverId || schedule?.driver?.id || schedule?.assignedDriver?.id || '',
-      driverName: schedule?.driverName || schedule?.assignedDriverName || schedule?.driver?.name || schedule?.assignedDriver?.name || '',
-      assignedDriverName: schedule?.assignedDriverName || schedule?.driverName || schedule?.driver?.name || schedule?.assignedDriver?.name || '',
-      actualDepartureTime: schedule?.actualDepartureTime || schedule?.startedAt || schedule?.actualStartTime || null,
-      actualArrivalTime: schedule?.actualArrivalTime || schedule?.completedAt || schedule?.actualEndTime || null,
-      delayMinutes,
-      delayReason: schedule?.delayReason || schedule?.currentDelayReason || '',
-    };
-  };
-
-  const fetchSegments = async (routeId) => {
-    if (segments[routeId]) return;
-    try {
-      const data = await getRouteSegments(routeId);
-      setSegments(prev => ({ ...prev, [routeId]: data }));
-    } catch { /* silent */ }
-  };
-
-  const fetchSchedules = async (routeId, forceRefresh = false) => {
-    if (!forceRefresh && schedules[routeId]) return schedules[routeId];
-    try {
-      const data = await getRouteSchedules(routeId);
-      const list = (data || []).map(normalizeSchedule);
-      setSchedules(prev => ({ ...prev, [routeId]: list }));
-      return list;
-    } catch {
-      setSchedules(prev => ({ ...prev, [routeId]: [] }));
-      return [];
-    }
-  };
-
-  const fetchPoints = async (scheduleId) => {
-    if (points[scheduleId]) return;
-    try {
-      const data = await getPoints(scheduleId);
-      setPoints(prev => ({ ...prev, [scheduleId]: data }));
-    } catch { setPoints(prev => ({ ...prev, [scheduleId]: [] })); }
-  };
-
-  const handleAddPoint = async (scheduleId) => {
-    const form = pointForm[scheduleId] || {};
-    if (!form.name || !form.type) return toast.error('Name and type are required');
-    try {
-      const newPoint = await runBlockingAction('Saving your boarding point...', () => addPoint(scheduleId, form));
-      setPoints(prev => ({ ...prev, [scheduleId]: [...(prev[scheduleId] || []), newPoint] }));
-      setPointForm(prev => ({ ...prev, [scheduleId]: {} }));
-      toast.success('Point added');
-    } catch (e) { toast.error(e.message); }
-  };
-
-  const handleDeletePoint = async (scheduleId, pointId) => {
-    try {
-      await runBlockingAction('Removing this boarding point...', () => deletePoint(scheduleId, pointId));
-      setPoints(prev => ({ ...prev, [scheduleId]: prev[scheduleId].filter(p => p.id !== pointId) }));
-      toast.success('Point deleted');
-    } catch (e) { toast.error(e.message); }
-  };
-
-  const startEditPoint = (scheduleId, point) => {
-    setEditingPoint(prev => ({
-      ...prev,
-      [scheduleId]: {
-        pointId: point.id,
-        name: point.name || '',
-        type: point.type || '',
-        address: point.address || '',
-        landmark: point.landmark || '',
-        arrivalTime: point.arrivalTime || ''
-      }
-    }));
-  };
-
-  const cancelEditPoint = (scheduleId) => {
-    setEditingPoint(prev => ({ ...prev, [scheduleId]: null }));
-  };
-
-  const saveEditPoint = async (scheduleId, pointId) => {
-    const edit = editingPoint[scheduleId] || {};
-    if (!edit.name || !edit.type) return toast.error('Name and type are required');
-    try {
-      const payload = {
-        name: edit.name,
-        type: edit.type,
-        address: edit.address || '',
-        landmark: edit.landmark || '',
-        arrivalTime: edit.arrivalTime || null
-      };
-      const updated = await runBlockingAction('Saving your boarding point...', () => updatePoint(scheduleId, pointId, payload));
-      setPoints(prev => ({
-        ...prev,
-        [scheduleId]: (prev[scheduleId] || []).map(p => (p.id === pointId ? { ...p, ...updated } : p))
-      }));
-      setEditingPoint(prev => ({ ...prev, [scheduleId]: null }));
-      toast.success('Point updated');
-    } catch (e) {
-      toast.error(e.message || 'Failed to update point');
-    }
-  };
-
-  const fetchFares = async (routeId) => {
-    try {
-      const data = await getFares(routeId);
-      const list = Array.isArray(data) ? data : [];
-      setFares(prev => {
-        const previousById = new Map((prev[routeId] || []).map((fare) => [String(fare.id), fare]));
-        const merged = list.map((fare) => {
-          const previous = previousById.get(String(fare.id));
-          if (!previous) return fare;
-          return {
-            ...previous,
-            ...fare,
-            busId: fare?.busId ?? fare?.bus?.id ?? previous?.busId ?? previous?.bus?.id ?? null,
-            bus: fare?.bus || previous?.bus || null,
-            busName: fare?.busName || previous?.busName || previous?.bus?.name || '',
-          };
-        });
-        return { ...prev, [routeId]: merged };
-      });
-    } catch (e) {
-      toast.error('Failed to load fares: ' + e.message);
-    }
-  };
-
-  const normalizeStop = (value) => String(value || '').trim().toLowerCase();
-  const normalizeSeatType = (value) => String(value || '').trim().toUpperCase();
-  const parseSegmentId = (value) => {
-    if (value === null || value === undefined) return '';
-    if (typeof value === 'object') {
-      if (value.id !== null && value.id !== undefined) return String(value.id);
-      return '';
-    }
-    return String(value);
-  };
-  const getSegmentLabelFromStops = (fromStop, toStop) => `${normalizeStop(fromStop)}->${normalizeStop(toStop)}`;
-  const getSegmentLabelFromText = (segmentName = '') => {
-    const [fromStop, toStop] = String(segmentName).split('→').map(v => v?.trim());
-    if (!fromStop || !toStop) return '';
-    return getSegmentLabelFromStops(fromStop, toStop);
-  };
-  const getSelectedSegmentKey = (routeId, segmentId) => {
-    const seg = (segments[routeId] || []).find(s => String(s.id) === String(segmentId));
-    if (!seg) return { idKey: parseSegmentId(segmentId), labelKey: '' };
-    return {
-      idKey: String(seg.id),
-      labelKey: getSegmentLabelFromStops(seg.fromStop, seg.toStop)
-    };
-  };
-  const getFareSegmentKeys = (fare) => {
-    const idKey = parseSegmentId(fare?.segmentId || fare?.segment?.id);
-    const fromStop = fare?.segmentFromStop || fare?.segment?.fromStop || '';
-    const toStop = fare?.segmentToStop || fare?.segment?.toStop || '';
-    const labelKey = fromStop && toStop
-      ? getSegmentLabelFromStops(fromStop, toStop)
-      : getSegmentLabelFromText(fare?.segmentName);
-    return { idKey, labelKey };
-  };
-  const isSameSegment = (selected, fareKeys) => {
-    if (selected.idKey && fareKeys.idKey && selected.idKey === fareKeys.idKey) return true;
-    if (selected.labelKey && fareKeys.labelKey && selected.labelKey === fareKeys.labelKey) return true;
-    return false;
-  };
-  const fareExistsForRoute = (routeId, segmentId, seatType) => {
-    const selectedSegment = getSelectedSegmentKey(routeId, segmentId);
-    const selectedBusId = String(fareForm[routeId]?.busId || '');
-    return (fares[routeId] || []).some(f => {
-      const fareSegment = getFareSegmentKeys(f);
-      const fareBusId = String(f?.busId || f?.bus?.id || '');
-      return (
-        isSameSegment(selectedSegment, fareSegment) &&
-        normalizeSeatType(f.seatType) === normalizeSeatType(seatType) &&
-        fareBusId === selectedBusId
-      );
-    });
-  };
-
-  const getRouteBusById = (routeId, busId) => {
-    if (!busId) return null;
-    const fromSchedules = (schedules[routeId] || []).find((schedule) => String(schedule?.bus?.id) === String(busId))?.bus;
-    if (fromSchedules) return fromSchedules;
-    return buses.find((bus) => String(bus.id) === String(busId)) || null;
-  };
-
-  const getRouteSegmentById = (routeId, segmentId) => (
-    (segments[routeId] || []).find((segment) => String(segment.id) === String(segmentId)) || null
-  );
-
-  const handleAddFare = async (routeId) => {
-    const form = fareForm[routeId] || {};
-    if (!form.segmentId || !form.seatType || !form.baseFare) return toast.error('Segment, seat type and fare are required');
-    if (fareExistsForRoute(routeId, form.segmentId, form.seatType)) {
-      return toast.error('Fare for this segment and seat type already exists');
-    }
-    try {
-      const created = await runBlockingAction('Saving your fares...', () => addFare(routeId, {
-        segmentId: form.segmentId,
-        seatType: normalizeSeatType(form.seatType),
-        baseFare: parseFloat(form.baseFare),
-        gstPercent: 5,
-        busId: form.busId || null,
-      }));
-      const linkedBus = getRouteBusById(routeId, form.busId);
-      const linkedSegment = getRouteSegmentById(routeId, form.segmentId);
-      setFares(prev => ({
-        ...prev,
-        [routeId]: [
-          ...(prev[routeId] || []),
-          {
-            ...created,
-            segmentId: created?.segmentId || form.segmentId,
-            segment: created?.segment || linkedSegment || null,
-            segmentFromStop: created?.segmentFromStop || linkedSegment?.fromStop || '',
-            segmentToStop: created?.segmentToStop || linkedSegment?.toStop || '',
-            segmentName: created?.segmentName || (linkedSegment ? `${linkedSegment.fromStop} → ${linkedSegment.toStop}` : ''),
-            seatType: created?.seatType || normalizeSeatType(form.seatType),
-            baseFare: created?.baseFare ?? parseFloat(form.baseFare),
-            gstPercent: created?.gstPercent ?? 5,
-            busId: created?.busId ?? form.busId ?? null,
-            bus: created?.bus || linkedBus || null,
-            busName: created?.busName || linkedBus?.name || '',
-          },
-        ],
-      }));
-      setFareForm(prev => ({ ...prev, [routeId]: {} }));
-      toast.success('Fare added');
-    } catch (e) { toast.error(e.message); }
-  };
-
-  const handleDeleteFare = async (routeId, fareId) => {
-    try {
-      await runBlockingAction('Removing this fare...', () => deleteFare(routeId, fareId));
-      setFares(prev => ({ ...prev, [routeId]: prev[routeId].filter(f => f.id !== fareId) }));
-      toast.success('Fare deleted');
-    } catch (e) { toast.error(e.message); }
-  };
-
-  const startEditFare = (routeId, fare) => {
-    setEditingFare(prev => ({
-      ...prev,
-      [routeId]: { fareId: fare.id, baseFare: String(fare.baseFare ?? '') }
-    }));
-  };
-
-  const cancelEditFare = (routeId) => {
-    setEditingFare(prev => ({ ...prev, [routeId]: null }));
-  };
-
-  const saveEditFare = async (routeId, fare) => {
-    const edit = editingFare[routeId];
-    const nextBaseFare = parseFloat(edit?.baseFare);
-    if (!edit || !Number.isFinite(nextBaseFare) || nextBaseFare < 0) {
-      return toast.error('Please enter a valid fare amount');
-    }
-
-    try {
-      const fareSegment = getFareSegmentKeys(fare);
-      await runBlockingAction('Saving your fares...', () => updateFare(routeId, fare.id, {
-        segmentId: fareSegment.idKey,
-        seatType: fare.seatType,
-        baseFare: nextBaseFare,
-        gstPercent: fare.gstPercent ?? 5,
-        busId: fare?.busId || fare?.bus?.id || null
-      }));
-      setFares(prev => ({
-        ...prev,
-        [routeId]: (prev[routeId] || []).map((item) => (
-          String(item.id) === String(fare.id)
-            ? { ...item, baseFare: nextBaseFare }
-            : item
-        )),
-      }));
-      setEditingFare(prev => ({ ...prev, [routeId]: null }));
-      toast.success('Fare updated');
-    } catch (e) {
-      toast.error(e.message || 'Failed to update fare');
-    }
-  };
-
-  const toggleRoute = async (routeId) => {
-    if (expandedRoute === routeId) { setExpandedRoute(null); return; }
-    setExpandingRoute(routeId);
-    await fetchSegments(routeId);
-    await fetchSchedules(routeId);
-    setExpandingRoute(null);
-    setExpandedRoute(routeId);
-  };
-
-  const openManageFares = async (routeId) => {
-    await runBlockingAction('Loading fare details...', async () => {
-      await fetchSegments(routeId);
-      await fetchSchedules(routeId);
-      await fetchFares(routeId);
-    });
-    setFareModalRouteId(routeId);
-  };
-
-  const openManagePoints = async (routeId) => {
-    const routeSchedules = await runBlockingAction('Loading boarding and dropping points...', () => fetchSchedules(routeId));
-    const firstSchedule = (routeSchedules || [])[0];
-    if (!firstSchedule?.id) {
-      toast.error('No schedules found for this route yet');
-      return;
-    }
-    await runBlockingAction('Loading boarding and dropping points...', () => fetchPoints(firstSchedule.id));
-    setPointModal({ routeId, scheduleId: firstSchedule.id });
-  };
-
-  const confirmDelete = async () => {
-    const { scheduleId, routeId, type } = deleteModal;
-    try {
-      if (type === 'schedule') {
-        await runBlockingAction('Deleting this schedule...', () => deleteSchedule(scheduleId));
-        setSchedules(prev => ({ ...prev, [routeId]: prev[routeId].filter(s => s.id !== scheduleId) }));
-        toast.success('Schedule deleted.');
-      } else {
-        await runBlockingAction('Deleting this route...', () => deleteRoute(routeId));
-        setRoutes(prev => prev.filter(r => r.id !== routeId));
-        setExpandedRoute(null);
-        toast.success('Route deleted.');
-      }
-      setDeleteModal({ show: false, scheduleId: null, routeId: null, type: null });
-    } catch (err) {
-      toast.error(err.message || `Failed to delete ${type}.`);
-    }
-  };
-
-  const getTripStatus = (schedule) => normalizeTripStatus(schedule);
-
-  const updateScheduleState = (routeId, scheduleId, patch) => {
-    setSchedules(prev => ({
-      ...prev,
-      [routeId]: (prev[routeId] || []).map(s =>
-        String(s.id) === String(scheduleId) ? normalizeSchedule({ ...s, ...patch }) : s
-      )
-    }));
-  };
-
-  const handleStartTrip = async (routeId, scheduleId) => {
-    try {
-      const res = await runBlockingAction('Starting this trip...', () => startTrip(scheduleId));
-      updateScheduleState(routeId, scheduleId, {
-        tripStatus: res?.tripStatus || res?.status || 'STARTED',
-        status: res?.status || res?.tripStatus || 'STARTED',
-        actualDepartureTime: res?.actualDepartureTime || res?.startedAt || new Date().toISOString()
-      });
-      await runBlockingAction('Refreshing trip details...', () => fetchSchedules(routeId, true));
-      toast.success('Trip started');
-    } catch (e) {
-      toast.error(e.message || 'Failed to start trip');
-    }
-  };
-
-  const handleCompleteTrip = async (routeId, scheduleId) => {
-    try {
-      const res = await runBlockingAction('Completing this trip...', () => completeTrip(scheduleId));
-      updateScheduleState(routeId, scheduleId, {
-        tripStatus: res?.tripStatus || res?.status || 'COMPLETED',
-        status: res?.status || res?.tripStatus || 'COMPLETED',
-        actualArrivalTime: res?.actualArrivalTime || res?.completedAt || new Date().toISOString()
-      });
-      await runBlockingAction('Refreshing trip details...', () => fetchSchedules(routeId, true));
-      toast.success('Trip completed');
-    } catch (e) {
-      toast.error(e.message || 'Failed to complete trip');
-    }
-  };
-
-  const submitDelay = async () => {
-    const { routeId, scheduleId, delayMinutes, delayReason } = delayModal;
-    const mins = Number(delayMinutes);
-    if (!routeId || !scheduleId || !Number.isFinite(mins) || mins <= 0) {
-      toast.error('Enter valid delay minutes');
-      return;
-    }
-    try {
-      const res = await runBlockingAction('Saving trip delay...', () => markDelay(scheduleId, mins, delayReason || ''));
-      updateScheduleState(routeId, scheduleId, {
-        tripStatus: res?.tripStatus || res?.status || 'DELAYED',
-        status: res?.status || res?.tripStatus || 'DELAYED',
-        delayMinutes: res?.delayMinutes ?? res?.currentDelayMinutes ?? mins,
-        delayReason: res?.delayReason ?? res?.currentDelayReason ?? (delayReason || '')
-      });
-      await runBlockingAction('Refreshing trip details...', () => fetchSchedules(routeId, true));
-      setDelayModal({ routeId: null, scheduleId: null, delayMinutes: '', delayReason: '' });
-      toast.success('Delay marked');
-    } catch (e) {
-      toast.error(e.message || 'Failed to mark delay');
-    }
-  };
-
-  const getDriverName = (driver) => {
-    if (typeof driver === 'string' && driver.trim()) return driver;
-    if (!driver) return 'Not assigned';
-    const fullName = `${driver.firstName || ''} ${driver.lastName || ''}`.trim();
-    return fullName || driver.name || driver.phone || 'Assigned';
-  };
-
-  const getScheduleDriverId = (schedule) => (
-    String(
-      schedule?.driver?.id ||
-      schedule?.assignedDriver?.id ||
-      schedule?.driverId ||
-      schedule?.assignedDriverId ||
-      ''
-    )
-  );
-
-  const hasAssignedDriver = (schedule) => Boolean(
-    getScheduleDriverId(schedule) ||
-    schedule?.driverName ||
-    schedule?.assignedDriverName ||
-    schedule?.driver?.name ||
-    schedule?.assignedDriver?.name
-  );
-
-  const openAssignDriverModal = (routeId, schedule) => {
-    if (!drivers.length) {
-      toast.error('No drivers added yet. Add one in Drivers page.', {
-        action: {
-          label: 'Open Drivers',
-          onClick: () => navigate(ROUTES.OPERATOR_DRIVERS)
-        }
-      });
-      return;
-    }
-    setDriverAssignModal({
-      routeId,
-      scheduleId: schedule.id,
-      selectedDriverId: getScheduleDriverId(schedule) || String(drivers[0].id)
-    });
-  };
-
-  const handleAssignDriver = async (routeId, scheduleId, driverId) => {
-    if (!driverId) {
-      toast.error(drivers.length ? 'Please select a driver' : 'No drivers available. Add a driver first.');
-      return;
-    }
-    const assignedDriver = drivers.find(d => String(d.id) === String(driverId));
-    if (assignedDriver && isDriverLicenseExpired(assignedDriver)) {
-      toast.error('Expired drivers cannot be assigned to a bus.');
-      return;
-    }
-    try {
-      setAssigningDriver(prev => ({ ...prev, [scheduleId]: true }));
-      const assigned = assignedDriver;
-      const response = await runBlockingAction('Assigning driver...', () => assignDriverToSchedule(scheduleId, driverId));
-      updateScheduleState(routeId, scheduleId, {
-        driver: response?.driver || assigned || { id: driverId },
-        assignedDriver: response?.driver || assigned || { id: driverId },
-        driverId: response?.driverId || String(driverId),
-        assignedDriverId: response?.driverId || String(driverId),
-        driverName: response?.driverName || getDriverName(assigned),
-        assignedDriverName: response?.driverName || getDriverName(assigned),
-        busId: response?.busId || undefined
-      });
-      await runBlockingAction('Refreshing trip details...', () => fetchSchedules(routeId, true));
-      setDriverAssignModal({ routeId: null, scheduleId: null, selectedDriverId: '' });
-      toast.success('Driver assigned successfully');
-    } catch (e) {
-      toast.error(e.message || 'Failed to assign driver');
-    } finally {
-      setAssigningDriver(prev => ({ ...prev, [scheduleId]: false }));
-    }
-  };
-
-  const formatDateTimeLocal = (value) => {
-    if (!value) return '';
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return '';
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
-
-  const openEditScheduleModal = (routeId, schedule) => {
-    setEditScheduleModal({
-      routeId,
-      scheduleId: schedule.id,
-      busId: schedule?.bus?.id ? String(schedule.bus.id) : '',
-      departureTime: formatDateTimeLocal(schedule.departureTime),
-      arrivalTime: formatDateTimeLocal(schedule.arrivalTime),
-      frequency: schedule.frequency || 'DAILY'
-    });
-  };
-
-  const closeEditScheduleModal = () => {
-    setEditScheduleModal({
-      routeId: null,
-      scheduleId: null,
-      busId: '',
-      departureTime: '',
-      arrivalTime: '',
-      frequency: 'DAILY'
-    });
-  };
-
-  const openAddScheduleModal = (routeId) => {
-    setAddScheduleModal({
-      routeId,
-      busId: '',
-      departureTime: '',
-      arrivalTime: '',
-      frequency: 'DAILY'
-    });
-  };
-
-  const closeAddScheduleModal = () => {
-    setAddScheduleModal({
-      routeId: null,
-      busId: '',
-      departureTime: '',
-      arrivalTime: '',
-      frequency: 'DAILY'
-    });
-  };
-
-  const submitScheduleUpdate = async () => {
-    const { routeId, scheduleId, busId, departureTime, arrivalTime, frequency } = editScheduleModal;
-    if (!routeId || !scheduleId || !busId || !departureTime || !arrivalTime || !frequency) {
-      toast.error('All schedule fields are required');
-      return;
-    }
-    const dep = new Date(departureTime);
-    const arr = new Date(arrivalTime);
-    if (Number.isNaN(dep.getTime()) || Number.isNaN(arr.getTime())) {
-      toast.error('Please enter valid date/time values');
-      return;
-    }
-    if (arr <= dep) {
-      toast.error('Arrival time must be after departure time');
-      return;
-    }
-
-    try {
-      const updated = await runBlockingAction('Saving your schedule...', () => updateSchedule(scheduleId, {
-        busId,
-        departureTime: dep.toISOString(),
-        arrivalTime: arr.toISOString(),
-        frequency
-      }));
-      updateScheduleState(routeId, scheduleId, {
-        ...updated,
-        bus: updated?.bus || buses.find((b) => String(b.id) === String(busId))
-      });
-      toast.success('Schedule updated successfully');
-      closeEditScheduleModal();
-    } catch (e) {
-      toast.error(e.message || 'Failed to update schedule');
-    }
-  };
-
-  const submitNewSchedule = async () => {
-    const { routeId, busId, departureTime, arrivalTime, frequency } = addScheduleModal;
-    if (!routeId || !busId || !departureTime || !arrivalTime || !frequency) {
-      toast.error('All schedule fields are required');
-      return;
-    }
-    const dep = new Date(departureTime);
-    const arr = new Date(arrivalTime);
-    if (Number.isNaN(dep.getTime()) || Number.isNaN(arr.getTime())) {
-      toast.error('Please enter valid date/time values');
-      return;
-    }
-    if (arr <= dep) {
-      toast.error('Arrival time must be after departure time');
-      return;
-    }
-
-    try {
-      await runBlockingAction('Creating your schedule...', () => createSchedule(routeId, {
-        busId,
-        departureTime: dep.toISOString(),
-        arrivalTime: arr.toISOString(),
-        frequency
-      }));
-      await runBlockingAction('Refreshing schedules...', () => fetchSchedules(routeId, true));
-      toast.success('Schedule added successfully');
-      closeAddScheduleModal();
-    } catch (e) {
-      toast.error(e.message || 'Failed to create schedule');
-    }
-  };
-
-  const submitEditRoute = async () => {
-    const { id, name, origin, destination } = editRouteModal;
+  const handleEditSave = async () => {
+    const { id, name, origin, destination } = editModal;
     if (!name?.trim() || !origin?.trim() || !destination?.trim()) {
-      toast.error('Name, origin and destination are required');
+      toast.error('All fields are required');
       return;
     }
+    setBlockingLoader('Updating route...');
     try {
-      const updated = await runBlockingAction('Updating route...', () => updateRoute(id, { name, origin, destination }));
+      const updated = await updateRoute(id, { name, origin, destination });
       setRoutes(prev => prev.map(r => r.id === id ? { ...r, ...updated, name, origin, destination } : r));
-      setEditRouteModal(null);
-      toast.success('Route updated successfully');
+      setEditModal(null);
+      toast.success('Route updated.');
     } catch (e) {
-      toast.error(e.message || 'Failed to update route');
+      toast.error(e.message || 'Failed to update route.');
+    } finally {
+      setBlockingLoader(null);
     }
   };
 
-  const handleSaveSegment = async (routeId) => {
-    const edit = editingSegment[routeId];
-    if (!edit?.fromStop?.trim() || !edit?.toStop?.trim()) {
-      toast.error('From stop and to stop are required');
-      return;
-    }
-    try {
-      const updated = await runBlockingAction('Saving segment...', () =>
-        updateSegment(routeId, edit.segmentId, {
-          fromStop: edit.fromStop,
-          toStop: edit.toStop,
-          distanceKm: Number(edit.distanceKm) || 0,
-          durationMinutes: Number(edit.durationMinutes) || 0,
-        })
-      );
-      setSegments(prev => ({
-        ...prev,
-        [routeId]: (prev[routeId] || []).map(s =>
-          String(s.id) === String(edit.segmentId) ? { ...s, ...updated } : s
-        ),
-      }));
-      setEditingSegment(prev => ({ ...prev, [routeId]: null }));
-      toast.success('Segment updated');
-    } catch (e) {
-      toast.error(e.message || 'Failed to update segment');
-    }
-  };
-
-  const handleDeleteSegment = async (routeId, segmentId) => {
-    try {
-      await runBlockingAction('Deleting segment...', () => deleteSegment(routeId, segmentId));
-      setSegments(prev => ({
-        ...prev,
-        [routeId]: (prev[routeId] || []).filter(s => String(s.id) !== String(segmentId)),
-      }));
-      // Also clear fares that belonged to this segment
-      setFares(prev => ({
-        ...prev,
-        [routeId]: (prev[routeId] || []).filter(f =>
-          String(f?.segmentId || f?.segment?.id) !== String(segmentId)
-        ),
-      }));
-      toast.success('Segment deleted');
-    } catch (e) {
-      toast.error(e.message || 'Failed to delete segment');
-    }
-  };
-
-  const handleAddSegment = async (routeId) => {
-    const form = addSegmentForm[routeId] || {};
-    if (!form.fromStop?.trim() || !form.toStop?.trim()) {
-      toast.error('From stop and to stop are required');
-      return;
-    }
-    try {
-      const created = await runBlockingAction('Adding segment...', () =>
-        addSegment(routeId, {
-          fromStop: form.fromStop.trim(),
-          toStop: form.toStop.trim(),
-          distanceKm: Number(form.distanceKm) || 0,
-          durationMinutes: Number(form.durationMinutes) || 0,
-        })
-      );
-      setSegments(prev => ({ ...prev, [routeId]: [...(prev[routeId] || []), created] }));
-      setAddSegmentForm(prev => ({ ...prev, [routeId]: {} }));
-      setShowAddSegment(prev => ({ ...prev, [routeId]: false }));
-      toast.success('Segment added');
-    } catch (e) {
-      toast.error(e.message || 'Failed to add segment');
-    }
-  };
-
-  const handlePreviewRoutePoints = async (routeId) => {
-    try {
-      const data = await runBlockingAction('Loading route points...', () => getRoutePoints(routeId));
-      setRoutePoints(prev => ({ ...prev, [routeId]: Array.isArray(data) ? data : [] }));
-    } catch (e) {
-      toast.error(e.message || 'Failed to load route points');
-    }
-  };
-
-  const handleImportPoints = async (scheduleId, routeId) => {
-    try {
-      await runBlockingAction('Importing points...', () => importPointsFromRoute(scheduleId));
-      // Refresh points for this schedule
-      const fresh = await getPoints(scheduleId);
-      setPoints(prev => ({ ...prev, [scheduleId]: fresh }));
-      setRoutePoints(prev => ({ ...prev, [routeId]: [] })); // clear preview
-      toast.success('Points imported successfully');
-    } catch (e) {
-      toast.error(e.message || 'Failed to import points');
-    }
-  };
-
-  const submitCopyPoints = async () => {
-    const { scheduleId, routeId, targetScheduleId } = copyPointsModal;
-    if (!targetScheduleId) { toast.error('Please select a target schedule'); return; }
-    if (targetScheduleId === scheduleId) { toast.error('Cannot copy to the same schedule'); return; }
-    try {
-      await runBlockingAction('Copying boarding/dropping points...', () => copyPointsToSchedule(scheduleId, targetScheduleId));
-      setCopyPointsModal({ scheduleId: null, routeId: null, targetScheduleId: '' });
-      toast.success('Points copied successfully');
-    } catch (e) {
-      toast.error(e.message || 'Failed to copy points');
-    }
-  };
+  const goToDetail = (routeId) => navigate(`/operator/routes/${routeId}`);
 
   return (
     <>
-      {blockingLoader ? (
-        <CenterScreenLoader
-          label={blockingLoader}
-          description="Please wait while we update your route and schedule details."
-        />
-      ) : null}
-      <OperatorLayout
-        activeItem="schedules"
-        title="Routes & Schedules"
-      >
-        <div className="flex justify-end mb-4">
+      {blockingLoader && <CenterScreenLoader label={blockingLoader} description="Please wait..." />}
+
+      <OperatorLayout activeItem="schedules" title="Routes & Schedules">
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h1 className="text-xl font-black text-slate-900">Routes & Schedules</h1>
+            <p className="text-xs text-slate-500 mt-0.5">{routes.length} route{routes.length !== 1 ? 's' : ''} configured</p>
+          </div>
           <button
             onClick={() => navigate(ROUTES.OPERATOR_CREATE_ROUTE)}
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-black rounded-lg hover:bg-primary/90 transition-colors text-sm font-bold"
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#002046] text-white text-sm font-bold hover:bg-[#003a80] transition-colors shadow-sm"
           >
             <span className="material-symbols-outlined text-sm">add</span>
             Create Route
           </button>
         </div>
+
+        {/* Loading */}
         {loadingRoutes ? (
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-              <p className="mt-4 text-slate-500">Loading routes...</p>
+              <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#002046]/20 border-t-[#002046] mx-auto mb-4" />
+              <p className="text-sm text-slate-500">Loading routes...</p>
             </div>
           </div>
         ) : routes.length === 0 ? (
-          <div className="bg-white dark:bg-op-card rounded-xl p-12 text-center border border-slate-200 dark:border-slate-800">
-            <span className="material-symbols-outlined text-6xl text-slate-300 dark:text-slate-700 mb-4 block">route</span>
-            <h3 className="text-xl font-bold mb-2">No Routes Created Yet</h3>
-            <p className="text-slate-500 dark:text-slate-400 mb-6">Create your first route to start scheduling trips</p>
+          <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm p-16 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+              <span className="material-symbols-outlined text-slate-400 text-3xl">route</span>
+            </div>
+            <h3 className="text-lg font-bold text-slate-800 mb-1">No Routes Created Yet</h3>
+            <p className="text-sm text-slate-500 mb-6">Create your first route to start scheduling trips</p>
             <button
               onClick={() => navigate(ROUTES.OPERATOR_CREATE_ROUTE)}
-              className="bg-primary text-black px-6 py-3 rounded-lg hover:bg-primary/90 transition-colors font-bold"
+              className="px-6 py-2.5 rounded-xl bg-[#002046] text-white font-bold text-sm hover:bg-[#003a80] transition-colors"
             >
               Create Your First Route
             </button>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {routes.map((route) => (
-              <div key={route.id} className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-                <div onClick={() => toggleRoute(route.id)} className="p-4 md:p-6 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                  {/* Row 1: route name + edit */}
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="text-base md:text-lg font-bold">{route.name}</h3>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setEditRouteModal({ id: route.id, name: route.name, origin: route.origin, destination: route.destination }); }}
-                      disabled={Boolean(blockingLoader)}
-                      className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 transition-colors shrink-0"
-                      title="Edit route"
-                    >
-                      <span className="material-symbols-outlined text-sm">edit</span>
-                    </button>
-                  </div>
-                  {/* Row 2: origin → destination */}
-                  <div className="flex flex-wrap items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mb-3">
-                    <span className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">location_on</span>{route.origin}
-                    </span>
-                    <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                    <span className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">location_on</span>{route.destination}
-                    </span>
-                    {route.totalDistanceKm && (
-                      <span className="flex items-center gap-1">
-                        <span className="material-symbols-outlined text-sm">straighten</span>{route.totalDistanceKm} km
-                      </span>
-                    )}
-                  </div>
-                  {/* Row 3: action buttons left, delete + expand right */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {expandingRoute === route.id && (
-                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
-                      )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); openAddScheduleModal(route.id); }}
-                        disabled={Boolean(blockingLoader)}
-                        className="px-2 py-1 text-[11px] rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
-                      >
-                        Add Schedule
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); openManageFares(route.id); }}
-                        disabled={Boolean(blockingLoader)}
-                        className="px-2 py-1 text-[11px] rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
-                      >
-                        Manage Fares
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); openManagePoints(route.id); }}
-                        disabled={Boolean(blockingLoader)}
-                        className="px-2 py-1 text-[11px] rounded-md border border-slate-200 transition-colors hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:hover:bg-slate-800"
-                      >
-                        Manage Points
-                      </button>
+              <div
+                key={route.id}
+                onClick={() => goToDetail(route.id)}
+                className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:ring-[#002046]/20 transition-all group"
+              >
+                {/* Navy hero */}
+                <div className="bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-5 py-4 relative">
+                  <div className="absolute -top-1 -right-3 text-6xl opacity-[0.07] select-none pointer-events-none">★</div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-black text-white truncate mb-1.5">{route.name}</h3>
+                      <div className="flex items-center gap-1 text-white/65 text-xs">
+                        <span className="material-symbols-outlined text-xs">location_on</span>
+                        <span className="font-medium truncate">{route.origin}</span>
+                        <span className="material-symbols-outlined text-sm flex-shrink-0">arrow_forward</span>
+                        <span className="material-symbols-outlined text-xs flex-shrink-0">location_on</span>
+                        <span className="font-medium truncate">{route.destination}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex gap-1 flex-shrink-0">
                       <button
-                        onClick={(e) => { e.stopPropagation(); setDeleteModal({ show: true, routeId: route.id, type: 'route' }); }}
-                        className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-red-500 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); setEditModal({ id: route.id, name: route.name, origin: route.origin, destination: route.destination }); }}
+                        className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/25 flex items-center justify-center transition-colors"
                       >
-                        <span className="material-symbols-outlined text-sm">delete</span>
+                        <span className="material-symbols-outlined text-white text-sm">edit</span>
                       </button>
-                      <span className={`material-symbols-outlined transition-transform ${expandedRoute === route.id ? 'rotate-180' : ''}`}>expand_more</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setDeleteModal({ show: true, routeId: route.id }); }}
+                        className="w-7 h-7 rounded-lg bg-white/10 hover:bg-red-400/30 flex items-center justify-center transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-white text-sm">delete</span>
+                      </button>
                     </div>
                   </div>
                 </div>
 
-                {expandedRoute === route.id && (
-                  <div className="border-t border-slate-200 dark:border-slate-800 p-6 bg-slate-50 dark:bg-slate-900/30">
-                    {segments[route.id]?.length > 0 && (
-                      <div className="mb-6">
-                        <h4 className="font-semibold mb-3 flex items-center gap-2">
-                          <span className="material-symbols-outlined text-sm">route</span>Route Segments
-                        </h4>
-                        <div className="space-y-2">
-                          {segments[route.id].map((segment, idx) => {
-                            const isEditing = editingSegment[route.id]?.segmentId === segment.id;
-                            return (
-                              <div key={segment.id} className="bg-white dark:bg-op-card p-4 rounded-lg border border-slate-200 dark:border-slate-700">
-                                {isEditing ? (
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <input placeholder="From stop *" value={editingSegment[route.id]?.fromStop || ''} onChange={e => setEditingSegment(prev => ({ ...prev, [route.id]: { ...prev[route.id], fromStop: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
-                                    <input placeholder="To stop *" value={editingSegment[route.id]?.toStop || ''} onChange={e => setEditingSegment(prev => ({ ...prev, [route.id]: { ...prev[route.id], toStop: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
-                                    <input type="number" min="0" placeholder="Distance (km)" value={editingSegment[route.id]?.distanceKm || ''} onChange={e => setEditingSegment(prev => ({ ...prev, [route.id]: { ...prev[route.id], distanceKm: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
-                                    <input type="number" min="0" placeholder="Duration (min)" value={editingSegment[route.id]?.durationMinutes || ''} onChange={e => setEditingSegment(prev => ({ ...prev, [route.id]: { ...prev[route.id], durationMinutes: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
-                                    <div className="col-span-2 flex gap-2 justify-end">
-                                      <button onClick={() => setEditingSegment(prev => ({ ...prev, [route.id]: null }))} className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
-                                      <button onClick={() => handleSaveSegment(route.id)} disabled={Boolean(blockingLoader)} className="px-3 py-1.5 text-xs rounded-lg bg-primary text-black font-bold hover:bg-primary/90 disabled:opacity-60">Save</button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                      <span className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">{idx + 1}</span>
-                                      <span className="font-medium">{segment.fromStop}</span>
-                                      <span className="material-symbols-outlined text-sm text-slate-400">arrow_forward</span>
-                                      <span className="font-medium">{segment.toStop}</span>
-                                    </div>
-                                    <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
-                                      <span>{segment.distanceKm} km</span>
-                                      <span>{segment.durationMinutes} min</span>
-                                      <button onClick={() => setEditingSegment(prev => ({ ...prev, [route.id]: { segmentId: segment.id, fromStop: segment.fromStop, toStop: segment.toStop, distanceKm: segment.distanceKm, durationMinutes: segment.durationMinutes } }))} className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500">
-                                        <span className="material-symbols-outlined text-sm">edit</span>
-                                      </button>
-                                      <button onClick={() => handleDeleteSegment(route.id, segment.id)} disabled={Boolean(blockingLoader)} className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-red-500 disabled:opacity-60">
-                                        <span className="material-symbols-outlined text-sm">delete</span>
-                                      </button>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Add Segment */}
-                        {showAddSegment[route.id] ? (
-                          <div className="mt-3 p-3 rounded-lg border border-dashed border-primary/40 bg-primary/5">
-                            <p className="text-xs font-semibold text-primary mb-2">New Segment</p>
-                            <div className="grid grid-cols-2 gap-2">
-                              <input placeholder="From stop *" value={addSegmentForm[route.id]?.fromStop || ''} onChange={e => setAddSegmentForm(prev => ({ ...prev, [route.id]: { ...prev[route.id], fromStop: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
-                              <input placeholder="To stop *" value={addSegmentForm[route.id]?.toStop || ''} onChange={e => setAddSegmentForm(prev => ({ ...prev, [route.id]: { ...prev[route.id], toStop: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
-                              <input type="number" min="0" placeholder="Distance (km)" value={addSegmentForm[route.id]?.distanceKm || ''} onChange={e => setAddSegmentForm(prev => ({ ...prev, [route.id]: { ...prev[route.id], distanceKm: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
-                              <input type="number" min="0" placeholder="Duration (min)" value={addSegmentForm[route.id]?.durationMinutes || ''} onChange={e => setAddSegmentForm(prev => ({ ...prev, [route.id]: { ...prev[route.id], durationMinutes: e.target.value } }))} className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary" />
-                              <div className="col-span-2 flex gap-2 justify-end">
-                                <button onClick={() => setShowAddSegment(prev => ({ ...prev, [route.id]: false }))} className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
-                                <button onClick={() => handleAddSegment(route.id)} disabled={Boolean(blockingLoader)} className="px-3 py-1.5 text-xs rounded-lg bg-primary text-black font-bold hover:bg-primary/90 disabled:opacity-60">Add Segment</button>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <button onClick={() => setShowAddSegment(prev => ({ ...prev, [route.id]: true }))} className="mt-2 flex items-center gap-1 text-xs text-primary hover:underline font-semibold">
-                            <span className="material-symbols-outlined text-sm">add</span> Add Segment
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    {schedules[route.id]?.length > 0 ? (
-                      <div>
-                        <h4 className="font-semibold mb-3 flex items-center gap-2">
-                          <span className="material-symbols-outlined text-sm">schedule</span>
-                          Schedules ({schedules[route.id].length})
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {schedules[route.id].map((schedule) => (
-                            <div key={schedule.id} className="bg-white dark:bg-op-card p-4 rounded-lg border border-slate-200 dark:border-slate-700">
-                              <div className="flex items-start justify-between mb-3">
-                                <div>
-                                  <p className="font-medium">{schedule.bus?.name || 'Bus'}</p>
-                                  <p className="text-xs text-slate-500 dark:text-slate-400">{schedule.bus?.busCode}</p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className={`px-2 py-1 rounded text-xs font-medium ${schedule.active ? 'bg-green-500/10 text-green-500' : 'bg-slate-500/10 text-slate-500'}`}>
-                                    {schedule.active ? 'Active' : 'Inactive'}
-                                  </span>
-                                  <button
-                                    onClick={() => openEditScheduleModal(route.id, schedule)}
-                                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded text-slate-500"
-                                  >
-                                    <span className="material-symbols-outlined text-sm">edit</span>
-                                  </button>
-                                  <button
-                                    onClick={() => setDeleteModal({ show: true, scheduleId: schedule.id, routeId: route.id, type: 'schedule' })}
-                                    className="p-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded text-red-500"
-                                  >
-                                    <span className="material-symbols-outlined text-sm">delete</span>
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="mb-3">
-                                <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                                  getTripStatus(schedule) === 'COMPLETED'
-                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                                    : getTripStatus(schedule) === 'STARTED'
-                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                                    : getTripStatus(schedule) === 'DELAYED'
-                                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                                    : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                                }`}>
-                                  Trip: {getTripStatus(schedule)}
-                                </span>
-                              </div>
-                              <div className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
-                                <div className="flex items-center gap-2">
-                                  <span className="material-symbols-outlined text-sm">schedule</span>
-                                  Departure: {new Date(schedule.departureTime).toLocaleString()}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="material-symbols-outlined text-sm">schedule</span>
-                                  Arrival: {new Date(schedule.arrivalTime).toLocaleString()}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="material-symbols-outlined text-sm">repeat</span>
-                                  {schedule.frequency}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="material-symbols-outlined text-sm">badge</span>
-                                  Driver: {getDriverName(schedule.driver || schedule.assignedDriver || schedule.driverName || schedule.assignedDriverName)}
-                                </div>
-                                {schedule.actualDepartureTime && (
-                                  <div className="flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-sm">play_arrow</span>
-                                    Started: {new Date(schedule.actualDepartureTime).toLocaleString()}
-                                  </div>
-                                )}
-                                {schedule.actualArrivalTime && (
-                                  <div className="flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-sm">task_alt</span>
-                                    Completed: {new Date(schedule.actualArrivalTime).toLocaleString()}
-                                  </div>
-                                )}
-                                {getScheduleDelayMinutes(schedule) ? (
-                                  <div className="flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-sm">warning</span>
-                                    Delayed by {getScheduleDelayMinutes(schedule)} min{schedule.delayReason ? ` · ${schedule.delayReason}` : ''}
-                                  </div>
-                                ) : null}
-                              </div>
-                              <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex flex-wrap gap-2">
-                                <div className="w-full flex items-center gap-2 mb-1">
-                                  <button
-                                    onClick={() => openAssignDriverModal(route.id, schedule)}
-                                    disabled={!!assigningDriver[schedule.id]}
-                                    className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-60"
-                                  >
-                                    {hasAssignedDriver(schedule) ? 'Change Driver' : 'Assign Driver'}
-                                  </button>
-                                </div>
-                                {(getTripStatus(schedule) === 'SCHEDULED' || getTripStatus(schedule) === 'DELAYED') && (
-                                  <button
-                                    onClick={() => handleStartTrip(route.id, schedule.id)}
-                                    className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                                  >
-                                    Start Trip
-                                  </button>
-                                )}
-                                {getTripStatus(schedule) === 'STARTED' && (
-                                  <button
-                                    onClick={() => handleCompleteTrip(route.id, schedule.id)}
-                                    className="px-3 py-1.5 text-xs rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
-                                  >
-                                    Complete Trip
-                                  </button>
-                                )}
-                                {getTripStatus(schedule) !== 'COMPLETED' && (
-                                  <button
-                                    onClick={() => setDelayModal({
-                                      routeId: route.id,
-                                      scheduleId: schedule.id,
-                                      delayMinutes: getScheduleDelayMinutes(schedule) ? String(getScheduleDelayMinutes(schedule)) : '',
-                                      delayReason: schedule.delayReason || ''
-                                    })}
-                                    className="px-3 py-1.5 text-xs rounded-lg border border-yellow-300 text-yellow-700 dark:border-yellow-700 dark:text-yellow-400 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors"
-                                  >
-                                    Mark Delay
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-slate-500 dark:text-slate-400">
-                        <span className="material-symbols-outlined text-4xl mb-2 block">schedule</span>
-                        <p>No schedules created for this route yet</p>
-                      </div>
+                {/* Body */}
+                <div className="px-5 py-4">
+                  <div className="flex items-center gap-3 mb-4">
+                    {route.totalDistanceKm && (
+                      <span className="flex items-center gap-1 text-xs text-slate-500">
+                        <span className="material-symbols-outlined text-slate-400 text-sm">straighten</span>
+                        {route.totalDistanceKm} km
+                      </span>
                     )}
                   </div>
-                )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-slate-400 font-medium">Click to manage schedules, fares & more</span>
+                    <span className="flex items-center gap-1 text-xs font-bold text-[#002046] group-hover:gap-2 transition-all">
+                      Open
+                      <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                    </span>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         )}
       </OperatorLayout>
 
-      {fareModalRouteId && (() => {
-        const routeId = fareModalRouteId;
-        const route = routes.find(r => r.id === routeId);
-        return (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-op-card rounded-xl p-5 w-full max-w-2xl border border-slate-200 dark:border-slate-800 max-h-[85vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold">Manage Fares {route ? `· ${route.name}` : ''}</h3>
-                <button
-                  onClick={() => setFareModalRouteId(null)}
-                  className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-                >
-                  <span className="material-symbols-outlined text-sm">close</span>
-                </button>
+      {/* Edit Route Modal */}
+      {editModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl ring-1 ring-slate-200 overflow-hidden">
+            <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100">
+              <div className="w-9 h-9 bg-[#002046]/10 rounded-xl flex items-center justify-center">
+                <span className="material-symbols-outlined text-[#002046] text-lg">edit_road</span>
               </div>
-
-              {(fares[routeId] || []).length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-2">No fares set yet</p>
-              ) : (
-                Object.entries(
-                  (fares[routeId] || []).reduce((acc, f) => {
-                    const key = f.segmentId || f.segment?.id || 'unknown';
-                    const label = f.segmentFromStop && f.segmentToStop
-                      ? `${f.segmentFromStop} → ${f.segmentToStop}`
-                      : f.segment?.fromStop && f.segment?.toStop
-                      ? `${f.segment.fromStop} → ${f.segment.toStop}`
-                      : (segments[routeId] || []).find(s => String(s.id) === String(key))
-                      ? `${segments[routeId].find(s => String(s.id) === String(key)).fromStop} → ${segments[routeId].find(s => String(s.id) === String(key)).toStop}`
-                      : 'Unknown segment';
-                    if (!acc[label]) acc[label] = [];
-                    acc[label].push(f);
-                    return acc;
-                  }, {})
-                ).map(([segLabel, segFares]) => (
-                  <div key={segLabel} className="mb-2">
-                    <p className="text-xs font-semibold text-slate-500 mb-1">{segLabel}</p>
-                    {segFares.map(f => {
-                      const isEditing = editingFare[routeId]?.fareId === f.id;
-                      return (
-                        <div key={f.id} className="flex items-center justify-between bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-lg text-xs mb-1 gap-2">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="px-1.5 py-0.5 rounded font-bold bg-primary/10 text-primary">{f.seatType?.replace(/_/g, ' ')}</span>
-                            <span className="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200">
-                              {f?.bus?.name || f?.busName || (f?.busId ? `Bus ${f.busId}` : 'Default Route Fare')}
-                            </span>
-                            {isEditing ? (
-                              <div className="relative">
-                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={editingFare[routeId]?.baseFare || ''}
-                                  onChange={e => setEditingFare(prev => ({
-                                    ...prev,
-                                    [routeId]: { ...prev[routeId], baseFare: e.target.value }
-                                  }))}
-                                  className="w-24 pl-5 pr-2 py-1 text-xs border border-slate-200 dark:border-slate-700 rounded bg-white dark:bg-slate-900"
-                                />
-                              </div>
-                            ) : (
-                              <span className="font-bold">₹{f.baseFare}</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {isEditing ? (
-                              <>
-                                <button onClick={() => saveEditFare(routeId, f)} disabled={Boolean(blockingLoader)} className="text-green-600 hover:text-green-700 font-semibold disabled:opacity-50">Save</button>
-                                <button onClick={() => cancelEditFare(routeId)} className="text-slate-500 hover:text-slate-700 font-semibold">Cancel</button>
-                              </>
-                            ) : (
-                              <button onClick={() => startEditFare(routeId, f)} className="text-primary hover:text-primary/80 font-semibold">Edit</button>
-                            )}
-                            <button onClick={() => handleDeleteFare(routeId, f.id)} disabled={Boolean(blockingLoader)} className="text-red-400 hover:text-red-600 disabled:opacity-50">
-                              <span className="material-symbols-outlined text-sm">delete</span>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ))
-              )}
-
-              <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-700">
-                <div className="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                  Choose `Default route fare (all buses)` to apply one fare to every bus on this route, or choose a specific bus to create a bus-specific override.
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                <select
-                  value={fareForm[routeId]?.busId || ''}
-                  onChange={e => setFareForm(prev => ({ ...prev, [routeId]: { ...prev[routeId], busId: e.target.value, seatType: '' } }))}
-                  className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-primary col-span-2"
-                >
-                  <option value="">Default route fare (all buses)</option>
-                  {Array.from(new Map(
-                    (schedules[routeId] || [])
-                      .filter((schedule) => schedule?.bus?.id)
-                      .map((schedule) => [String(schedule.bus.id), schedule.bus])
-                  ).values()).map((bus) => (
-                    <option key={bus.id} value={bus.id}>
-                      {bus.name} ({bus.busCode}) - Bus-specific fare
-                    </option>
-                  ))}
-                </select>
-                <select
-                  value={fareForm[routeId]?.segmentId || ''}
-                  onChange={e => setFareForm(prev => ({ ...prev, [routeId]: { ...prev[routeId], segmentId: e.target.value, seatType: '' } }))}
-                  className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="">Select segment *</option>
-                  {(segments[routeId] || []).map(s => (
-                    <option key={s.id} value={s.id}>{s.fromStop} → {s.toStop}</option>
-                  ))}
-                </select>
-                {(() => {
-                  const busType = schedules[routeId]?.[0]?.bus?.busType || '';
-                  const t = busType.toUpperCase();
-                  const selectedSegmentId = fareForm[routeId]?.segmentId || '';
-                  const selectedSegment = getSelectedSegmentKey(routeId, selectedSegmentId);
-                  const selectedBusId = String(fareForm[routeId]?.busId || '');
-                  const usedSeatTypes = new Set(
-                    (fares[routeId] || [])
-                      .filter(f => (
-                        isSameSegment(selectedSegment, getFareSegmentKeys(f)) &&
-                        String(f?.busId || f?.bus?.id || '') === selectedBusId
-                      ))
-                      .map(f => normalizeSeatType(f.seatType))
-                  );
-                  const seatOptions = (() => {
-                    if (t.includes('AC') && t.includes('SLEEPER')) return [['AC_SLEEPER','AC Sleeper']];
-                    if (t.includes('SLEEPER')) return [['SLEEPER','Sleeper']];
-                    if (t.includes('AC')) return [['AC_SEATER','AC Seater']];
-                    if (t) return [['SEATER','Seater']];
-                    return [['SEATER','Seater'],['SLEEPER','Sleeper'],['AC_SEATER','AC Seater'],['AC_SLEEPER','AC Sleeper']];
-                  })();
-                  return (
-                    <select
-                      value={fareForm[routeId]?.seatType || ''}
-                      onChange={e => setFareForm(prev => ({ ...prev, [routeId]: { ...prev[routeId], seatType: e.target.value } }))}
-                      disabled={!selectedSegmentId}
-                      className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      <option value="">Seat type *</option>
-                      {seatOptions.map(([val, label]) => (
-                        <option key={val} value={val} disabled={!fareForm[routeId]?.segmentId || usedSeatTypes.has(val)}>
-                          {label}
-                          {fareForm[routeId]?.segmentId && usedSeatTypes.has(val) ? ' (Already added)' : ''}
-                        </option>
-                      ))}
-                    </select>
-                  );
-                })()}
-                <div className="relative col-span-2">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs">₹</span>
+              <h3 className="font-extrabold text-base">Edit Route</h3>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              {[
+                { label: 'Route Name *', field: 'name' },
+                { label: 'Origin *', field: 'origin' },
+                { label: 'Destination *', field: 'destination' },
+              ].map(({ label, field }) => (
+                <div key={field}>
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">{label}</label>
                   <input
-                    type="number" min="0" placeholder="Base fare *"
-                    value={fareForm[routeId]?.baseFare || ''}
-                    onChange={e => setFareForm(prev => ({ ...prev, [routeId]: { ...prev[routeId], baseFare: e.target.value } }))}
-                    className="w-full pl-6 pr-3 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-primary"
+                    value={editModal[field]}
+                    onChange={e => setEditModal(prev => ({ ...prev, [field]: e.target.value }))}
+                    className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white outline-none focus:ring-1 focus:ring-[#002046]"
                   />
                 </div>
-                <button
-                  onClick={() => handleAddFare(routeId)}
-                  disabled={Boolean(blockingLoader)}
-                  className="col-span-2 flex items-center justify-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-black transition-colors hover:bg-primary/90 disabled:opacity-60"
-                >
-                  <span className="material-symbols-outlined text-sm">add</span>
-                  Add Fare
-                </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {pointModal.routeId && (() => {
-        const routeId = pointModal.routeId;
-        const route = routes.find(r => r.id === routeId);
-        const routeSchedules = schedules[routeId] || [];
-        const selectedScheduleId = pointModal.scheduleId;
-        return (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-op-card rounded-xl p-5 w-full max-w-2xl border border-slate-200 dark:border-slate-800 max-h-[85vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold">Manage Boarding/Dropping {route ? `· ${route.name}` : ''}</h3>
-                <button
-                  onClick={() => setPointModal({ routeId: null, scheduleId: null })}
-                  className="p-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800"
-                >
-                  <span className="material-symbols-outlined text-sm">close</span>
-                </button>
-              </div>
-
-              <div className="mb-3">
-                <label className="block text-xs text-slate-500 mb-1">Schedule</label>
-                <select
-                  value={selectedScheduleId || ''}
-                  onChange={async (e) => {
-                    const nextScheduleId = e.target.value;
-                    setPointModal(prev => ({ ...prev, scheduleId: nextScheduleId }));
-                    if (nextScheduleId) await fetchPoints(nextScheduleId);
-                  }}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                >
-                  {routeSchedules.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.bus?.name || 'Bus'} ({new Date(s.departureTime).toLocaleString()})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {(points[selectedScheduleId] || []).length === 0 && (
-                <p className="text-xs text-slate-400 text-center py-2">No points added yet</p>
-              )}
-              {(points[selectedScheduleId] || []).map(p => {
-                const isEditing = editingPoint[selectedScheduleId]?.pointId === p.id;
-                return (
-                  <div key={p.id} className="bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-lg text-xs mb-1">
-                    {isEditing ? (
-                      <div className="grid grid-cols-2 gap-2">
-                        <input
-                          placeholder="Point name *"
-                          value={editingPoint[selectedScheduleId]?.name || ''}
-                          onChange={e => setEditingPoint(prev => ({ ...prev, [selectedScheduleId]: { ...prev[selectedScheduleId], name: e.target.value } }))}
-                          className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary"
-                        />
-                        <select
-                          value={editingPoint[selectedScheduleId]?.type || ''}
-                          onChange={e => setEditingPoint(prev => ({ ...prev, [selectedScheduleId]: { ...prev[selectedScheduleId], type: e.target.value } }))}
-                          className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary"
-                        >
-                          <option value="BOARDING">Boarding</option>
-                          <option value="DROPPING">Dropping</option>
-                        </select>
-                        <input
-                          placeholder="Address"
-                          value={editingPoint[selectedScheduleId]?.address || ''}
-                          onChange={e => setEditingPoint(prev => ({ ...prev, [selectedScheduleId]: { ...prev[selectedScheduleId], address: e.target.value } }))}
-                          className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary"
-                        />
-                        <input
-                          placeholder="Landmark"
-                          value={editingPoint[selectedScheduleId]?.landmark || ''}
-                          onChange={e => setEditingPoint(prev => ({ ...prev, [selectedScheduleId]: { ...prev[selectedScheduleId], landmark: e.target.value } }))}
-                          className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary"
-                        />
-                        <input
-                          type="time"
-                          value={editingPoint[selectedScheduleId]?.arrivalTime || ''}
-                          onChange={e => setEditingPoint(prev => ({ ...prev, [selectedScheduleId]: { ...prev[selectedScheduleId], arrivalTime: e.target.value } }))}
-                          className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 outline-none focus:ring-1 focus:ring-primary"
-                        />
-                        <div className="flex items-center gap-3">
-                          <button onClick={() => saveEditPoint(selectedScheduleId, p.id)} disabled={Boolean(blockingLoader)} className="text-green-600 hover:text-green-700 font-semibold disabled:opacity-50">Save</button>
-                          <button onClick={() => cancelEditPoint(selectedScheduleId)} className="text-slate-500 hover:text-slate-700 font-semibold">Cancel</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`px-1.5 py-0.5 rounded font-bold ${p.type === 'BOARDING' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
-                            {p.type}
-                          </span>
-                          <span className="font-medium">{p.name}</span>
-                          {p.arrivalTime && <span className="text-slate-400">{p.arrivalTime}</span>}
-                          {p.landmark && <span className="text-slate-400">· {p.landmark}</span>}
-                          {p.address && <span className="text-slate-400 truncate max-w-[180px]">{p.address}</span>}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button onClick={() => startEditPoint(selectedScheduleId, p)} className="text-primary hover:text-primary/80 font-semibold">Edit</button>
-                          <button onClick={() => handleDeletePoint(selectedScheduleId, p.id)} disabled={Boolean(blockingLoader)} className="ml-2 shrink-0 text-red-400 hover:text-red-600 disabled:opacity-50">
-                            <span className="material-symbols-outlined text-sm">delete</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-100 dark:border-slate-700">
-                <input
-                  placeholder="Point name *"
-                  value={pointForm[selectedScheduleId]?.name || ''}
-                  onChange={e => setPointForm(prev => ({ ...prev, [selectedScheduleId]: { ...prev[selectedScheduleId], name: e.target.value } }))}
-                  className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-primary"
-                />
-                <select
-                  value={pointForm[selectedScheduleId]?.type || ''}
-                  onChange={e => setPointForm(prev => ({ ...prev, [selectedScheduleId]: { ...prev[selectedScheduleId], type: e.target.value } }))}
-                  className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="">Type *</option>
-                  <option value="BOARDING">Boarding</option>
-                  <option value="DROPPING">Dropping</option>
-                </select>
-                <input
-                  placeholder="Address"
-                  value={pointForm[selectedScheduleId]?.address || ''}
-                  onChange={e => setPointForm(prev => ({ ...prev, [selectedScheduleId]: { ...prev[selectedScheduleId], address: e.target.value } }))}
-                  className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-primary"
-                />
-                <input
-                  placeholder="Landmark"
-                  value={pointForm[selectedScheduleId]?.landmark || ''}
-                  onChange={e => setPointForm(prev => ({ ...prev, [selectedScheduleId]: { ...prev[selectedScheduleId], landmark: e.target.value } }))}
-                  className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-primary"
-                />
-                <input
-                  type="time"
-                  value={pointForm[selectedScheduleId]?.arrivalTime || ''}
-                  onChange={e => setPointForm(prev => ({ ...prev, [selectedScheduleId]: { ...prev[selectedScheduleId], arrivalTime: e.target.value } }))}
-                  className="px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-primary"
-                />
-                <button
-                  onClick={() => handleAddPoint(selectedScheduleId)}
-                  disabled={Boolean(blockingLoader)}
-                  className="flex items-center justify-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-black transition-colors hover:bg-primary/90 disabled:opacity-60"
-                >
-                  <span className="material-symbols-outlined text-sm">add</span>
-                  Add Point
-                </button>
-              </div>
-
-              {/* Copy points to another schedule */}
-              {routeSchedules.length > 1 && (
-                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700">
-                  <p className="text-xs font-semibold text-slate-500 mb-2">Copy these points to another schedule</p>
-                  <div className="flex gap-2">
-                    <select
-                      value={copyPointsModal.scheduleId === selectedScheduleId ? copyPointsModal.targetScheduleId : ''}
-                      onChange={e => setCopyPointsModal({ scheduleId: selectedScheduleId, routeId, targetScheduleId: e.target.value })}
-                      className="flex-1 px-2 py-1.5 text-xs border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 outline-none focus:ring-1 focus:ring-primary"
-                    >
-                      <option value="">Select target schedule</option>
-                      {routeSchedules.filter(s => s.id !== selectedScheduleId).map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.bus?.name || 'Bus'} ({new Date(s.departureTime).toLocaleString()})
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={submitCopyPoints}
-                      disabled={Boolean(blockingLoader) || !copyPointsModal.targetScheduleId}
-                      className="px-3 py-1.5 text-xs rounded-lg bg-blue-600 text-white font-bold hover:bg-blue-700 disabled:opacity-60 transition-colors"
-                    >
-                      Copy
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })()}
-
-      {delayModal.scheduleId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-op-card rounded-xl p-6 max-w-md w-full border border-slate-200 dark:border-slate-800">
-            <h3 className="text-lg font-bold mb-4">Mark Delay</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Delay Minutes *</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={delayModal.delayMinutes}
-                  onChange={e => setDelayModal(prev => ({ ...prev, delayMinutes: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Reason</label>
-                <input
-                  type="text"
-                  value={delayModal.delayReason}
-                  onChange={e => setDelayModal(prev => ({ ...prev, delayReason: e.target.value }))}
-                  placeholder="Traffic, weather, etc."
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 justify-end mt-6">
-              <button
-                onClick={() => setDelayModal({ routeId: null, scheduleId: null, delayMinutes: '', delayReason: '' })}
-                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitDelay}
-                className="px-4 py-2 rounded-lg bg-yellow-500 text-black hover:bg-yellow-600 transition-colors font-semibold"
-              >
-                Save Delay
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {driverAssignModal.scheduleId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-op-card rounded-xl p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800">
-            <h3 className="text-lg font-bold mb-4">Assign Driver</h3>
-            <div className="max-h-64 overflow-y-auto space-y-2">
-              {drivers.map((driver) => (
-                <label
-                  key={driver.id}
-                  className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
-                    isDriverLicenseExpired(driver)
-                      ? 'cursor-not-allowed border-red-200 bg-red-50/80 opacity-70 dark:border-red-900/40 dark:bg-red-950/20'
-                      : 'cursor-pointer'
-                  } ${
-                    String(driverAssignModal.selectedDriverId) === String(driver.id)
-                      ? 'border-primary bg-primary/5'
-                      : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="radio"
-                      name="assign-driver"
-                      disabled={isDriverLicenseExpired(driver)}
-                      checked={String(driverAssignModal.selectedDriverId) === String(driver.id)}
-                      onChange={() => setDriverAssignModal(prev => ({ ...prev, selectedDriverId: String(driver.id) }))}
-                    />
-                    <div>
-                      <p className="text-sm font-semibold">{getDriverName(driver)}</p>
-                      <p className="text-xs text-slate-500">{driver.phone} · {driver.licenseNumber}</p>
-                      {isDriverLicenseExpired(driver) ? (
-                        <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
-                          License expired{driver.licenseExpiry ? ` on ${new Date(driver.licenseExpiry).toLocaleDateString()}` : ''}
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-                </label>
               ))}
             </div>
-            <div className="flex gap-3 justify-end mt-6">
-              <button
-                onClick={() => setDriverAssignModal({ routeId: null, scheduleId: null, selectedDriverId: '' })}
-                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleAssignDriver(driverAssignModal.routeId, driverAssignModal.scheduleId, driverAssignModal.selectedDriverId)}
-                disabled={!!assigningDriver[driverAssignModal.scheduleId]}
-                className="px-4 py-2 rounded-lg bg-primary text-black hover:bg-primary/90 transition-colors font-semibold disabled:opacity-60"
-              >
-                {assigningDriver[driverAssignModal.scheduleId] ? 'Assigning...' : 'Confirm Assign'}
-              </button>
+            <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
+              <button onClick={() => setEditModal(null)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
+              <button onClick={handleEditSave} disabled={Boolean(blockingLoader)} className="flex-1 py-2.5 rounded-xl bg-[#002046] text-white font-bold text-sm hover:bg-[#003a80] transition-colors disabled:opacity-60">Save Route</button>
             </div>
           </div>
         </div>
       )}
 
-      {editScheduleModal.scheduleId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-op-card rounded-xl p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800">
-            <h3 className="text-lg font-bold mb-4">Edit Schedule</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Bus *</label>
-                <select
-                  value={editScheduleModal.busId}
-                  onChange={(e) => setEditScheduleModal(prev => ({ ...prev, busId: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                >
-                  <option value="">Select bus</option>
-                  {buses.map((bus) => (
-                    <option key={bus.id} value={bus.id}>
-                      {bus.name} ({bus.busCode}) · {bus.busType?.replace(/_/g, ' ')}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Departure *</label>
-                  <input
-                    type="datetime-local"
-                    value={editScheduleModal.departureTime}
-                    onChange={(e) => setEditScheduleModal(prev => ({ ...prev, departureTime: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Arrival *</label>
-                  <input
-                    type="datetime-local"
-                    value={editScheduleModal.arrivalTime}
-                    onChange={(e) => setEditScheduleModal(prev => ({ ...prev, arrivalTime: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Frequency *</label>
-                <select
-                  value={editScheduleModal.frequency}
-                  onChange={(e) => setEditScheduleModal(prev => ({ ...prev, frequency: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                >
-                  <option value="DAILY">Daily</option>
-                  <option value="WEEKLY">Weekly</option>
-                  <option value="WEEKDAYS">Weekdays</option>
-                  <option value="WEEKENDS">Weekends</option>
-                  <option value="ONCE">One Time</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-3 justify-end mt-6">
-              <button
-                onClick={closeEditScheduleModal}
-                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitScheduleUpdate}
-                className="px-4 py-2 rounded-lg bg-primary text-black hover:bg-primary/90 transition-colors font-semibold"
-              >
-                Save Schedule
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {addScheduleModal.routeId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-op-card rounded-xl p-6 max-w-lg w-full border border-slate-200 dark:border-slate-800">
-            <h3 className="text-lg font-bold mb-4">Add Schedule</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Bus *</label>
-                <select
-                  value={addScheduleModal.busId}
-                  onChange={(e) => setAddScheduleModal(prev => ({ ...prev, busId: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                >
-                  <option value="">Select bus</option>
-                  {buses.map((bus) => (
-                    <option key={bus.id} value={bus.id}>
-                      {bus.name} ({bus.busCode}) · {bus.busType?.replace(/_/g, ' ')}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Departure *</label>
-                  <input
-                    type="datetime-local"
-                    value={addScheduleModal.departureTime}
-                    onChange={(e) => setAddScheduleModal(prev => ({ ...prev, departureTime: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Arrival *</label>
-                  <input
-                    type="datetime-local"
-                    value={addScheduleModal.arrivalTime}
-                    onChange={(e) => setAddScheduleModal(prev => ({ ...prev, arrivalTime: e.target.value }))}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Frequency *</label>
-                <select
-                  value={addScheduleModal.frequency}
-                  onChange={(e) => setAddScheduleModal(prev => ({ ...prev, frequency: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                >
-                  <option value="DAILY">Daily</option>
-                  <option value="WEEKLY">Weekly</option>
-                  <option value="WEEKDAYS">Weekdays</option>
-                  <option value="WEEKENDS">Weekends</option>
-                  <option value="ONCE">One Time</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-3 justify-end mt-6">
-              <button
-                onClick={closeAddScheduleModal}
-                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitNewSchedule}
-                className="px-4 py-2 rounded-lg bg-primary text-black hover:bg-primary/90 transition-colors font-semibold"
-              >
-                Create Schedule
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Delete Modal */}
       {deleteModal.show && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-op-card rounded-xl p-6 max-w-md w-full border border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center">
-                <span className="material-symbols-outlined text-red-500">delete</span>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl ring-1 ring-slate-200 overflow-hidden">
+            <div className="px-6 py-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                <span className="material-symbols-outlined text-red-500 text-xl">delete</span>
               </div>
-              <div>
-                <h3 className="text-lg font-bold">{deleteModal.type === 'route' ? 'Delete Route' : 'Delete Schedule'}</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">This action cannot be undone</p>
-              </div>
+              <h3 className="text-base font-extrabold text-slate-900 mb-1">Delete Route</h3>
+              <p className="text-sm text-slate-500 mb-3">This action cannot be undone</p>
+              <p className="text-sm text-slate-600">All associated schedules, fares, and points will also be deleted.</p>
             </div>
-            <p className="text-slate-600 dark:text-slate-300 mb-6">
-              {deleteModal.type === 'route'
-                ? 'Are you sure you want to delete this route? All associated schedules will also be deleted.'
-                : 'Are you sure you want to delete this schedule?'}
-            </p>
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setDeleteModal({ show: false, scheduleId: null, routeId: null, type: null })}
-                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button onClick={confirmDelete} className="px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition-colors">
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {editRouteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-op-card rounded-xl p-6 max-w-md w-full border border-slate-200 dark:border-slate-800">
-            <h3 className="text-lg font-bold mb-4">Edit Route</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Route Name *</label>
-                <input
-                  value={editRouteModal.name}
-                  onChange={e => setEditRouteModal(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Origin *</label>
-                <input
-                  value={editRouteModal.origin}
-                  onChange={e => setEditRouteModal(prev => ({ ...prev, origin: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Destination *</label>
-                <input
-                  value={editRouteModal.destination}
-                  onChange={e => setEditRouteModal(prev => ({ ...prev, destination: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800"
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 justify-end mt-6">
-              <button
-                onClick={() => setEditRouteModal(null)}
-                className="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={submitEditRoute}
-                disabled={Boolean(blockingLoader)}
-                className="px-4 py-2 rounded-lg bg-primary text-black font-semibold hover:bg-primary/90 transition-colors disabled:opacity-60"
-              >
-                Save Route
-              </button>
+            <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
+              <button onClick={() => setDeleteModal({ show: false, routeId: null })} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
+              <button onClick={handleDelete} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 transition-colors">Delete</button>
             </div>
           </div>
         </div>

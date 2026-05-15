@@ -281,7 +281,7 @@ const UserSettings = () => {
               <button
                 onClick={handleSaveProfile}
                 disabled={savingProfile}
-                className="flex-1 rounded-2xl bg-[#002046] px-4 py-3 text-sm font-bold text-white hover:bg-[#003a80] disabled:opacity-60 transition-colors"
+                className="flex-1 color-white rounded-2xl bg-[#002046] px-4 py-3 text-sm font-bold text-white hover:bg-[#003a80] disabled:opacity-60 transition-colors"
               >
                 {savingProfile ? 'Saving...' : 'Save Changes'}
               </button>

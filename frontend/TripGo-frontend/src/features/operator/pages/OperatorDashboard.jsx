@@ -6,283 +6,406 @@ import { getBuses } from '../../../api/busService';
 import { getOperatorDashboard } from '../../../api/routeService';
 import { getOperatorBookings } from '../../../api/operatorBookingService';
 import { ROUTES } from '../../../shared/constants/routes';
-import './OperatorDashboard.css';
 
-const SuspendedModal = ({ onClose }) => (
-  <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div className="bg-white dark:bg-op-card border border-orange-500/30 rounded-2xl p-10 max-w-md w-full text-center shadow-2xl">
-      <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-        <span className="material-symbols-outlined text-orange-500 text-3xl">block</span>
+const fmt = (v) => `₹${Number(v || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+
+const normalizeList = (resp) => {
+  if (Array.isArray(resp)) return resp;
+  if (Array.isArray(resp?.content)) return resp.content;
+  if (Array.isArray(resp?.data)) return resp.data;
+  return [];
+};
+
+const getGreeting = () => {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+};
+
+const toDisplayBookingId = (booking) => {
+  const raw = String(booking?.publicBookingId || booking?.bookingCode || booking?.bookingId || booking?.id || '').trim();
+  if (!raw) return '--';
+  if (raw.startsWith('TG-')) return raw;
+  const compact = raw.replace(/-/g, '').slice(0, 8).toUpperCase();
+  return compact ? `TG-${compact}` : raw;
+};
+
+const getBookingStatus = (booking) => {
+  const s = String(booking?.status || '').toUpperCase();
+  if (s === 'CONFIRMED') return { label: 'Confirmed', cls: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' };
+  if (s === 'CANCELLED') return { label: 'Cancelled', cls: 'bg-rose-50 text-rose-700', dot: 'bg-rose-500' };
+  return { label: s || 'Pending', cls: 'bg-amber-50 text-amber-700', dot: 'bg-amber-400' };
+};
+
+const QUICK_ACTIONS = [
+  { label: 'Add Bus',       icon: 'directions_bus', route: ROUTES.OPERATOR_ADD_BUS,    color: 'bg-[#002046]/[0.07] text-[#002046]' },
+  { label: 'Create Route',  icon: 'add_road',       route: ROUTES.OPERATOR_CREATE_ROUTE, color: 'bg-emerald-50 text-emerald-700' },
+  { label: 'Schedules',     icon: 'calendar_month', route: ROUTES.OPERATOR_SCHEDULES,  color: 'bg-sky-50 text-sky-700' },
+  { label: 'Bookings',      icon: 'confirmation_number', route: ROUTES.OPERATOR_BOOKINGS, color: 'bg-violet-50 text-violet-700' },
+  { label: 'Drivers',       icon: 'badge',          route: ROUTES.OPERATOR_DRIVERS,    color: 'bg-amber-50 text-amber-700' },
+  { label: 'Earnings',      icon: 'payments',       route: ROUTES.OPERATOR_EARNINGS,   color: 'bg-rose-50 text-rose-600' },
+];
+
+/* ── Suspended screen ── */
+const SuspendedScreen = () => (
+  <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
+    <div className="bg-white ring-1 ring-slate-200 rounded-2xl p-10 max-w-md w-full text-center shadow-sm">
+      <div className="w-14 h-14 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <span className="material-symbols-outlined text-orange-500 text-2xl">block</span>
       </div>
-      <h2 className="text-xl font-bold mb-3">Account Suspended</h2>
-      <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
-        Your operator account has been suspended. Please contact our support team at{' '}
-        <a href="mailto:support@tripgo.com" className="text-primary font-semibold hover:underline">support@tripgo.com</a>
+      <h2 className="text-lg font-extrabold text-slate-900 mb-2">Account Suspended</h2>
+      <p className="text-sm text-slate-500 leading-relaxed">
+        Your operator account has been suspended. Contact{' '}
+        <a href="mailto:support@tripgo.com" className="text-[#002046] font-semibold hover:underline">support@tripgo.com</a>
       </p>
-      <button onClick={onClose} className="mt-6 px-6 py-2.5 bg-primary text-black font-bold rounded-xl hover:bg-primary/90 transition-all">
+    </div>
+  </div>
+);
+
+/* ── Suspended modal (logged-in detection) ── */
+const SuspendedModal = ({ onClose }) => (
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="bg-white ring-1 ring-slate-200 rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl">
+      <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+        <span className="material-symbols-outlined text-orange-500 text-xl">block</span>
+      </div>
+      <h2 className="text-base font-extrabold text-slate-900 mb-2">Account Suspended</h2>
+      <p className="text-sm text-slate-500 mb-5">Please contact support@tripgo.com for assistance.</p>
+      <button onClick={onClose} className="px-6 py-2.5 bg-[#002046] text-white font-bold rounded-xl hover:bg-[#003a80] transition-colors text-sm">
         Go to Login
       </button>
     </div>
   </div>
 );
 
+/* ── Skeleton pulse ── */
+const Pulse = ({ w = 'w-16', h = 'h-8' }) => (
+  <div className={`${w} ${h} bg-white/20 rounded animate-pulse`} />
+);
+
 const OperatorDashboard = () => {
   const navigate = useNavigate();
   const { user, loading, suspendedWhileLoggedIn, setSuspendedWhileLoggedIn } = useAuth();
+
   const [buses, setBuses] = useState([]);
   const [loadingBuses, setLoadingBuses] = useState(true);
-  const [stats, setStats] = useState({
-    totalBookings: 0,
-    confirmedBookings: 0,
-    cancelledBookings: 0,
-    totalRevenue: 0,
-    totalBuses: 0,
-    totalRoutes: 0
-  });
+
+  const [stats, setStats] = useState({ totalBookings: 0, confirmedBookings: 0, cancelledBookings: 0, totalRevenue: 0, totalBuses: 0, totalRoutes: 0 });
   const [loadingStats, setLoadingStats] = useState(true);
+
+  const [recentBookings, setRecentBookings] = useState([]);
+  const [loadingBookings, setLoadingBookings] = useState(true);
 
   useEffect(() => {
     if (loading) return;
     if (!user || (user.role && user.role !== 'OPERATOR')) navigate(ROUTES.DASHBOARD, { replace: true });
   }, [user, loading, navigate]);
 
-  if (!loading && user?.operatorStatus === 'SUSPENDED') {
-    return (
-      <div className="bg-op-bg min-h-screen flex items-center justify-center p-6">
-        <div className="bg-white dark:bg-op-card border border-orange-500/30 rounded-2xl p-10 max-w-md w-full text-center shadow-2xl">
-          <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-outlined text-orange-500 text-3xl">block</span>
-          </div>
-          <h2 className="text-xl font-bold mb-3">Account Suspended</h2>
-          <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">
-            Your operator account has been suspended. Please contact our support team at{' '}
-            <a href="mailto:support@tripgo.com" className="text-primary font-semibold hover:underline">support@tripgo.com</a>
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   useEffect(() => {
     fetchBuses();
-    fetchOperatorStats();
+    fetchStats();
+    fetchRecentBookings();
   }, []);
 
   const fetchBuses = async () => {
     try {
       setLoadingBuses(true);
-      const data = await getBuses();
-      setBuses(data || []);
-    } catch {
-      setBuses([]);
-    } finally {
-      setLoadingBuses(false);
-    }
+      setBuses(await getBuses() || []);
+    } catch { setBuses([]); }
+    finally { setLoadingBuses(false); }
   };
 
-  const fetchOperatorStats = async () => {
+  const fetchStats = async () => {
     try {
       setLoadingStats(true);
-      const [dashboard, bookingsResp, cancelledResp] = await Promise.all([
+      const [dashboard, allResp, cancelResp] = await Promise.all([
         getOperatorDashboard(),
         getOperatorBookings(),
-        getOperatorBookings('CANCELLED')
+        getOperatorBookings('CANCELLED'),
       ]);
-
-      const normalizeList = (resp) => {
-        if (Array.isArray(resp)) return resp;
-        if (Array.isArray(resp?.content)) return resp.content;
-        if (Array.isArray(resp?.data)) return resp.data;
-        return [];
-      };
-
-      const allBookings = normalizeList(bookingsResp);
-      const cancelledBookingsList = normalizeList(cancelledResp);
-
-      const totalBookings = allBookings.length || Number(dashboard?.totalBookings || 0);
-      const cancelledBookings = cancelledBookingsList.length || Number(dashboard?.cancelledBookings || 0);
-      const confirmedBookings = Number(dashboard?.confirmedBookings ?? Math.max(totalBookings - cancelledBookings, 0));
-
+      const all       = normalizeList(allResp);
+      const cancelled = normalizeList(cancelResp);
+      const total     = all.length || Number(dashboard?.totalBookings || 0);
+      const canc      = cancelled.length || Number(dashboard?.cancelledBookings || 0);
       setStats({
-        totalBookings,
-        confirmedBookings,
-        cancelledBookings,
-        totalRevenue: Number(dashboard?.totalRevenue || 0),
-        totalBuses: Number(dashboard?.totalBuses || 0),
-        totalRoutes: Number(dashboard?.totalRoutes || 0)
+        totalBookings:     total,
+        confirmedBookings: Number(dashboard?.confirmedBookings ?? Math.max(total - canc, 0)),
+        cancelledBookings: canc,
+        totalRevenue:      Number(dashboard?.totalRevenue || 0),
+        totalBuses:        Number(dashboard?.totalBuses || 0),
+        totalRoutes:       Number(dashboard?.totalRoutes || 0),
       });
     } catch {
-      setStats({
-        totalBookings: 0,
-        confirmedBookings: 0,
-        cancelledBookings: 0,
-        totalRevenue: 0,
-        totalBuses: 0,
-        totalRoutes: 0
-      });
-    } finally {
-      setLoadingStats(false);
-    }
+      setStats({ totalBookings: 0, confirmedBookings: 0, cancelledBookings: 0, totalRevenue: 0, totalBuses: 0, totalRoutes: 0 });
+    } finally { setLoadingStats(false); }
   };
 
-  const activeBuses = buses.filter(b => b.active).length;
-  const resolvedTotalBuses = buses.length > 0 ? buses.length : stats.totalBuses;
+  const fetchRecentBookings = async () => {
+    try {
+      setLoadingBookings(true);
+      const data = normalizeList(await getOperatorBookings());
+      setRecentBookings(data.slice(0, 8));
+    } catch { setRecentBookings([]); }
+    finally { setLoadingBookings(false); }
+  };
+
+  if (!loading && user?.operatorStatus === 'SUSPENDED') return <SuspendedScreen />;
+
+  const activeBuses  = buses.filter(b => b.active).length;
+  const pendingBuses = buses.length - activeBuses;
+  const totalBuses   = buses.length > 0 ? buses.length : stats.totalBuses;
+
+  const firstName = user?.firstName || user?.name?.split(' ')[0] || 'Operator';
+
+  const KPI_CARDS = [
+    { label: 'Total Revenue',      value: loadingStats ? null : fmt(stats.totalRevenue),       sub: 'all time',              icon: 'payments',             grad: 'from-[#002046] via-[#003a80] to-[#001224]', light: false },
+    { label: 'Confirmed Bookings', value: loadingStats ? null : stats.confirmedBookings,        sub: `${stats.cancelledBookings} cancelled`, icon: 'confirmation_number', iconColor: 'text-emerald-600', iconBg: 'bg-emerald-50', light: true },
+    { label: 'Total Buses',        value: loadingBuses ? null : totalBuses,                     sub: `${activeBuses} active · ${pendingBuses} pending`, icon: 'directions_bus', grad: 'from-[#1e1b4b] via-[#3730a3] to-[#0f0c29]', light: false },
+    { label: 'Routes',             value: loadingStats ? null : stats.totalRoutes,              sub: 'configured routes',     icon: 'route',                iconColor: 'text-[#002046]', iconBg: 'bg-[#002046]/[0.07]', light: true },
+  ];
 
   return (
     <OperatorLayout activeItem="overview" title="Overview">
       {suspendedWhileLoggedIn && (
-        <SuspendedModal onClose={() => {
-          setSuspendedWhileLoggedIn(false);
-          navigate(ROUTES.LOGIN);
-        }} />
+        <SuspendedModal onClose={() => { setSuspendedWhileLoggedIn(false); navigate(ROUTES.LOGIN); }} />
       )}
-      <div className="space-y-8">
 
-        {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+      <div className="space-y-5">
 
-          {/* Total Buses */}
-          <div className="bg-blue-50 dark:bg-blue-950/30 p-6 rounded-xl border-l-4 border-blue-500 border border-blue-100 dark:border-blue-900/50 flex items-start justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Buses</p>
-              <h3 className="text-3xl font-bold mt-2 text-blue-700 dark:text-blue-300">{loadingBuses ? '...' : resolvedTotalBuses}</h3>
-              <p className="text-xs text-slate-400 mt-2 flex items-center gap-1">
-                <span className="material-symbols-outlined text-xs">info</span>
-                {loadingStats ? '...' : `${stats.totalRoutes} routes`} · {loadingBuses ? '...' : `${activeBuses} active`}
-              </p>
-            </div>
-            <div className="bg-blue-500/10 p-3 rounded-lg text-blue-500">
-              <span className="material-symbols-outlined">directions_bus</span>
-            </div>
-          </div>
-
-          {/* Confirmed Bookings */}
-          <div className="bg-green-50 dark:bg-green-950/30 p-6 rounded-xl border-l-4 border-green-500 border border-green-100 dark:border-green-900/50 flex items-start justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Confirmed Bookings</p>
-              <h3 className="text-3xl font-bold mt-2 text-green-700 dark:text-green-300">{loadingStats ? '...' : stats.confirmedBookings}</h3>
-              <p className="text-xs text-slate-400 mt-2">Cancelled: {loadingStats ? '...' : stats.cancelledBookings}</p>
-            </div>
-            <div className="bg-green-500/10 p-3 rounded-lg text-green-500">
-              <span className="material-symbols-outlined">route</span>
-            </div>
-          </div>
-
-          {/* Total Bookings */}
-          <div className="bg-orange-50 dark:bg-orange-950/30 p-6 rounded-xl border-l-4 border-orange-500 border border-orange-100 dark:border-orange-900/50 flex items-start justify-between">
-            <div>
-              <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Bookings</p>
-              <h3 className="text-3xl font-bold mt-2 text-orange-700 dark:text-orange-300">{loadingStats ? '...' : stats.totalBookings}</h3>
-              <p className="text-xs text-slate-400 mt-2">All booking statuses</p>
-            </div>
-            <div className="bg-orange-500/10 p-3 rounded-lg text-orange-500">
-              <span className="material-symbols-outlined">confirmation_number</span>
-            </div>
-          </div>
-
-          {/* Total Revenue */}
-          <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-6 rounded-xl flex items-start justify-between relative overflow-hidden group">
-            <div className="relative z-10">
-              <p className="text-sm font-medium text-white/80">Total Revenue</p>
-              <h3 className="text-3xl font-bold mt-2 text-white">{loadingStats ? '...' : `₹${Math.round(stats.totalRevenue).toLocaleString()}`}</h3>
-              <p className="text-xs text-white/80 mt-2">Revenue from confirmed bookings</p>
-            </div>
-            <div className="bg-white/20 p-3 rounded-lg text-white relative z-10">
-              <span className="material-symbols-outlined">payments</span>
-            </div>
-            <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition-all"></div>
-          </div>
+        {/* Header */}
+        <div>
+          <p className="text-sm text-slate-400 font-medium">{getGreeting()},</p>
+          <h1 className="text-2xl font-black text-slate-900">{firstName}</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
         </div>
 
-        {/* Content Grid */}
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        {/* KPI cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+          {KPI_CARDS.map((card) => (
+            card.light ? (
+              <div key={card.label} className="rounded-2xl bg-white ring-1 ring-slate-200 p-3 sm:p-5 shadow-sm relative overflow-hidden">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[9px] sm:text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5 sm:mb-2">{card.label}</p>
+                    {card.value === null ? (
+                      <div className="w-16 h-8 bg-slate-100 rounded animate-pulse" />
+                    ) : (
+                      <p className="text-2xl sm:text-3xl font-black text-slate-900">{card.value}</p>
+                    )}
+                    <p className="text-[10px] sm:text-xs text-slate-400 mt-1 sm:mt-1.5 truncate">{card.sub}</p>
+                  </div>
+                  <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl ${card.iconBg} flex items-center justify-center flex-shrink-0`}>
+                    <span className={`material-symbols-outlined text-sm sm:text-base ${card.iconColor}`}>{card.icon}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div key={card.label} className={`rounded-2xl bg-gradient-to-br ${card.grad} p-3 sm:p-5 text-white shadow-sm relative overflow-hidden`}>
+                <div className="absolute -top-2 -right-2 text-5xl opacity-10 select-none">★</div>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[9px] sm:text-[10px] font-semibold opacity-60 uppercase tracking-wider mb-1.5 sm:mb-2">{card.label}</p>
+                    {card.value === null ? (
+                      <Pulse />
+                    ) : (
+                      <p className="text-2xl sm:text-3xl font-black">{card.value}</p>
+                    )}
+                    <p className="text-[10px] sm:text-xs opacity-50 mt-1 sm:mt-1.5 truncate">{card.sub}</p>
+                  </div>
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white/10 flex items-center justify-center flex-shrink-0">
+                    <span className="material-symbols-outlined text-white text-sm sm:text-base">{card.icon}</span>
+                  </div>
+                </div>
+              </div>
+            )
+          ))}
+        </div>
 
-          {/* Live Trip Status */}
-          <div className="xl:col-span-2 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-bold tracking-tight">Live Trip Status</h3>
+        {/* Main grid */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+
+          {/* Recent bookings — 2/3 width */}
+          <div className="xl:col-span-2 rounded-2xl bg-white ring-1 ring-slate-200 overflow-hidden shadow-sm">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <p className="text-sm font-black text-slate-900">Recent Bookings</p>
+              <button
+                onClick={() => navigate(ROUTES.OPERATOR_BOOKINGS)}
+                className="text-xs font-semibold text-[#002046] hover:underline flex items-center gap-1"
+              >
+                View all
+                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              </button>
             </div>
-            <div className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800">
-              <div className="flex flex-col items-center justify-center py-16 text-center px-6">
-                <span className="material-symbols-outlined text-5xl text-slate-300 dark:text-slate-700 mb-3">route</span>
-                <p className="text-slate-500 font-medium">
-                  {loadingStats ? 'Loading dashboard stats...' : `${stats.totalRoutes} route${stats.totalRoutes > 1 ? 's' : ''} configured`}
-                </p>
-                <p className="text-slate-400 text-sm mt-1">
-                  {loadingStats ? 'Fetching latest operator dashboard data.' : `${stats.totalBuses} buses and ${stats.totalBookings} bookings in summary.`}
-                </p>
-                <button
-                  onClick={() => navigate(ROUTES.OPERATOR_SCHEDULES)}
-                  className="mt-4 px-4 py-2 bg-primary text-black text-sm font-bold rounded-lg hover:bg-primary/90 transition-colors"
-                >
-                  Create Schedule
+
+            {loadingBookings ? (
+              <div className="p-10 flex items-center justify-center gap-3 text-sm text-slate-400">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-[#002046]/30 border-t-[#002046]" />
+                Loading bookings...
+              </div>
+            ) : recentBookings.length === 0 ? (
+              <div className="p-10 text-center">
+                <span className="material-symbols-outlined text-4xl text-slate-200">confirmation_number</span>
+                <p className="mt-3 text-sm font-semibold text-slate-500">No bookings yet</p>
+                <p className="mt-1 text-xs text-slate-400">Bookings will appear here once passengers book your buses.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-slate-100 bg-slate-50/80">
+                      <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Booking ID</th>
+                      <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Passenger</th>
+                      <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">Route</th>
+                      <th className="px-5 py-3 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                      <th className="px-5 py-3 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden lg:table-cell">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {recentBookings.map((booking, i) => {
+                      const id = toDisplayBookingId(booking);
+                      const { label, cls, dot } = getBookingStatus(booking);
+                      const passengers = Array.isArray(booking?.passengers) ? booking.passengers : Array.isArray(booking?.bookingSeats) ? booking.bookingSeats.map(s => s?.passenger) : [];
+                      const pax = passengers[0];
+                      const passengerName = pax ? `${pax.firstName || ''} ${pax.lastName || ''}`.trim() : (booking?.passengerName || booking?.customerName || 'Passenger');
+                      const route = booking?.routeName || [booking?.from || booking?.source, booking?.to || booking?.destination].filter(Boolean).join(' → ') || '—';
+                      const amount = booking?.payableAmount ?? booking?.amount ?? booking?.fare ?? null;
+
+                      return (
+                        <tr key={i} className="hover:bg-slate-50/70 transition-colors">
+                          <td className="px-5 py-3.5">
+                            <span className="text-xs font-mono text-slate-600">{id}</span>
+                          </td>
+                          <td className="px-5 py-3.5 hidden sm:table-cell">
+                            <span className="text-sm font-medium text-slate-800 truncate max-w-[120px] block">{passengerName}</span>
+                          </td>
+                          <td className="px-5 py-3.5 hidden md:table-cell">
+                            <span className="text-sm text-slate-500 truncate max-w-[160px] block">{route}</span>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${cls}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
+                              {label}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 text-right hidden lg:table-cell">
+                            {amount != null ? (
+                              <span className="text-sm font-bold text-[#002046]">₹{Number(amount).toLocaleString()}</span>
+                            ) : <span className="text-xs text-slate-400">—</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Right column */}
+          <div className="space-y-5">
+
+            {/* Quick actions */}
+            <div className="rounded-2xl bg-white ring-1 ring-slate-200 overflow-hidden shadow-sm">
+              <div className="px-5 py-4 border-b border-slate-100">
+                <p className="text-sm font-black text-slate-900">Quick Actions</p>
+              </div>
+              <div className="p-3 grid grid-cols-3 gap-2">
+                {QUICK_ACTIONS.map((action) => (
+                  <button
+                    key={action.label}
+                    onClick={() => navigate(action.route)}
+                    className="flex flex-col items-center gap-1.5 rounded-xl p-3 hover:bg-slate-50 transition-colors group"
+                  >
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${action.color} group-hover:scale-105 transition-transform`}>
+                      <span className="material-symbols-outlined text-lg">{action.icon}</span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-slate-600 text-center leading-tight">{action.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Fleet status */}
+            <div className="rounded-2xl bg-white ring-1 ring-slate-200 overflow-hidden shadow-sm">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                <p className="text-sm font-black text-slate-900">Fleet Status</p>
+                <button onClick={() => navigate(ROUTES.OPERATOR_MY_BUSES)} className="text-xs font-semibold text-[#002046] hover:underline flex items-center gap-1">
+                  View all
+                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
               </div>
-            </div>
+              <div className="px-5 py-4 space-y-4">
+                {loadingBuses ? (
+                  <div className="animate-pulse space-y-3">
+                    <div className="h-3 bg-slate-200 rounded w-full" />
+                    <div className="h-3 bg-slate-200 rounded w-3/4" />
+                  </div>
+                ) : buses.length === 0 ? (
+                  <div className="text-center py-4">
+                    <span className="material-symbols-outlined text-3xl text-slate-200">directions_bus</span>
+                    <p className="text-xs text-slate-400 mt-2">No buses registered yet</p>
+                    <button
+                      onClick={() => navigate(ROUTES.OPERATOR_ADD_BUS)}
+                      className="mt-3 text-xs font-semibold text-[#002046] hover:underline"
+                    >
+                      Add your first bus →
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <div className="flex items-center justify-between text-xs mb-1.5">
+                        <span className="flex items-center gap-1.5 text-slate-600 font-medium">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                          Active
+                        </span>
+                        <span className="font-bold text-slate-900">{activeBuses} / {buses.length}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-emerald-500 transition-all"
+                          style={{ width: buses.length ? `${(activeBuses / buses.length) * 100}%` : '0%' }}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between text-xs mb-1.5">
+                        <span className="flex items-center gap-1.5 text-slate-600 font-medium">
+                          <span className="w-2 h-2 rounded-full bg-amber-400" />
+                          Pending Approval
+                        </span>
+                        <span className="font-bold text-slate-900">{pendingBuses}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-amber-400 transition-all"
+                          style={{ width: buses.length ? `${(pendingBuses / buses.length) * 100}%` : '0%' }}
+                        />
+                      </div>
+                    </div>
 
-            {/* Map */}
-            <div className="h-64 rounded-xl overflow-hidden relative border border-slate-200 dark:border-slate-800">
-              <iframe
-                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d497698.77490949244!2d77.3507609!3d12.9539974!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3bae1670c9b44e6d%3A0xf8dfc3e8517e4fe0!2sBengaluru%2C%20Karnataka!5e0!3m2!1sen!2sin!4v1234567890123!5m2!1sen!2sin"
-                width="100%" height="100%" style={{ border: 0 }}
-                allowFullScreen loading="lazy" referrerPolicy="no-referrer-when-downgrade"
-                className="grayscale"
-              ></iframe>
-              <div className="absolute inset-0 bg-gradient-to-t from-op-bg/80 to-transparent flex items-end p-6 pointer-events-none">
-                <div className="flex items-center gap-4">
-                  <span className="flex items-center gap-2 text-sm text-white bg-op-bg/60 backdrop-blur px-3 py-1 rounded-full border border-white/10">
-                    <span className="w-2 h-2 rounded-full bg-primary"></span> {activeBuses} Active
-                  </span>
-                  <span className="flex items-center gap-2 text-sm text-white bg-op-bg/60 backdrop-blur px-3 py-1 rounded-full border border-white/10">
-                    <span className="w-2 h-2 rounded-full bg-slate-400"></span> {buses.length - activeBuses} In Garage
-                  </span>
-                </div>
+                    <div className="pt-1 border-t border-slate-100 grid grid-cols-2 gap-3">
+                      {buses.slice(0, 4).map((bus) => (
+                        <div key={bus.id} className="flex items-center gap-2">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${bus.active ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                          <span className="text-xs text-slate-600 truncate">{bus.name || bus.busName}</span>
+                        </div>
+                      ))}
+                      {buses.length > 4 && (
+                        <span className="text-xs text-slate-400 col-span-2">+{buses.length - 4} more</span>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
-          </div>
 
-          {/* Right Column */}
-          <div className="space-y-4">
-            <h3 className="text-xl font-bold tracking-tight">Recent Activity</h3>
-            <div className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800 p-6">
-              <div className="flex flex-col items-center justify-center py-10 text-center">
-                <span className="material-symbols-outlined text-5xl text-slate-300 dark:text-slate-700 mb-3">history</span>
-                <p className="text-slate-500 font-medium">No recent activity</p>
-                <p className="text-slate-400 text-sm mt-1">Bookings and events will appear here.</p>
-              </div>
-            </div>
-
-            {/* Fleet Stats — real data */}
-            <div className="bg-white dark:bg-op-card rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
-              <h4 className="text-sm font-bold uppercase tracking-wider text-slate-400">Fleet Overview</h4>
-              {loadingBuses ? (
-                <div className="animate-pulse space-y-3">
-                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded"></div>
-                  <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded"></div>
-                </div>
-              ) : buses.length === 0 ? (
-                <p className="text-sm text-slate-400">No buses registered yet.</p>
-              ) : (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm">Active Buses</span>
-                    <span className="text-sm font-bold text-green-500">{activeBuses} / {buses.length}</span>
-                  </div>
-                  <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-green-500 h-full transition-all" style={{ width: buses.length ? `${(activeBuses / buses.length) * 100}%` : '0%' }}></div>
-                  </div>
-                  <div className="flex items-center justify-between pt-2">
-                    <span className="text-sm">Pending Approval</span>
-                    <span className="text-sm font-bold text-yellow-500">{buses.length - activeBuses}</span>
-                  </div>
-                  <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-yellow-500 h-full transition-all" style={{ width: buses.length ? `${((buses.length - activeBuses) / buses.length) * 100}%` : '0%' }}></div>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
         </div>
+
       </div>
     </OperatorLayout>
   );
