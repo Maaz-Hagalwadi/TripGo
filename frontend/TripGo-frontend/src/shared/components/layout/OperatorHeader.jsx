@@ -198,7 +198,7 @@ const OperatorHeader = ({
                   My Profile
                 </button>
                 <button
-                  onClick={() => { setShowProfileDropdown(false); navigate(ROUTES.USER_SETTINGS); }}
+                  onClick={() => { setShowProfileDropdown(false); navigate(ROUTES.OPERATOR_SETTINGS); }}
                   className="w-full px-4 py-3 text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-3"
                 >
                   <span className="material-symbols-outlined text-lg">settings</span>
