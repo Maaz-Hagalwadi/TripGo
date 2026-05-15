@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { fetchCurrentUser, loginRequest, pingHealth } from '../services/authService';
+import { fetchCurrentUser, loginRequest, pingHealth, sendOtpRequest, verifyOtpRequest } from '../services/authService';
 import { API_BASE_URL } from '../../config/env';
 import { toast } from 'sonner';
 import { scheduleProactiveRefresh } from '../../api/apiClient';
@@ -134,6 +134,22 @@ export const AuthProvider = ({ children }) => {
     return { success: true };
   };
 
+  const sendLoginOtp = async (payload) => {
+    const result = await sendOtpRequest(payload);
+    if (result.error) return { success: false, error: result.error };
+    return { success: true };
+  };
+
+  const loginWithOtp = async (payload) => {
+    const result = await verifyOtpRequest(payload);
+    if (result.error) return { success: false, error: result.error };
+    localStorage.setItem('accessToken', result.accessToken);
+    localStorage.setItem('refreshToken', result.refreshToken);
+    scheduleProactiveRefresh(result.accessToken);
+    await checkAuth();
+    return { success: true };
+  };
+
   const logout = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
@@ -147,7 +163,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, user, loading, login, logout, checkAuth, updateUser, suspendedWhileLoggedIn, setSuspendedWhileLoggedIn }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, loading, login, sendLoginOtp, loginWithOtp, logout, checkAuth, updateUser, suspendedWhileLoggedIn, setSuspendedWhileLoggedIn }}>
       {children}
     </AuthContext.Provider>
   );

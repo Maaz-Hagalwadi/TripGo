@@ -6,7 +6,6 @@ import Header from '../../../shared/components/layout/Header';
 import HeroSection from './HeroSection';
 import WhyChooseUs from './WhyChooseUs';
 import ExploreSection from './ExploreSection';
-import Footer from '../../../shared/components/layout/Footer';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -47,22 +46,21 @@ const Home = () => {
 
   if (isProcessingOAuth || (loading && searchParams.get('token'))) {
     return (
-      <div className="bg-deep-black min-h-screen flex items-center justify-center">
+      <div className="bg-white min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white text-lg">Completing sign in...</p>
+          <p className="text-slate-700 text-lg font-medium">Completing sign in...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen theme-bg">
+    <div className="min-h-screen bg-white">
       <Header />
       <HeroSection />
       <WhyChooseUs />
       <ExploreSection />
-      <Footer />
     </div>
   );
 };

@@ -27,93 +27,109 @@ const HeaderAuth = () => {
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b theme-border theme-bg/95 backdrop-blur-xl shadow-2xl">
+    <header className="sticky top-0 z-50 w-full bg-white border-b border-slate-200 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20">
+        <div className="flex items-center justify-between h-16">
           {/* Logo */}
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/dashboard')}>
-            <div className="text-primary">
-              <TripGoIcon className="w-10 h-10" />
+          <button className="flex items-center gap-2.5 flex-shrink-0 group" onClick={() => navigate('/dashboard')}>
+            <div className="w-9 h-9 rounded-xl bg-[#002046] flex items-center justify-center shadow-sm group-hover:bg-[#001533] transition-colors">
+              <TripGoIcon className="w-6 h-5 text-white" />
             </div>
-            <span className="text-2xl font-extrabold tracking-tight text-white">TripGo</span>
-          </div>
+            <span className="text-base font-black text-[#002046] tracking-tight">TripGo</span>
+          </button>
 
           {/* Navigation */}
-          <nav className="hidden md:flex items-center gap-8">
-            <button 
+          <nav className="hidden md:flex items-center gap-1">
+            <button
               onClick={() => navigate('/dashboard')}
-              className="text-sm font-bold text-primary hover:text-primary/80 transition-colors"
+              className="text-sm font-semibold text-[#002046] px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors"
             >
               Dashboard
             </button>
-            <button onClick={() => navigate('/bookings')} className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">
+            <button
+              onClick={() => navigate('/bookings')}
+              className="text-sm font-semibold text-slate-600 hover:text-[#002046] px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors"
+            >
               My Bookings
             </button>
-            <button onClick={() => navigate('/user/support')} className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">
+            <button
+              onClick={() => navigate('/user/support')}
+              className="text-sm font-semibold text-slate-600 hover:text-[#002046] px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors"
+            >
               Support
             </button>
           </nav>
 
           {/* Right Side Actions */}
-          <div className="flex items-center gap-2 md:gap-4">
+          <div className="flex items-center gap-2">
             <NotificationBell />
 
             {/* Profile Dropdown */}
             <div className="relative" ref={profileRef}>
               <button
                 onClick={() => setShowProfileDropdown(!showProfileDropdown)}
-                className="flex items-center gap-2 md:gap-3 p-1 md:p-2 rounded-xl hover:bg-white/5 transition-colors"
+                className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-200"
               >
-                <div className="w-8 h-8 md:w-10 md:h-10 bg-primary/20 rounded-full flex items-center justify-center">
-                  <span className="material-symbols-outlined text-primary text-lg md:text-xl">person</span>
+                <div className="w-8 h-8 bg-[#002046]/10 rounded-full flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[#002046] text-lg">person</span>
                 </div>
                 <div className="hidden md:block text-left">
-                  <p className="text-white text-sm font-medium">{user?.name || 'User'}</p>
-                  <p className="text-slate-400 text-xs">{user?.email || 'user@example.com'}</p>
+                  <p className="text-slate-800 text-sm font-semibold leading-tight">{user?.name || 'User'}</p>
+                  <p className="text-slate-500 text-xs leading-tight">{user?.email || 'user@example.com'}</p>
                 </div>
-                <span className="material-symbols-outlined text-slate-400 text-base md:text-lg hidden md:block">
+                <span className="material-symbols-outlined text-slate-400 text-base hidden md:block">
                   {showProfileDropdown ? 'expand_less' : 'expand_more'}
                 </span>
               </button>
 
-              {/* Profile Dropdown Menu */}
               {showProfileDropdown && (
-                <div className="absolute right-0 mt-2 w-56 md:w-64 bg-charcoal border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-                  <div className="p-4 border-b border-white/10">
+                <div className="absolute right-0 mt-2 w-60 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden">
+                  <div className="p-4 bg-slate-50 border-b border-slate-100">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center">
-                        <span className="material-symbols-outlined text-primary text-xl">person</span>
+                      <div className="w-10 h-10 bg-[#002046]/10 rounded-full flex items-center justify-center">
+                        <span className="material-symbols-outlined text-[#002046] text-xl">person</span>
                       </div>
                       <div>
-                        <p className="text-white font-medium">{user?.name || 'User'}</p>
-                        <p className="text-slate-400 text-sm">{user?.email || 'user@example.com'}</p>
+                        <p className="text-slate-800 font-semibold text-sm">{user?.name || 'User'}</p>
+                        <p className="text-slate-500 text-xs">{user?.email || 'user@example.com'}</p>
                       </div>
                     </div>
                   </div>
-                  
-                  <div className="py-2">
-                    <button onClick={() => navigate('/user/profile')} className="w-full px-4 py-3 text-left text-slate-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-3">
-                      <span className="material-symbols-outlined text-lg">star</span>
+
+                  <div className="py-1.5">
+                    <button
+                      onClick={() => { navigate('/user/profile'); setShowProfileDropdown(false); }}
+                      className="w-full px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50 hover:text-[#002046] transition-colors flex items-center gap-3 text-sm"
+                    >
+                      <span className="material-symbols-outlined text-lg text-slate-400">star</span>
                       Ratings
                     </button>
-                    <button onClick={() => navigate('/bookings')} className="w-full px-4 py-3 text-left text-slate-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-3">
-                      <span className="material-symbols-outlined text-lg">confirmation_number</span>
+                    <button
+                      onClick={() => { navigate('/bookings'); setShowProfileDropdown(false); }}
+                      className="w-full px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50 hover:text-[#002046] transition-colors flex items-center gap-3 text-sm"
+                    >
+                      <span className="material-symbols-outlined text-lg text-slate-400">confirmation_number</span>
                       My Bookings
                     </button>
-                    <button className="w-full px-4 py-3 text-left text-slate-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-3">
-                      <span className="material-symbols-outlined text-lg">payment</span>
+                    <button
+                      className="w-full px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50 hover:text-[#002046] transition-colors flex items-center gap-3 text-sm"
+                    >
+                      <span className="material-symbols-outlined text-lg text-slate-400">payment</span>
                       Payment Methods
                     </button>
-                    <button onClick={() => navigate('/user/settings')} className="w-full px-4 py-3 text-left text-slate-300 hover:bg-white/5 hover:text-white transition-colors flex items-center gap-3">
-                      <span className="material-symbols-outlined text-lg">settings</span>
+                    <button
+                      onClick={() => { navigate('/user/settings'); setShowProfileDropdown(false); }}
+                      className="w-full px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50 hover:text-[#002046] transition-colors flex items-center gap-3 text-sm"
+                    >
+                      <span className="material-symbols-outlined text-lg text-slate-400">settings</span>
                       Settings
                     </button>
                   </div>
-                  
-                  <div className="border-t border-white/10 p-2">
-                    <button 
+
+                  <div className="border-t border-slate-100 p-1.5">
+                    <button
                       onClick={handleLogout}
-                      className="w-full px-4 py-3 text-left text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors flex items-center gap-3 rounded-xl"
+                      className="w-full px-4 py-2.5 text-left text-red-500 hover:bg-red-50 transition-colors flex items-center gap-3 rounded-xl text-sm font-medium"
                     >
                       <span className="material-symbols-outlined text-lg">logout</span>
                       Logout

@@ -130,3 +130,17 @@ export const downloadTicketFromApi = async (bookingId, fallbackFilename = 'ticke
     return false;
   }
 };
+
+export const viewTicketFromApi = async (bookingId) => {
+  try {
+    const response = await fetchWithAuth(`${API_BASE_URL}/booking/${encodeURIComponent(bookingId)}/ticket/download`);
+    if (!response.ok) throw new Error('API ticket not available');
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    return true;
+  } catch {
+    return false;
+  }
+};

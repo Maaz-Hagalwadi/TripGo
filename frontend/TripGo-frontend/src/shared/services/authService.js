@@ -55,6 +55,42 @@ export const loginRequest = async (credentials) => {
   }
 };
 
+export const sendOtpRequest = async ({ emailOrPhone }) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/send-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emailOrPhone }),
+    });
+
+    if (response.ok) return { success: true };
+
+    const data = await response.json().catch(() => ({}));
+    return { error: data.error || data.message || 'Failed to send OTP' };
+  } catch {
+    return { error: 'Network error. Please try again.' };
+  }
+};
+
+export const verifyOtpRequest = async ({ emailOrPhone, otp }) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emailOrPhone, otp }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+
+    if (response.ok && data.accessToken && data.refreshToken) {
+      return { accessToken: data.accessToken, refreshToken: data.refreshToken };
+    }
+    return { error: data.error || data.message || 'OTP verification failed' };
+  } catch {
+    return { error: 'Network error. Please try again.' };
+  }
+};
+
 /**
  * Pings the backend health endpoint to keep the server warm on Render free tier.
  */

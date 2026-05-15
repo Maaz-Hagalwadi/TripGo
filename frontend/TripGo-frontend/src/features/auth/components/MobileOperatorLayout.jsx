@@ -177,7 +177,7 @@ const MobileOperatorLayout = () => {
           right: '-10%',
           width: '60%',
           height: '40%',
-          background: 'radial-gradient(circle at center, rgba(0, 212, 255, 0.12) 0%, transparent 70%)',
+          background: 'radial-gradient(circle at center, rgba(11, 31, 58, 0.12) 0%, transparent 70%)',
           filter: 'blur(60px)',
           pointerEvents: 'none',
           zIndex: 0
@@ -196,7 +196,7 @@ const MobileOperatorLayout = () => {
           }}>
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <Box sx={{ color: '#00d4ff', cursor: 'pointer' }} onClick={() => navigate('/')}>
+                <Box sx={{ color: '#0B1F3A', cursor: 'pointer' }} onClick={() => navigate('/')}>
                   <TripGoIcon style={{ width: 32, height: 32 }} />
                 </Box>
                 <Typography 
@@ -205,7 +205,7 @@ const MobileOperatorLayout = () => {
                     fontWeight: 800, 
                     color: 'white', 
                     cursor: 'pointer',
-                    '&:hover': { color: '#00d4ff' },
+                    '&:hover': { color: '#0B1F3A' },
                     transition: 'color 0.2s'
                   }}
                   onClick={() => navigate('/')}
@@ -256,12 +256,12 @@ const MobileOperatorLayout = () => {
                   sx={{
                     flex: 1,
                     py: 1,
-                    bgcolor: '#00d4ff',
-                    color: 'black',
+                    bgcolor: '#0B1F3A',
+                    color: 'white',
                     fontWeight: 800,
                     fontSize: '0.75rem',
                     borderRadius: 1.5,
-                    '&:hover': { bgcolor: '#00b8e6' }
+                    '&:hover': { bgcolor: '#102A4C' }
                   }}
                 >
                   Bus Operator
@@ -522,14 +522,14 @@ const MobileOperatorLayout = () => {
                       name="agreeToTerms"
                       checked={formData.agreeToTerms}
                       onChange={handleInputChange}
-                      sx={{ color: '#64748b', '&.Mui-checked': { color: '#00d4ff' } }}
+                      sx={{ color: '#64748b', '&.Mui-checked': { color: '#0B1F3A' } }}
                       size="small"
                     />
                   }
                   label={
                     <Typography variant="caption" sx={{ color: '#94a3b8' }}>
-                      I agree to the <span style={{ color: '#00d4ff', fontWeight: 600 }}>Terms</span> and{' '}
-                      <span style={{ color: '#00d4ff', fontWeight: 600 }}>Privacy Policy</span>.
+                      I agree to the <span style={{ color: '#0B1F3A', fontWeight: 600 }}>Terms</span> and{' '}
+                      <span style={{ color: '#0B1F3A', fontWeight: 600 }}>Privacy Policy</span>.
                     </Typography>
                   }
                 />
@@ -546,18 +546,18 @@ const MobileOperatorLayout = () => {
                 variant="contained"
                 disabled={isLoading}
                 sx={{
-                  bgcolor: '#00d4ff',
-                  color: 'black',
+                  bgcolor: '#0B1F3A',
+                  color: 'white',
                   py: 1.5,
                   fontWeight: 800,
                   fontSize: '1rem',
-                  boxShadow: '0 4px 20px rgba(0,212,255,0.25)',
+                  boxShadow: '0 4px 20px rgba(11,31,58,0.25)',
                   '&:hover': {
-                    bgcolor: '#00b8e6',
+                    bgcolor: '#102A4C',
                   },
                   '&:disabled': {
-                    bgcolor: 'rgba(0,212,255,0.5)',
-                    color: 'black'
+                    bgcolor: 'rgba(11,31,58,0.5)',
+                    color: 'white'
                   }
                 }}
               >
@@ -568,7 +568,7 @@ const MobileOperatorLayout = () => {
             <Typography variant="caption" sx={{ textAlign: 'center', mt: 4, color: '#64748b', display: 'block' }}>
               Already have an account?{' '}
               <span 
-                style={{ color: '#00d4ff', fontWeight: 700, cursor: 'pointer' }}
+                style={{ color: '#0B1F3A', fontWeight: 700, cursor: 'pointer' }}
                 onClick={() => navigate('/login')}
               >
                 Log In

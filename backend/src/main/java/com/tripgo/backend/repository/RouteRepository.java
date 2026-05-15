@@ -35,4 +35,13 @@ public interface RouteRepository extends JpaRepository<Route, UUID> {
         ORDER BY city
         """, nativeQuery = true)
     List<String> findAllDistinctCities();
+
+    @Query(value = """
+        SELECT DISTINCT TRIM(r.origin) AS origin, TRIM(r.destination) AS destination
+        FROM routes r
+        WHERE r.origin IS NOT NULL AND TRIM(r.origin) <> ''
+          AND r.destination IS NOT NULL AND TRIM(r.destination) <> ''
+        ORDER BY origin, destination
+        """, nativeQuery = true)
+    List<Object[]> findAllDistinctRoutePairs();
 }

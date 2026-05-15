@@ -1,66 +1,72 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../shared/contexts/AuthContext';
+
+const routes = [
+  { from: 'Mumbai', to: 'Pune', duration: '3h', buses: '120+ buses' },
+  { from: 'Delhi', to: 'Jaipur', duration: '5h', buses: '80+ buses' },
+  { from: 'Bangalore', to: 'Chennai', duration: '6h', buses: '100+ buses' },
+  { from: 'Hyderabad', to: 'Bangalore', duration: '10h', buses: '75+ buses' },
+  { from: 'Ahmedabad', to: 'Mumbai', duration: '8h', buses: '60+ buses' },
+  { from: 'Kolkata', to: 'Bhubaneswar', duration: '7h', buses: '45+ buses' },
+];
+
+const RouteCard = ({ from, to, duration, buses, onBook }) => (
+  <button
+    onClick={onBook}
+    className="group flex items-center justify-between bg-white border border-slate-100 rounded-xl px-5 py-4 shadow-sm hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5 transition-all duration-200 text-left w-full"
+  >
+    <div className="flex items-center gap-3">
+      <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
+        <span className="material-symbols-outlined text-slate-600 !text-xl">directions_bus</span>
+      </div>
+      <div>
+        <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+          <span>{from}</span>
+          <span className="material-symbols-outlined !text-base text-slate-400">arrow_forward</span>
+          <span>{to}</span>
+        </div>
+        <div className="text-xs text-slate-400 mt-0.5">{buses} &middot; {duration}</div>
+      </div>
+    </div>
+    <span className="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors !text-xl">chevron_right</span>
+  </button>
+);
 
 const ExploreSection = () => {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
-  const [isMobile, setIsMobile] = useState(false);
-  
-  useEffect(() => {
-    const checkScreenSize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    
-    checkScreenSize();
-    window.addEventListener('resize', checkScreenSize);
-    
-    return () => window.removeEventListener('resize', checkScreenSize);
-  }, []);
 
-  const handleViewOffers = () => {
-    if (!isAuthenticated) {
-      navigate('/login');
-    }
+  const today = new Date().toISOString().split('T')[0];
+
+  const handleBook = (from, to) => {
+    navigate('/search-results', { state: { from, to, date: today } });
   };
+
   return (
-    <section className="py-20 theme-bg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className={isMobile ? "flex flex-col items-center gap-8 rounded-[2.5rem] bg-charcoal border border-white/5 p-6 shadow-2xl relative overflow-hidden" : "flex flex-row items-center gap-12 rounded-[2.5rem] bg-charcoal border border-white/5 p-12 shadow-2xl relative overflow-hidden"}>
-          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
-          
-          <div className="flex-1 space-y-8 relative z-10">
-            <span className="inline-block px-4 py-1.5 bg-primary/20 text-primary text-sm font-bold uppercase tracking-widest rounded-full">
-              Explore New Frontiers
-            </span>
-            <h2 className={isMobile ? "text-3xl font-extrabold text-white leading-tight" : "text-4xl md:text-5xl font-extrabold text-white leading-tight"}>
-              Pacific Coastline: The Scenic Expedition
-            </h2>
-            <p className={isMobile ? "text-slate-400 text-lg leading-relaxed" : "text-slate-400 text-xl leading-relaxed"}>
-              Book our new exclusive routes through the Pacific Northwest. Experience breathtaking mountain vistas and coastal roads in absolute luxury.
-            </p>
-            <button 
-              onClick={handleViewOffers}
-              className={isMobile ? "bg-primary hover:bg-primary/90 text-black px-6 py-3 rounded-xl font-bold flex items-center gap-3 transition-all transform hover:translate-x-2" : "bg-primary hover:bg-primary/90 text-black px-10 py-4 rounded-xl font-bold flex items-center gap-3 transition-all transform hover:translate-x-2"}
-            >
-              View Exclusive Offers
-              <span className="material-symbols-outlined">arrow_forward</span>
-            </button>
+    <section className="py-16 md:py-20 bg-slate-50">
+      <div className="max-w-screen-xl mx-auto px-4 sm:px-6">
+
+        <div className="flex items-end justify-between mb-8">
+          <div>
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Quick Access</span>
+            <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 mt-1">Popular Routes</h2>
           </div>
-          
-          <div className="flex-1 w-full relative">
-            <div 
-              className="w-full aspect-[4/3] rounded-3xl overflow-hidden shadow-2xl border border-white/10" 
-              style={{
-                backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuCUUQehNglV6D_9xBVLoBUIx9IvKu51t5Abq-b2dc6vVnhz2tTcaoYW3wqmHNogfBkQE_2xuaU5H_4XoKrMQuLYm3TnMHHARjWkZVD16kpP31ifbIWaHjudkmY2YY8m5xXRqf8vJzjuYk8HrIPxPz5lCVyn-dCDs6E7gSXxJZTr9UKm5ZiGM86f7C3uhPC5Y6RYIy209LnRHsnkYAcB2jBQ5BRFnlCy49j8bt6uF761WPRiOItVWRGvYSsLDMtL3ai2-qujnO8nPWnP')",
-                backgroundSize: "cover",
-                backgroundPosition: "center"
-              }}
-            >
-              <div className="absolute inset-0 bg-gradient-to-t from-deep-black/60 to-transparent" />
-            </div>
-          </div>
+          <button
+            onClick={() => navigate('/search-results')}
+            className="text-sm font-semibold text-slate-500 hover:text-slate-800 hover:underline hidden md:block"
+          >
+            View all routes →
+          </button>
         </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {routes.map((r) => (
+            <RouteCard
+              key={`${r.from}-${r.to}`}
+              {...r}
+              onBook={() => handleBook(r.from.toLowerCase(), r.to.toLowerCase())}
+            />
+          ))}
+        </div>
+
       </div>
     </section>
   );

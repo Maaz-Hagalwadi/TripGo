@@ -80,7 +80,7 @@ const MobileForgotPasswordLayout = () => {
           right: '-10%',
           width: '60%',
           height: '40%',
-          background: 'radial-gradient(circle at center, rgba(0, 212, 255, 0.12) 0%, transparent 70%)',
+          background: 'radial-gradient(circle at center, rgba(11, 31, 58, 0.12) 0%, transparent 70%)',
           filter: 'blur(60px)',
           pointerEvents: 'none',
           zIndex: 0
@@ -91,7 +91,7 @@ const MobileForgotPasswordLayout = () => {
           left: '-10%',
           width: '60%',
           height: '40%',
-          background: 'radial-gradient(circle at center, rgba(0, 212, 255, 0.12) 0%, transparent 70%)',
+          background: 'radial-gradient(circle at center, rgba(11, 31, 58, 0.12) 0%, transparent 70%)',
           filter: 'blur(60px)',
           pointerEvents: 'none',
           zIndex: 0
@@ -110,7 +110,7 @@ const MobileForgotPasswordLayout = () => {
           }}>
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <Box sx={{ color: '#00d4ff', cursor: 'pointer' }} onClick={() => navigate('/')}>
+                <Box sx={{ color: '#0B1F3A', cursor: 'pointer' }} onClick={() => navigate('/')}>
                   <TripGoIcon style={{ width: 32, height: 32 }} />
                 </Box>
                 <Typography 
@@ -119,7 +119,7 @@ const MobileForgotPasswordLayout = () => {
                     fontWeight: 800, 
                     color: 'white', 
                     cursor: 'pointer',
-                    '&:hover': { color: '#00d4ff' },
+                    '&:hover': { color: '#0B1F3A' },
                     transition: 'color 0.2s'
                   }}
                   onClick={() => navigate('/')}
@@ -141,11 +141,11 @@ const MobileForgotPasswordLayout = () => {
                 justifyContent: 'center', 
                 width: 64, 
                 height: 64, 
-                bgcolor: 'rgba(0, 212, 255, 0.1)', 
+                bgcolor: 'rgba(11, 31, 58, 0.1)', 
                 borderRadius: 2, 
                 mb: 3 
               }}>
-                <Key sx={{ color: '#00d4ff', fontSize: 32 }} />
+                <Key sx={{ color: '#0B1F3A', fontSize: 32 }} />
               </Box>
               <Typography variant="h6" sx={{ fontWeight: 700, color: 'white', mb: 0.5 }}>
                 Forgot Password?
@@ -185,18 +185,18 @@ const MobileForgotPasswordLayout = () => {
                 variant="contained"
                 disabled={isLoading}
                 sx={{
-                  bgcolor: '#00d4ff',
-                  color: 'black',
+                  bgcolor: '#0B1F3A',
+                  color: 'white',
                   py: 1.5,
                   fontWeight: 800,
                   fontSize: '1rem',
-                  boxShadow: '0 4px 20px rgba(0,212,255,0.25)',
+                  boxShadow: '0 4px 20px rgba(11,31,58,0.25)',
                   '&:hover': {
-                    bgcolor: '#00b8e6',
+                    bgcolor: '#102A4C',
                   },
                   '&:disabled': {
-                    bgcolor: 'rgba(0,212,255,0.5)',
-                    color: 'black'
+                    bgcolor: 'rgba(11,31,58,0.5)',
+                    color: 'white'
                   }
                 }}
               >

@@ -134,7 +134,7 @@ const MobileResetPasswordLayout = () => {
           right: '-10%',
           width: '60%',
           height: '40%',
-          background: 'radial-gradient(circle at center, rgba(0, 212, 255, 0.12) 0%, transparent 70%)',
+          background: 'radial-gradient(circle at center, rgba(11, 31, 58, 0.12) 0%, transparent 70%)',
           filter: 'blur(60px)',
           pointerEvents: 'none',
           zIndex: 0
@@ -153,7 +153,7 @@ const MobileResetPasswordLayout = () => {
           }}>
             <Box>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-                <Box sx={{ color: '#00d4ff' }}>
+                <Box sx={{ color: '#0B1F3A' }}>
                   <TripGoIcon style={{ width: 32, height: 32 }} />
                 </Box>
                 <Typography variant="h5" sx={{ fontWeight: 800, color: 'white' }}>
@@ -236,18 +236,18 @@ const MobileResetPasswordLayout = () => {
                 variant="contained"
                 disabled={isLoading || !token}
                 sx={{
-                  bgcolor: '#00d4ff',
-                  color: 'black',
+                  bgcolor: '#0B1F3A',
+                  color: 'white',
                   py: 1.5,
                   fontWeight: 800,
                   fontSize: '1rem',
-                  boxShadow: '0 4px 20px rgba(0,212,255,0.25)',
+                  boxShadow: '0 4px 20px rgba(11,31,58,0.25)',
                   '&:hover': {
-                    bgcolor: '#00b8e6',
+                    bgcolor: '#102A4C',
                   },
                   '&:disabled': {
-                    bgcolor: 'rgba(0,212,255,0.5)',
-                    color: 'black'
+                    bgcolor: 'rgba(11,31,58,0.5)',
+                    color: 'white'
                   }
                 }}
               >
@@ -258,7 +258,7 @@ const MobileResetPasswordLayout = () => {
             <Typography variant="caption" sx={{ textAlign: 'center', mt: 4, color: '#64748b', display: 'block' }}>
               Remember your password?{' '}
               <span 
-                style={{ color: '#00d4ff', fontWeight: 700, cursor: 'pointer' }}
+                style={{ color: '#0B1F3A', fontWeight: 700, cursor: 'pointer' }}
                 onClick={() => navigate('/login')}
               >
                 Sign In

@@ -185,7 +185,7 @@ const DesktopResetPasswordForm = () => {
               <button 
                 type="submit"
                 disabled={isLoading || !token}
-                className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-black py-4 rounded-xl font-extrabold text-lg transition-all shadow-[0_0_20px_rgba(0,212,255,0.2)] transform hover:scale-[1.01] active:scale-[0.99] mt-2"
+                className="w-full bg-primary hover:bg-primary/90 disabled:bg-primary/50 text-white py-4 rounded-xl font-extrabold text-lg transition-all shadow-[0_0_20px_rgba(11,31,58,0.2)] transform hover:scale-[1.01] active:scale-[0.99] mt-2"
               >
                 {isLoading ? 'Resetting Password...' : 'Reset Password'}
               </button>

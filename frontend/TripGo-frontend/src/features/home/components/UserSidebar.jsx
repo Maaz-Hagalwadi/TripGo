@@ -1,94 +1,113 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { ROUTES } from '../../../shared/constants/routes';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 
-const UserSidebar = ({ activeItem = 'dashboard', collapsed = false, onToggleCollapse }) => {
+const menuItems = [
+  { id: 'dashboard', icon: 'dashboard',           label: 'Overview',    route: ROUTES.DASHBOARD },
+  { id: 'search',    icon: 'search',              label: 'Search Buses', route: ROUTES.SEARCH_RESULTS },
+  { id: 'bookings',  icon: 'confirmation_number', label: 'My Bookings', route: ROUTES.USER_BOOKINGS },
+  { id: 'ratings',   icon: 'star',                label: 'Ratings',     route: ROUTES.USER_PROFILE },
+];
+
+const bottomItems = [
+  { id: 'settings', icon: 'settings',      label: 'Settings', route: ROUTES.USER_SETTINGS },
+  { id: 'support',  icon: 'support_agent', label: 'Support',  route: ROUTES.USER_SUPPORT },
+];
+
+const UserSidebar = ({ activeItem = 'dashboard', collapsed = true, onToggleCollapse }) => {
   const navigate = useNavigate();
+  const { logout } = useAuth();
+  const [isHovered, setIsHovered] = useState(false);
 
-  const menuItems = [
-    { id: 'dashboard', icon: 'dashboard', label: 'Overview', route: ROUTES.DASHBOARD },
-    { id: 'search', icon: 'search', label: 'Search Buses', route: ROUTES.SEARCH_RESULTS },
-    { id: 'bookings', icon: 'confirmation_number', label: 'My Bookings', route: ROUTES.USER_BOOKINGS },
-    { id: 'ratings', icon: 'star', label: 'Ratings', route: ROUTES.USER_PROFILE },
-  ];
-  const bottomItems = [
-    { id: 'settings', icon: 'settings', label: 'Settings', route: ROUTES.USER_SETTINGS },
-    { id: 'support', icon: 'support_agent', label: 'Support', route: ROUTES.USER_SUPPORT },
-  ];
+  const handleLogout = () => {
+    logout();
+    navigate(ROUTES.LOGIN);
+  };
+
+  // Visually open when explicitly expanded OR when collapsed but hovered
+  const isOpen = !collapsed || isHovered;
 
   return (
-    <aside className={`hidden md:flex bg-white dark:bg-op-sidebar border-r border-slate-200 dark:border-slate-800 flex-col fixed left-0 top-0 h-screen overflow-y-auto transition-all ${collapsed ? 'w-20' : 'w-64'}`}>
-      <div className="p-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {!collapsed && (
-            <>
-              <div className="bg-primary p-2 rounded-lg flex items-center justify-center">
-                <span className="material-symbols-outlined text-white">person</span>
-              </div>
-              <div>
-                <h1 className="text-lg font-bold tracking-tight">TripGo</h1>
-                <p className="text-xs text-slate-500 dark:text-slate-400">User Dashboard</p>
-              </div>
-            </>
-          )}
-          {collapsed && (
-            <div className="bg-primary p-2 rounded-lg flex items-center justify-center mx-auto">
-              <span className="material-symbols-outlined text-white">person</span>
-            </div>
-          )}
-        </div>
-        {!collapsed && (
-          <button
-            onClick={onToggleCollapse}
-            className="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            <span className="material-symbols-outlined text-slate-600 dark:text-slate-400 text-xl">menu_open</span>
-          </button>
-        )}
-      </div>
-
-      {collapsed && (
+    <aside
+      className={`
+        fixed top-16 left-0 z-40 h-[calc(100vh-4rem)]
+        bg-white border-r border-slate-200 flex flex-col
+        transition-all duration-200 overflow-hidden hidden md:flex
+        ${isOpen ? 'w-64' : 'w-20'}
+        ${isHovered && collapsed ? 'shadow-xl z-50' : ''}
+      `}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Toggle pin button */}
+      <div className={`flex items-center py-3 border-b border-slate-100 ${isOpen ? 'justify-end px-4' : 'justify-center px-2'}`}>
         <button
           onClick={onToggleCollapse}
-          className="mx-3 mb-4 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center"
+          className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+          title={collapsed ? 'Pin open' : 'Collapse'}
         >
-          <span className="material-symbols-outlined text-slate-600 dark:text-slate-400">menu</span>
+          <span className="material-symbols-outlined text-slate-500 text-xl">
+            {collapsed ? 'menu' : 'menu_open'}
+          </span>
         </button>
-      )}
+      </div>
 
-      <nav className="flex-1 px-3 py-4 space-y-1">
-        {menuItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => navigate(item.route)}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              activeItem === item.id
-                ? 'text-primary bg-primary/10 border-l-4 border-primary rounded-r-lg'
-                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            } ${collapsed ? 'justify-center' : ''}`}
-            title={collapsed ? item.label : ''}
-          >
-            <span className="material-symbols-outlined">{item.icon}</span>
-            {!collapsed && <span className="font-medium text-sm">{item.label}</span>}
-          </button>
-        ))}
+      {/* Main nav */}
+      <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto overflow-x-hidden">
+        {menuItems.map(item => {
+          const active = activeItem === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => navigate(item.route)}
+              title={!isOpen ? item.label : ''}
+              className={`
+                w-full flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors
+                ${!isOpen ? 'justify-center' : ''}
+                ${active
+                  ? 'bg-[#002046]/10 text-[#002046] border-l-[3px] border-[#002046]'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
+              `}
+            >
+              <span className="material-symbols-outlined text-xl flex-shrink-0">{item.icon}</span>
+              {isOpen && <span className="font-medium text-sm whitespace-nowrap">{item.label}</span>}
+            </button>
+          );
+        })}
       </nav>
 
-      <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-1">
-        {bottomItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => navigate(item.route)}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-              activeItem === item.id
-                ? 'text-primary bg-primary/10 border-l-4 border-primary rounded-r-lg'
-                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-            } ${collapsed ? 'justify-center' : ''}`}
-            title={collapsed ? item.label : ''}
-          >
-            <span className="material-symbols-outlined">{item.icon}</span>
-            {!collapsed && <span className="font-medium text-sm">{item.label}</span>}
-          </button>
-        ))}
+      {/* Bottom items */}
+      <div className="border-t border-slate-100 px-2 py-3 space-y-0.5">
+        {bottomItems.map(item => {
+          const active = activeItem === item.id;
+          return (
+            <button
+              key={item.id}
+              onClick={() => navigate(item.route)}
+              title={!isOpen ? item.label : ''}
+              className={`
+                w-full flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors
+                ${!isOpen ? 'justify-center' : ''}
+                ${active
+                  ? 'bg-[#002046]/10 text-[#002046] border-l-[3px] border-[#002046]'
+                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
+              `}
+            >
+              <span className="material-symbols-outlined text-xl flex-shrink-0">{item.icon}</span>
+              {isOpen && <span className="font-medium text-sm whitespace-nowrap">{item.label}</span>}
+            </button>
+          );
+        })}
+        <button
+          onClick={handleLogout}
+          title={!isOpen ? 'Logout' : ''}
+          className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors text-rose-500 hover:bg-rose-50 ${!isOpen ? 'justify-center' : ''}`}
+        >
+          <span className="material-symbols-outlined text-xl flex-shrink-0">logout</span>
+          {isOpen && <span className="font-medium text-sm whitespace-nowrap">Logout</span>}
+        </button>
       </div>
     </aside>
   );

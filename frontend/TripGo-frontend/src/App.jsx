@@ -15,6 +15,7 @@ const UserBookings = lazy(() => import('./features/home/pages/UserBookings'));
 const UserProfile = lazy(() => import('./features/home/pages/UserProfile'));
 const UserSettings = lazy(() => import('./features/home/pages/UserSettings'));
 const UserSupport = lazy(() => import('./features/home/pages/UserSupport'));
+const UserPremium = lazy(() => import('./features/home/pages/UserPremium'));
 
 const Login = lazy(() => import('./features/auth/pages/Login'));
 const Register = lazy(() => import('./features/auth/pages/Register'));
@@ -124,6 +125,9 @@ function App() {
           } />
           <Route path={ROUTES.USER_SUPPORT} element={
             <ProtectedRoute allowedRoles={['USER']}><UserSupport /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.USER_PREMIUM} element={
+            <ProtectedRoute allowedRoles={['USER']}><UserPremium /></ProtectedRoute>
           } />
 
           {/* Operator routes */}
