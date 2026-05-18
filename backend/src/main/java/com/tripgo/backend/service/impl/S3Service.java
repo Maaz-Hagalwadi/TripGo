@@ -16,25 +16,28 @@ import java.util.UUID;
 @Service
 public class S3Service {
 
-    private final S3Client s3Client;
+    private S3Client s3Client;
     private final String bucketName;
     private final String region;
 
     public S3Service(
-            @Value("${aws.access-key}") String accessKeyId,
-            @Value("${aws.secret-key}") String secretAccessKey,
-            @Value("${aws.s3.region}") String region,
-            @Value("${aws.s3.bucket}") String bucketName) {
+            @Value("${aws.access-key:}") String accessKeyId,
+            @Value("${aws.secret-key:}") String secretAccessKey,
+            @Value("${aws.s3.region:us-east-1}") String region,
+            @Value("${aws.s3.bucket:}") String bucketName) {
         this.region = region;
         this.bucketName = bucketName;
-        this.s3Client = S3Client.builder()
-                .region(Region.of(region))
-                .credentialsProvider(StaticCredentialsProvider.create(
-                        AwsBasicCredentials.create(accessKeyId, secretAccessKey)))
-                .build();
+        if (!accessKeyId.isBlank() && !secretAccessKey.isBlank() && !bucketName.isBlank()) {
+            this.s3Client = S3Client.builder()
+                    .region(Region.of(region))
+                    .credentialsProvider(StaticCredentialsProvider.create(
+                            AwsBasicCredentials.create(accessKeyId, secretAccessKey)))
+                    .build();
+        }
     }
 
     public String uploadProfilePicture(UUID userId, MultipartFile file) throws IOException {
+        if (s3Client == null) throw new IllegalStateException("S3 is not configured");
         String original = file.getOriginalFilename();
         String ext = (original != null && original.contains("."))
                 ? original.substring(original.lastIndexOf('.'))
