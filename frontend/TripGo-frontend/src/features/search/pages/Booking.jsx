@@ -20,6 +20,7 @@ import {
   getScheduleRouteStops,
   getScheduleSeats,
   lockScheduleSeats,
+  getSavedPassengerProfiles,
 } from '../../../api/bookingService';
 
 const CURRENT_BOOKING_STORAGE_KEY = 'tripgo_current_booking_state';
@@ -52,10 +53,10 @@ const formatInstant = (instant) => {
 const getTripStatusMeta = (tripStatus, delayMinutes) => {
   const status = String(tripStatus || '').toUpperCase();
   const delay = Number(delayMinutes || 0);
-  if (status === 'DELAYED' || delay > 0) return { label: `Delayed${delay > 0 ? ` by ${delay} min` : ''}`, className: 'bg-amber-500/12 text-amber-700 dark:text-amber-200' };
-  if (status === 'STARTED') return { label: 'Started', className: 'bg-sky-500/12 text-sky-700 dark:text-sky-200' };
-  if (status === 'COMPLETED') return { label: 'Completed', className: 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-200' };
-  return { label: 'On Time', className: 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-200' };
+  if (status === 'DELAYED' || delay > 0) return { label: `Delayed${delay > 0 ? ` by ${delay} min` : ''}`, className: 'bg-amber-500/12 text-amber-700' };
+  if (status === 'STARTED') return { label: 'Started', className: 'bg-sky-500/12 text-sky-700' };
+  if (status === 'COMPLETED') return { label: 'Completed', className: 'bg-emerald-500/12 text-emerald-700' };
+  return { label: 'On Time', className: 'bg-emerald-500/12 text-emerald-700' };
 };
 
 const stopLabel = (stop) => stop?.name || stop?.stopName || stop?.city || stop?.location || stop?.address || stop?.landmark || '';
@@ -111,12 +112,12 @@ const UserSeaterSeat = ({ seat, selectedSeats, onToggleSeat }) => {
     >
       <SeatMarks seat={seat} />
       <div className={`h-2.5 w-6 rounded-t-md border-t-2 border-x-2 ${
-        isAvailable ? (isSelected ? 'border-primary bg-primary/30' : 'border-emerald-400/80 bg-emerald-400/20') : 'border-slate-400 bg-slate-300/40 dark:border-slate-500 dark:bg-slate-700/40'
+        isAvailable ? (isSelected ? 'border-[#002046] bg-[#002046]/[0.12]' : 'border-emerald-400/80 bg-emerald-400/20') : 'border-slate-400 bg-slate-300/40'
       }`} />
       <div className={`flex h-7 w-8 items-end justify-center rounded-b-lg border-2 border-t-0 pb-0.5 ${
-        isAvailable ? (isSelected ? 'border-primary bg-primary/15' : 'border-emerald-400/80 bg-emerald-400/10') : 'border-slate-400 bg-slate-300/30 dark:border-slate-500 dark:bg-slate-700/30'
+        isAvailable ? (isSelected ? 'border-[#002046] bg-[#002046]/[0.08]' : 'border-emerald-400/80 bg-emerald-400/10') : 'border-slate-400 bg-slate-300/30'
       }`}>
-        <span className={`text-[9px] font-bold ${isAvailable ? (isSelected ? 'text-primary' : 'text-emerald-700 dark:text-emerald-200') : 'text-slate-500 dark:text-slate-300'}`}>{seat.seatNumber}</span>
+        <span className={`text-[9px] font-bold ${isAvailable ? (isSelected ? 'text-[#002046]' : 'text-emerald-700') : 'text-slate-500'}`}>{seat.seatNumber}</span>
       </div>
     </button>
   );
@@ -130,14 +131,14 @@ const UserSleeperSeat = ({ seat, selectedSeats, onToggleSeat }) => {
       onClick={() => isAvailable && onToggleSeat(seat.seatNumber)}
       disabled={!isAvailable}
       className={`group relative flex flex-col items-center justify-between rounded border-2 transition-all disabled:cursor-not-allowed ${
-        isAvailable ? (isSelected ? 'border-primary bg-primary/15' : 'border-emerald-400/70 bg-emerald-400/10') : 'border-slate-400 bg-slate-300/30 dark:border-slate-500 dark:bg-slate-700/30'
+        isAvailable ? (isSelected ? 'border-[#002046] bg-[#002046]/[0.08]' : 'border-emerald-400/70 bg-emerald-400/10') : 'border-slate-400 bg-slate-300/30'
       }`}
       style={{ width: 30, height: 58, padding: '4px 2px' }}
       title={seat.seatNumber}
     >
       <SeatMarks seat={seat} />
-      <div className="h-4 w-5 rounded-sm border border-slate-300 bg-slate-100 dark:border-slate-500 dark:bg-slate-600" />
-      <span className={`text-[8px] font-bold leading-none ${isAvailable ? (isSelected ? 'text-primary' : 'text-emerald-700 dark:text-emerald-200') : 'text-slate-500 dark:text-slate-300'}`}>{seat.seatNumber}</span>
+      <div className="h-4 w-5 rounded-sm border border-slate-300 bg-slate-100" />
+      <span className={`text-[8px] font-bold leading-none ${isAvailable ? (isSelected ? 'text-[#002046]' : 'text-emerald-700') : 'text-slate-500'}`}>{seat.seatNumber}</span>
     </button>
   );
 };
@@ -154,7 +155,7 @@ const UserSleeperDeck = ({ deck, seats, selectedSeats, onToggleSeat }) => {
         })}
       </div>
       <div className="flex flex-col justify-center" style={{ width: 16 }}>
-        <div className="w-px bg-slate-300 dark:bg-slate-500/50" style={{ height: rows.length * 58 + (rows.length - 1) * 4 }} />
+        <div className="w-px bg-slate-300" style={{ height: rows.length * 58 + (rows.length - 1) * 4 }} />
       </div>
       {[1, 2].map((col) => (
         <div key={`${deck}-${col}`} className="flex flex-col gap-1">
@@ -179,7 +180,7 @@ const UserSeaterLayout = ({ seats, selectedSeats, onToggleSeat }) => {
         return (
           <div key={`row-${row}`} className="flex items-center gap-1">
             <div className="flex gap-1">{left.map((seat) => <UserSeaterSeat key={seat.seatNumber} seat={seat} selectedSeats={selectedSeats} onToggleSeat={onToggleSeat} />)}</div>
-            <div className="flex w-6 items-center justify-center"><div className="h-8 w-px bg-slate-300 dark:bg-slate-500/50" /></div>
+            <div className="flex w-6 items-center justify-center"><div className="h-8 w-px bg-slate-300" /></div>
             <div className="flex gap-1">{right.map((seat) => <UserSeaterSeat key={seat.seatNumber} seat={seat} selectedSeats={selectedSeats} onToggleSeat={onToggleSeat} />)}</div>
           </div>
         );
@@ -293,8 +294,8 @@ const dedupeTravelers = (travelers = []) => {
 };
 
 const InlineLoader = ({ label }) => (
-  <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
-    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/40 border-t-primary" />
+  <div className="flex items-center gap-3 text-sm text-slate-600">
+    <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#002046]/30 border-t-[#002046]" />
     <span>{label}</span>
   </div>
 );
@@ -348,6 +349,7 @@ const Booking = () => {
   const [ratingSummary, setRatingSummary] = useState(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
   const recentTravelers = useMemo(() => dedupeTravelers(savedTravelers), [savedTravelers]);
+  const [savedProfilesList, setSavedProfilesList] = useState([]);
 
   const refreshSeats = async () => {
     if (!scheduleId) return;
@@ -462,6 +464,10 @@ const Booking = () => {
     return () => { isMounted = false; };
   }, [scheduleId, bus?.id]);
 
+  useEffect(() => {
+    getSavedPassengerProfiles().then(setSavedProfilesList).catch(() => {});
+  }, []);
+
   const seats = useMemo(() => {
     if (Array.isArray(seatsResponse?.upperDeck) || Array.isArray(seatsResponse?.lowerDeck)) {
       const lower = (seatsResponse?.lowerDeck || []).map((seat) => ({ ...seat, deck: 'lower' }));
@@ -573,9 +579,9 @@ const Booking = () => {
   if (!bus) {
     return (
       <UserLayout activeItem="search" title="Select Seat">
-        <div className="rounded-3xl bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-black dark:text-slate-100 dark:ring-slate-900">
-          <p className="mb-4 text-sm text-slate-600 dark:text-slate-300">No bus selected. Please search and choose a bus first.</p>
-          <button onClick={() => navigate(ROUTES.SEARCH_RESULTS)} className="rounded-xl bg-primary px-4 py-2 font-semibold text-black">Back to Search</button>
+        <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200 shadow-sm">
+          <p className="mb-4 text-sm text-slate-600">No bus selected. Please search and choose a bus first.</p>
+          <button onClick={() => navigate(ROUTES.SEARCH_RESULTS)} className="rounded-xl bg-[#002046] px-4 py-2 font-semibold text-white">Back to Search</button>
         </div>
       </UserLayout>
     );
@@ -888,22 +894,22 @@ const Booking = () => {
                 ) : null}
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Country Code</label>
-                    <div className={`flex items-center gap-2 px-3 py-2 text-sm text-slate-500 dark:text-slate-300 ${SUBTLE_PANEL_CLASS}`}>
-                      <span className="material-symbols-outlined text-base text-slate-400 dark:text-slate-500">lock</span>
+                    <label className="mb-1 block text-xs text-slate-500">Country Code</label>
+                    <div className={`flex items-center gap-2 px-3 py-2 text-sm text-slate-500 ${SUBTLE_PANEL_CLASS}`}>
+                      <span className="material-symbols-outlined text-base text-slate-400">lock</span>
                       <input value={contact.countryCode} readOnly className="w-full bg-transparent outline-none" />
                     </div>
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Phone *</label>
+                    <label className="mb-1 block text-xs text-slate-500">Phone *</label>
                     <input value={contact.phone} onChange={(e) => setContact((p) => ({ ...p, phone: e.target.value.replace(/[^\d]/g, '').slice(0, 10) }))} placeholder="10-digit mobile number" className={INPUT_SHELL_CLASS} />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Email ID *</label>
+                    <label className="mb-1 block text-xs text-slate-500">Email ID *</label>
                     <input type="email" value={contact.email} onChange={(e) => setContact((p) => ({ ...p, email: e.target.value }))} placeholder="Enter email id" className={INPUT_SHELL_CLASS} />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">State of Residence *</label>
+                    <label className="mb-1 block text-xs text-slate-500">State of Residence *</label>
                     <select value={contact.stateOfResidence} onChange={(e) => setContact((p) => ({ ...p, stateOfResidence: e.target.value }))} className={INPUT_SHELL_CLASS}>
                       <option value="">Select state</option>
                       {INDIA_STATES.map((state) => <option key={state} value={state}>{state}</option>)}
@@ -913,10 +919,10 @@ const Booking = () => {
 
                 <div className={`mt-5 flex items-center justify-between px-4 py-3 ${SUBTLE_PANEL_CLASS}`}>
                   <div>
-                    <p className="text-sm font-semibold text-slate-900 dark:text-white">Send booking details and trip updates on WhatsApp</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">Disabled by default. Turn it on only if the traveler wants WhatsApp alerts.</p>
+                    <p className="text-sm font-semibold text-slate-900">Send booking details and trip updates on WhatsApp</p>
+                    <p className="text-xs text-slate-500">Disabled by default. Turn it on only if the traveler wants WhatsApp alerts.</p>
                   </div>
-                  <button type="button" onClick={() => setContact((p) => ({ ...p, whatsappOptIn: !p.whatsappOptIn }))} className={`relative h-7 w-14 rounded-full transition ${contact.whatsappOptIn ? 'bg-primary' : 'bg-slate-400 dark:bg-slate-600'}`} aria-pressed={contact.whatsappOptIn}>
+                  <button type="button" onClick={() => setContact((p) => ({ ...p, whatsappOptIn: !p.whatsappOptIn }))} className={`relative h-7 w-14 rounded-full transition ${contact.whatsappOptIn ? 'bg-[#002046]' : 'bg-slate-400'}`} aria-pressed={contact.whatsappOptIn}>
                     <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${contact.whatsappOptIn ? 'left-8' : 'left-1'}`} />
                   </button>
                 </div>
@@ -925,44 +931,62 @@ const Booking = () => {
                   {passengers.map((passenger, index) => (
                     <div key={passenger.seatNumber || index} className={`${SUBTLE_PANEL_CLASS} p-4`}>
                       <div className="mb-4 flex items-center justify-between gap-3">
-                        <p className="text-sm font-bold text-slate-900 dark:text-white">Passenger {index + 1}</p>
+                        <p className="text-sm font-bold text-slate-900">Passenger {index + 1}</p>
                         <span className="rounded-full bg-[#002046]/[0.08] px-3 py-1 text-xs font-semibold text-[#002046]">Seat {passenger.seatNumber || '--'}</span>
                       </div>
-                      {recentTravelers.length > 0 ? (
+                      {(recentTravelers.length > 0 || savedProfilesList.length > 0) ? (
                         <div className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]">
                           <div>
-                            <label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Choose saved traveler</label>
+                            <label className="mb-1 block text-xs text-slate-500">Choose saved traveler</label>
                             <select
                               value={recentTravelers.findIndex((traveler) => normalizeTraveler(traveler).name === passenger.name && normalizeTraveler(traveler).phone === passenger.phone && normalizeTraveler(traveler).email === passenger.email)}
                               onChange={(e) => {
-                                const selectedIndex = Number(e.target.value);
-                                if (selectedIndex < 0) {
-                                  resetTravelerForSeat(passenger.seatNumber);
+                                const val = e.target.value;
+                                if (val === '__new__') { resetTravelerForSeat(passenger.seatNumber); return; }
+                                if (val.startsWith('profile:')) {
+                                  const profileId = val.replace('profile:', '');
+                                  const profile = savedProfilesList.find((p) => String(p.id) === profileId);
+                                  if (profile) applyTravelerToSeat(passenger.seatNumber, { name: `${profile.firstName} ${profile.lastName || ''}`.trim(), age: profile.age, gender: profile.gender, phone: profile.phone, email: '' });
                                   return;
                                 }
+                                const selectedIndex = Number(val);
+                                if (selectedIndex < 0) { resetTravelerForSeat(passenger.seatNumber); return; }
                                 applyTravelerToSeat(passenger.seatNumber, recentTravelers[selectedIndex]);
                               }}
                               className={INPUT_SHELL_CLASS}
                             >
-                              <option value={-1}>Enter new traveler</option>
-                              {recentTravelers.map((traveler, travelerIndex) => (
-                                <option key={`${getTravelerLabel(traveler)}-${travelerIndex}`} value={travelerIndex}>
-                                  {getTravelerLabel(traveler)}{traveler?.phone ? ` · ${traveler.phone}` : ''}
-                                </option>
-                              ))}
+                              <option value="__new__">Enter new traveler</option>
+                              {savedProfilesList.length > 0 && (
+                                <optgroup label="── Saved Profiles ──">
+                                  {savedProfilesList.map((profile) => (
+                                    <option key={`profile-${profile.id}`} value={`profile:${profile.id}`}>
+                                      {profile.firstName} {profile.lastName || ''}{profile.phone ? ` · ${profile.phone}` : ''}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              {recentTravelers.length > 0 && (
+                                <optgroup label="── Recent Travelers ──">
+                                  {recentTravelers.map((traveler, travelerIndex) => (
+                                    <option key={`${getTravelerLabel(traveler)}-${travelerIndex}`} value={travelerIndex}>
+                                      {getTravelerLabel(traveler)}{traveler?.phone ? ` · ${traveler.phone}` : ''}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
                             </select>
                           </div>
-                          <button type="button" onClick={() => resetTravelerForSeat(passenger.seatNumber)} className="mt-6 rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-white/[0.05] dark:text-slate-200 dark:hover:bg-white/[0.09]">
+                          <button type="button" onClick={() => resetTravelerForSeat(passenger.seatNumber)} className="mt-6 rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">
                             Clear
                           </button>
                         </div>
                       ) : null}
                       <div className="grid gap-4 md:grid-cols-2">
-                        <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Passenger Name *</label><input value={passenger.name} onChange={(e) => updatePassenger(passenger.seatNumber, 'name', e.target.value)} placeholder="Enter passenger name" className={INPUT_SHELL_CLASS} /></div>
-                        <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Age *</label><input type="number" min="1" value={passenger.age} onChange={(e) => updatePassenger(passenger.seatNumber, 'age', e.target.value)} placeholder="Enter age" className={INPUT_SHELL_CLASS} /></div>
-                        <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Gender *</label><select value={passenger.gender} onChange={(e) => updatePassenger(passenger.seatNumber, 'gender', e.target.value)} className={INPUT_SHELL_CLASS}><option value="">Select gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option><option value="OTHER">Other</option></select></div>
-                        <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Phone *</label><input value={passenger.phone} onChange={(e) => updatePassenger(passenger.seatNumber, 'phone', e.target.value.replace(/[^\d]/g, '').slice(0, 10))} placeholder="Enter phone number" className={INPUT_SHELL_CLASS} /></div>
-                        <div className="md:col-span-2"><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">Email *</label><input type="email" value={passenger.email} onChange={(e) => updatePassenger(passenger.seatNumber, 'email', e.target.value)} placeholder="Enter email" className={INPUT_SHELL_CLASS} /></div>
+                        <div><label className="mb-1 block text-xs text-slate-500">Passenger Name *</label><input value={passenger.name} onChange={(e) => updatePassenger(passenger.seatNumber, 'name', e.target.value)} placeholder="Enter passenger name" className={INPUT_SHELL_CLASS} /></div>
+                        <div><label className="mb-1 block text-xs text-slate-500">Age *</label><input type="number" min="1" value={passenger.age} onChange={(e) => updatePassenger(passenger.seatNumber, 'age', e.target.value)} placeholder="Enter age" className={INPUT_SHELL_CLASS} /></div>
+                        <div><label className="mb-1 block text-xs text-slate-500">Gender *</label><select value={passenger.gender} onChange={(e) => updatePassenger(passenger.seatNumber, 'gender', e.target.value)} className={INPUT_SHELL_CLASS}><option value="">Select gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option><option value="OTHER">Other</option></select></div>
+                        <div><label className="mb-1 block text-xs text-slate-500">Phone *</label><input value={passenger.phone} onChange={(e) => updatePassenger(passenger.seatNumber, 'phone', e.target.value.replace(/[^\d]/g, '').slice(0, 10))} placeholder="Enter phone number" className={INPUT_SHELL_CLASS} /></div>
+                        <div className="md:col-span-2"><label className="mb-1 block text-xs text-slate-500">Email *</label><input type="email" value={passenger.email} onChange={(e) => updatePassenger(passenger.seatNumber, 'email', e.target.value)} placeholder="Enter email" className={INPUT_SHELL_CLASS} /></div>
                       </div>
                     </div>
                   ))}
@@ -975,12 +999,12 @@ const Booking = () => {
                 ) : (
                   <>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">{`Boarding Point${boardingPoints.length > 0 ? ' *' : ''}`}</label><select value={selection.boardingPointId} onChange={(e) => setSelection((p) => ({ ...p, boardingPointId: e.target.value }))} className={INPUT_SHELL_CLASS} disabled={boardingPoints.length === 0}><option value="">{boardingPoints.length > 0 ? 'Select boarding point' : 'No boarding point required'}</option>{boardingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
-                      <div><label className="mb-1 block text-xs text-slate-500 dark:text-slate-400">{`Dropping Point${droppingPoints.length > 0 ? ' *' : ''}`}</label><select value={selection.droppingPointId} onChange={(e) => setSelection((p) => ({ ...p, droppingPointId: e.target.value }))} className={INPUT_SHELL_CLASS} disabled={droppingPoints.length === 0}><option value="">{droppingPoints.length > 0 ? 'Select dropping point' : 'No dropping point required'}</option>{droppingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
+                      <div><label className="mb-1 block text-xs text-slate-500">{`Boarding Point${boardingPoints.length > 0 ? ' *' : ''}`}</label><select value={selection.boardingPointId} onChange={(e) => setSelection((p) => ({ ...p, boardingPointId: e.target.value }))} className={INPUT_SHELL_CLASS} disabled={boardingPoints.length === 0}><option value="">{boardingPoints.length > 0 ? 'Select boarding point' : 'No boarding point required'}</option>{boardingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
+                      <div><label className="mb-1 block text-xs text-slate-500">{`Dropping Point${droppingPoints.length > 0 ? ' *' : ''}`}</label><select value={selection.droppingPointId} onChange={(e) => setSelection((p) => ({ ...p, droppingPointId: e.target.value }))} className={INPUT_SHELL_CLASS} disabled={droppingPoints.length === 0}><option value="">{droppingPoints.length > 0 ? 'Select dropping point' : 'No dropping point required'}</option>{droppingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
                     </div>
                     <div className="mt-4 grid gap-4 md:grid-cols-2">
-                      <div className={`${SUBTLE_PANEL_CLASS} p-4`}><p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Boarding points</p>{boardingPoints.length === 0 ? <p className="text-xs text-slate-500 dark:text-slate-400">No boarding points available</p> : boardingPoints.map((point) => <p key={point.id} className="mb-2 text-xs text-slate-600 dark:text-slate-300">{pointLabel(point)}</p>)}</div>
-                      <div className={`${SUBTLE_PANEL_CLASS} p-4`}><p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Dropping points</p>{droppingPoints.length === 0 ? <p className="text-xs text-slate-500 dark:text-slate-400">No dropping points available</p> : droppingPoints.map((point) => <p key={point.id} className="mb-2 text-xs text-slate-600 dark:text-slate-300">{pointLabel(point)}</p>)}</div>
+                      <div className={`${SUBTLE_PANEL_CLASS} p-4`}><p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Boarding points</p>{boardingPoints.length === 0 ? <p className="text-xs text-slate-500">No boarding points available</p> : boardingPoints.map((point) => <p key={point.id} className="mb-2 text-xs text-slate-600">{pointLabel(point)}</p>)}</div>
+                      <div className={`${SUBTLE_PANEL_CLASS} p-4`}><p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Dropping points</p>{droppingPoints.length === 0 ? <p className="text-xs text-slate-500">No dropping points available</p> : droppingPoints.map((point) => <p key={point.id} className="mb-2 text-xs text-slate-600">{pointLabel(point)}</p>)}</div>
                     </div>
                   </>
                 )}
@@ -989,10 +1013,10 @@ const Booking = () => {
 
             <div className="space-y-6">
               <DetailCard icon="confirmation_number" title="Review before payment" subtitle="A quick final check before moving to the payment screen.">
-                <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
-                  <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Selected seats</span><span className="font-bold text-slate-900 dark:text-white">{selectedSeats.join(', ') || '--'}</span></div>
-                  <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Travelers</span><span className="font-bold text-slate-900 dark:text-white">{passengers.length || selectedSeats.length || 0}</span></div>
-                  <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Seat fare</span><span className="font-bold text-slate-900 dark:text-white">₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}</span></div>
+                <div className="space-y-3 text-sm text-slate-600">
+                  <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Selected seats</span><span className="font-bold text-slate-900">{selectedSeats.join(', ') || '--'}</span></div>
+                  <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Travelers</span><span className="font-bold text-slate-900">{passengers.length || selectedSeats.length || 0}</span></div>
+                  <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Seat fare</span><span className="font-bold text-slate-900">₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}</span></div>
                   <div className="rounded-xl bg-[#002046]/[0.07] px-4 py-4 ring-1 ring-[#002046]/20">
                     <p className="text-xs font-semibold uppercase tracking-widest text-[#002046] opacity-80">Payment timer</p>
                     <p className="mt-2 text-xl font-black text-slate-900">{lockSecondsLeft > 0 ? formatCountdown(lockSecondsLeft) : 'Expired'}</p>

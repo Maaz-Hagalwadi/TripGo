@@ -210,6 +210,7 @@ public class BookingController {
                     Map<String, Object> result = new LinkedHashMap<>();
                     result.put("bookingId", b.getId());
                     result.put("bookingCode", b.getBookingCode());
+                    result.put("scheduleId", b.getRouteSchedule().getId());
                     result.put("status", b.getStatus());
                     result.put("paymentStatus", latestPayment != null ? latestPayment.getStatus() : null);
                     result.put("from", b.getRouteSchedule().getRoute().getOrigin());

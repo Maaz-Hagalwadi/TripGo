@@ -37,13 +37,6 @@ const findMatchingBooking = (bookings, pendingPayment) => {
   }) || null;
 };
 
-const InlineLoader = ({ label }) => (
-  <div className="flex items-center justify-center gap-3 text-sm text-slate-500 dark:text-slate-400">
-    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/40 border-t-primary" />
-    <span>{label}</span>
-  </div>
-);
-
 const buildLatestBookingFallback = (pendingPayment, paymentIntentId) => {
   if (!pendingPayment) return null;
   const bookingState = pendingPayment?.bookingState || {};
@@ -79,6 +72,18 @@ const buildLatestBookingFallback = (pendingPayment, paymentIntentId) => {
   };
 };
 
+const InfoCard = ({ icon, title, children }) => (
+  <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
+    <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
+      <div className="w-9 h-9 rounded-xl bg-[#002046]/[0.08] flex items-center justify-center flex-shrink-0">
+        <span className="material-symbols-outlined text-[#002046] text-lg">{icon}</span>
+      </div>
+      <p className="text-sm font-black text-slate-900">{title}</p>
+    </div>
+    <div className="px-5 py-5">{children}</div>
+  </div>
+);
+
 const PaymentSuccess = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -110,7 +115,6 @@ const PaymentSuccess = () => {
 
     const verifyBooking = async () => {
       try {
-        // Immediately confirm via fallback endpoint if we have the required info
         if (pendingPayment?.bookingId && (paymentIntentId || pendingPayment?.paymentIntentId)) {
           try {
             await confirmBookingPayment(
@@ -193,7 +197,6 @@ const PaymentSuccess = () => {
       : 'pending';
 
   const iconName = visualState === 'pending' ? 'hourglass_top' : 'check_circle';
-  const iconColor = visualState === 'confirmed' ? 'text-emerald-500' : visualState === 'paid' ? 'text-primary' : 'text-amber-500';
   const heading = visualState === 'confirmed'
     ? 'Booking confirmed'
     : visualState === 'paid'
@@ -205,90 +208,93 @@ const PaymentSuccess = () => {
       ? 'Your payment went through. We are finishing booking confirmation in the background.'
       : statusMessage;
 
+  const headerAccent = visualState === 'confirmed'
+    ? { icon: 'text-emerald-400', dot: 'bg-emerald-400', label: 'Confirmed' }
+    : visualState === 'paid'
+      ? { icon: 'text-white', dot: 'bg-white', label: 'Payment received' }
+      : { icon: 'text-amber-400', dot: 'bg-amber-400', label: 'Pending' };
+
   return (
     <UserLayout activeItem="bookings" title="Payment Status" showHeaderSearch={false}>
-      <div className="mx-auto max-w-4xl rounded-[32px] bg-[radial-gradient(circle_at_top,#fff3cf_0%,#f7fbff_28%,#eef4ff_100%)] p-4 text-slate-900 dark:bg-[linear-gradient(180deg,#040404_0%,#0b0b0b_100%)] dark:text-slate-100 md:p-6">
-        <div className="rounded-[28px] bg-white p-6 shadow-[0_24px_70px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,#050505_0%,#0d0d0d_100%)] dark:ring-slate-900 md:p-8">
-          <div className="mx-auto max-w-2xl text-center">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-slate-50 ring-1 ring-slate-200/70 dark:bg-black/60 dark:ring-slate-800">
-              <span className={`material-symbols-outlined text-6xl ${iconColor}`}>
-                {iconName}
-              </span>
+      <div className="space-y-5">
+
+        {/* Navy gradient header */}
+        <div className="rounded-2xl bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-5 py-5 text-white shadow-sm relative overflow-hidden">
+          <div className="absolute -top-3 -right-3 text-7xl opacity-10 select-none">★</div>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+              <span className={`material-symbols-outlined text-4xl ${headerAccent.icon}`}>{iconName}</span>
             </div>
-            <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-600 dark:bg-slate-900 dark:text-slate-300">
-              <span className={`h-2.5 w-2.5 rounded-full ${visualState === 'confirmed' ? 'bg-emerald-500' : visualState === 'paid' ? 'bg-primary' : 'bg-amber-500'}`} />
-              {visualState === 'confirmed' ? 'Confirmed' : visualState === 'paid' ? 'Payment received' : 'Pending'}
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold opacity-60 uppercase tracking-widest mb-1">Payment Status</p>
+              <h1 className="text-2xl font-black">{heading}</h1>
+              <p className="text-sm opacity-70 mt-1">{subheading}</p>
             </div>
-          </div>
-
-          <h1 className="mt-5 text-center text-xl md:text-3xl font-black text-slate-900 dark:text-white">
-            {heading}
-          </h1>
-          <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-slate-500 dark:text-slate-400">
-            {subheading}
-          </p>
-
-          {!booking ? (
-            <p className="mt-2 text-center text-sm text-slate-500 dark:text-slate-400">{statusMessage}</p>
-          ) : null}
-
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
-            <div className="rounded-3xl bg-slate-50 p-5 ring-1 ring-slate-200/70 dark:bg-black/50 dark:ring-slate-800">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Booking code</p>
-              <p className="mt-2 text-base md:text-xl font-black text-slate-900 dark:text-white">
-                {pendingPayment?.bookingCode || booking?.bookingCode || 'Generating...'}
-              </p>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                Keep this code handy for support and trip tracking.
-              </p>
-            </div>
-
-            <div className="rounded-3xl bg-slate-50 p-5 ring-1 ring-slate-200/70 dark:bg-black/50 dark:ring-slate-800">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Payment status</p>
-              <p className="mt-2 text-base md:text-xl font-black text-slate-900 dark:text-white">
-                {visualState === 'confirmed' ? 'Confirmed' : visualState === 'paid' ? 'Paid, syncing booking' : 'Processing'}
-              </p>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Your payment has been received safely.</p>
-            </div>
-          </div>
-
-          <div className="mt-8 rounded-3xl bg-[linear-gradient(135deg,#fff7d8,#fff)] p-5 ring-1 ring-amber-200/70 dark:bg-[linear-gradient(135deg,#15110a,#080808)] dark:ring-amber-500/20">
-            <div className="flex items-start gap-3">
-              <span className="material-symbols-outlined mt-0.5 text-2xl text-amber-500">info</span>
-              <div>
-                <p className="font-bold text-slate-900 dark:text-white">
-                  {visualState === 'confirmed' ? 'Your booking is confirmed.' : 'Payment received successfully.'}
-                </p>
-                <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-                  {visualState === 'confirmed'
-                    ? 'You can now open My Bookings to view your ticket details and trip info.'
-                    : 'We are finishing your booking confirmation. This usually takes only a few seconds.'}
-                </p>
+            <div className="flex-shrink-0">
+              <div className="flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-bold uppercase tracking-widest">
+                <span className={`h-2.5 w-2.5 rounded-full ${headerAccent.dot}`} />
+                {headerAccent.label}
               </div>
             </div>
           </div>
-
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
-            <button
-              onClick={() => navigate(ROUTES.USER_BOOKINGS, { replace: true, state: booking ? { latestBooking: booking } : undefined })}
-              className="rounded-2xl bg-primary px-5 py-3 text-sm font-bold text-black hover:bg-primary/90"
-            >
-              Go to My Bookings
-            </button>
-            <button
-              onClick={() => navigate(ROUTES.SEARCH_RESULTS)}
-              className="rounded-2xl bg-slate-100 px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
-            >
-              Search More Buses
-            </button>
-          </div>
-
-          {loading && !booking ? (
-            <div className="mt-4">
-              <InlineLoader label="Confirming your booking..." />
+          {loading && !booking && (
+            <div className="mt-4 flex items-center gap-2 opacity-70 text-sm">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+              <span>Confirming your booking...</span>
             </div>
-          ) : null}
+          )}
         </div>
+
+        {/* Booking code + Payment status */}
+        <div className="grid gap-5 md:grid-cols-2">
+          <InfoCard icon="confirmation_number" title="Booking code">
+            <p className="text-xl font-black text-slate-900">
+              {pendingPayment?.bookingCode || booking?.bookingCode || 'Generating...'}
+            </p>
+            <p className="mt-2 text-sm text-slate-500">Keep this code handy for support and trip tracking.</p>
+          </InfoCard>
+
+          <InfoCard icon="payments" title="Payment status">
+            <p className="text-xl font-black text-slate-900">
+              {visualState === 'confirmed' ? 'Confirmed' : visualState === 'paid' ? 'Paid, syncing booking' : 'Processing'}
+            </p>
+            <p className="mt-2 text-sm text-slate-500">Your payment has been received safely.</p>
+          </InfoCard>
+        </div>
+
+        {/* Info banner */}
+        <div className="rounded-2xl bg-amber-50 ring-1 ring-amber-200 p-5">
+          <div className="flex items-start gap-3">
+            <span className="material-symbols-outlined mt-0.5 text-xl text-amber-500 flex-shrink-0">info</span>
+            <div>
+              <p className="font-bold text-slate-900">
+                {visualState === 'confirmed' ? 'Your booking is confirmed.' : 'Payment received successfully.'}
+              </p>
+              <p className="mt-1 text-sm text-slate-600">
+                {visualState === 'confirmed'
+                  ? 'You can now open My Bookings to view your ticket details and trip info.'
+                  : 'We are finishing your booking confirmation. This usually takes only a few seconds.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex flex-wrap gap-3 justify-center">
+          <button
+            onClick={() => navigate(ROUTES.USER_BOOKINGS, { replace: true, state: booking ? { latestBooking: booking } : undefined })}
+            className="rounded-xl bg-[#002046] px-6 py-3 text-sm font-bold text-white hover:bg-[#003a80] transition-colors"
+          >
+            Go to My Bookings
+          </button>
+          <button
+            onClick={() => navigate(ROUTES.SEARCH_RESULTS)}
+            className="rounded-xl bg-slate-100 px-6 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-colors"
+          >
+            Search More Buses
+          </button>
+        </div>
+
       </div>
     </UserLayout>
   );

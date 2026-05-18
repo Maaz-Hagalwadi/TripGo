@@ -25,3 +25,7 @@ export const confirmBookingPayment = async (bookingId, paymentIntentId) => {
     `/payments/confirm-booking/${encodeURIComponent(bookingId)}?paymentIntentId=${encodeURIComponent(paymentIntentId)}`
   );
 };
+
+export const createPremiumPaymentIntent = async (plan) => {
+  return apiPost('/payments/premium/create-intent', { plan });
+};

@@ -33,3 +33,11 @@ export const rejectBus = async (busId) => {
 export const getUsers = async () => {
   return apiGet('/admin/users');
 };
+
+export const suspendUser = async (id) => {
+  return apiPost(`/admin/users/${id}/suspend`, {});
+};
+
+export const unsuspendUser = async (id) => {
+  return apiPost(`/admin/users/${id}/unsuspend`, {});
+};

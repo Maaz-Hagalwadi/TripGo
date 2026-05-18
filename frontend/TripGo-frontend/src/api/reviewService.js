@@ -11,8 +11,8 @@ const toQuery = (params = {}) => {
   return query ? `?${query}` : '';
 };
 
-export const getOperatorReviews = async ({ page = 0, size = 10 } = {}) => {
-  return apiGet(`/operator/reviews${toQuery({ page, size })}`);
+export const getOperatorReviews = async ({ page = 0, size = 10, rating } = {}) => {
+  return apiGet(`/operator/reviews${toQuery({ page, size, rating })}`);
 };
 
 export const getOperatorBusReviews = async (busId, { page = 0, size = 10 } = {}) => {

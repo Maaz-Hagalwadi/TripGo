@@ -193,6 +193,61 @@ public class EmailService {
         sendResendTemplate(user.getEmail(), "booking-confirmation", templateData);
     }
 
+    @Async
+    public void sendSupportTicket(User user, String subject, String category, String message) {
+        Map<String, Object> model = new HashMap<>();
+        model.put("firstName", user.getFirstName());
+        model.put("userEmail", user.getEmail());
+        model.put("subject", subject);
+        model.put("category", category);
+        model.put("message", message);
+        sendTemplate("support@tripgo.com",
+                "[TripGo Support] " + category + ": " + subject,
+                "support-ticket",
+                model);
+    }
+
+    @Async
+    public void sendRescheduleConfirmation(User user, Booking booking, List<BookingSeat> seats) {
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a").withZone(ZoneId.of("Asia/Kolkata"));
+        String seatNumbers = seats.stream().map(BookingSeat::getSeatNumber).reduce((a, b) -> a + ", " + b).orElse("-");
+        String from = seats.isEmpty() ? "-" : seats.get(0).getFromStop();
+        String to = seats.isEmpty() ? "-" : seats.get(0).getToStop();
+        Map<String, Object> data = new HashMap<>();
+        data.put("subject", "Booking Rescheduled - " + booking.getBookingCode() + " | TripGo");
+        data.put("firstName", user.getFirstName());
+        data.put("bookingCode", booking.getBookingCode());
+        data.put("from", from);
+        data.put("to", to);
+        data.put("busName", booking.getRouteSchedule().getBus().getName());
+        data.put("newTravelDate", booking.getTravelDate().toString());
+        data.put("departureTime", fmt.format(booking.getRouteSchedule().getDepartureTime()));
+        data.put("seatNumbers", seatNumbers);
+        data.put("payableAmount", booking.getPayableAmount());
+        data.put("frontendUrl", frontendUrl);
+        sendResendTemplate(user.getEmail(), "booking-reschedule", data);
+    }
+
+    @Async
+    public void sendBookingReminder(User user, Booking booking, List<BookingSeat> seats) {
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("hh:mm a").withZone(ZoneId.of("Asia/Kolkata"));
+        String seatNumbers = seats.stream().map(BookingSeat::getSeatNumber).reduce((a, b) -> a + ", " + b).orElse("-");
+        String from = seats.isEmpty() ? booking.getRouteSchedule().getRoute().getOrigin() : seats.get(0).getFromStop();
+        String to = seats.isEmpty() ? booking.getRouteSchedule().getRoute().getDestination() : seats.get(0).getToStop();
+        Map<String, Object> data = new HashMap<>();
+        data.put("subject", "Reminder: Your trip tomorrow - " + booking.getBookingCode() + " | TripGo");
+        data.put("firstName", user.getFirstName());
+        data.put("bookingCode", booking.getBookingCode());
+        data.put("from", from);
+        data.put("to", to);
+        data.put("travelDate", booking.getTravelDate().toString());
+        data.put("departureTime", fmt.format(booking.getRouteSchedule().getDepartureTime()));
+        data.put("busName", booking.getRouteSchedule().getBus().getName());
+        data.put("seatNumbers", seatNumbers);
+        data.put("frontendUrl", frontendUrl);
+        sendResendTemplate(user.getEmail(), "booking-reminder", data);
+    }
+
     private void sendResendTemplate(String to, String templateName, Map<String, Object> variables) {
         try {
             Context ctx = new Context();

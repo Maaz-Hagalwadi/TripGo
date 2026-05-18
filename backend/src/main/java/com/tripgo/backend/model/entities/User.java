@@ -41,6 +41,18 @@ public class User {
 
     private String password;
 
+    @Column(name = "profile_picture_url", length = 500)
+    private String profilePictureUrl;
+
+    @Column(name = "is_premium")
+    private boolean isPremium;
+
+    @Column(name = "premium_expires_at")
+    private Instant premiumExpiresAt;
+
+    @Column(name = "is_suspended")
+    private boolean isSuspended;
+
     @Column(name = "is_phone_verified")
     private boolean isPhoneVerified;
 

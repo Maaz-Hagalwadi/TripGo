@@ -12,5 +12,7 @@ public record AdminUserResponse(
         String phone,
         boolean emailVerified,
         List<String> roles,
-        Instant createdAt
+        Instant createdAt,
+        boolean isSuspended,
+        String profilePictureUrl
 ) {}

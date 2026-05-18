@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Booking Rescheduled</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f4f6f9; font-family: 'Segoe UI', Arial, sans-serif; }
+    .wrapper { max-width: 600px; margin: 30px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #002046, #003a80); padding: 36px 32px; text-align: center; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 26px; font-weight: 700; }
+    .header p { color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 14px; }
+    .badge { display: inline-block; background: #fff; color: #002046; padding: 6px 18px; border-radius: 20px; font-size: 13px; font-weight: 700; margin-top: 14px; }
+    .body { padding: 32px; }
+    .greeting { font-size: 16px; color: #333; margin-bottom: 24px; }
+    .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+    .label { color: #888; }
+    .value { font-weight: 600; color: #222; }
+    .info-box { background: #eff6ff; border: 1px solid #93c5fd; border-radius: 8px; padding: 16px 20px; margin: 24px 0; }
+    .info-box p { margin: 0; font-weight: 700; color: #1e40af; font-size: 14px; }
+    .info-box span { display: block; margin-top: 6px; font-size: 13px; color: #555; font-weight: 400; }
+    .btn { display: inline-block; background: #002046; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; margin-top: 24px; }
+    .footer { background: #f4f6f9; padding: 24px 32px; text-align: center; font-size: 12px; color: #999; border-top: 1px solid #eee; }
+    .footer a { color: #002046; text-decoration: none; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <h1>🚌 TripGo</h1>
+    <p>Booking Rescheduled Successfully</p>
+    <div class="badge">✓ RESCHEDULED</div>
+  </div>
+  <div class="body">
+    <p class="greeting">Hi <strong th:text="${firstName}">User</strong>, your booking has been rescheduled. Here are your updated trip details:</p>
+    <div class="detail-row"><span class="label">Booking Code</span><span class="value" th:text="${bookingCode}">TG12345</span></div>
+    <div class="detail-row"><span class="label">Route</span><span class="value" th:text="${from + ' → ' + to}">A → B</span></div>
+    <div class="detail-row"><span class="label">Bus</span><span class="value" th:text="${busName}">Bus</span></div>
+    <div class="detail-row"><span class="label">New Travel Date</span><span class="value" th:text="${newTravelDate}">-</span></div>
+    <div class="detail-row"><span class="label">Departure Time</span><span class="value" th:text="${departureTime}">-</span></div>
+    <div class="detail-row"><span class="label">Seats</span><span class="value" th:text="${seatNumbers}">-</span></div>
+    <div class="detail-row"><span class="label">Amount Paid</span><span class="value" th:text="'₹' + ${payableAmount}">₹0</span></div>
+    <div class="info-box">
+      <p>✅ Your booking is confirmed for the new date.</p>
+      <span>Download your updated ticket from the TripGo app. Your original payment remains valid.</span>
+    </div>
+    <a th:href="${frontendUrl + '/my-bookings'}" class="btn">View My Bookings</a>
+  </div>
+  <div class="footer">
+    <p>© 2026 TripGo. All rights reserved.</p>
+    <p>Need help? <a th:href="${frontendUrl + '/support'}">Contact Support</a></p>
+  </div>
+</div>
+</body>
+</html>

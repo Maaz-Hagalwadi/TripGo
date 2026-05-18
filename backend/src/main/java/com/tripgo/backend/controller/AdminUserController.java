@@ -4,9 +4,11 @@ import com.tripgo.backend.dto.response.AdminUserResponse;
 import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -22,10 +24,28 @@ public class AdminUserController {
     }
 
     @GetMapping("/{id}")
-    public AdminUserResponse getUser(@PathVariable UUID id) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        return toResponse(user);
+    public ResponseEntity<AdminUserResponse> getUser(@PathVariable UUID id) {
+        return userRepository.findById(id)
+                .map(u -> ResponseEntity.ok(toResponse(u)))
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/{id}/suspend")
+    public ResponseEntity<?> suspendUser(@PathVariable UUID id) {
+        return userRepository.findById(id).map(u -> {
+            u.setSuspended(true);
+            userRepository.save(u);
+            return ResponseEntity.ok(toResponse(u));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @PostMapping("/{id}/unsuspend")
+    public ResponseEntity<?> unsuspendUser(@PathVariable UUID id) {
+        return userRepository.findById(id).map(u -> {
+            u.setSuspended(false);
+            userRepository.save(u);
+            return ResponseEntity.ok(toResponse(u));
+        }).orElse(ResponseEntity.notFound().build());
     }
 
     private AdminUserResponse toResponse(User user) {
@@ -37,7 +57,9 @@ public class AdminUserController {
                 user.getPhone(),
                 user.isEmailVerified(),
                 user.getRoles().stream().map(r -> r.getName().name()).toList(),
-                user.getCreatedAt()
+                user.getCreatedAt(),
+                user.isSuspended(),
+                user.getProfilePictureUrl()
         );
     }
 }

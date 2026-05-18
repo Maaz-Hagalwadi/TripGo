@@ -24,6 +24,7 @@ const UserLayout = ({ activeItem = 'dashboard', title = 'Dashboard', showHeaderT
         showSearch={showHeaderSearch}
         searchPlaceholder="Search routes, cities, or bookings..."
         roleLabel="Traveler"
+        settingsRoute={ROUTES.USER_SETTINGS}
       />
 
       {/* Fixed sidebar — desktop only */}

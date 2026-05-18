@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import UserLayout from '../../../shared/components/UserLayout';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ROUTES } from '../../../shared/constants/routes';
+import { submitSupportTicket } from '../../../api/userService';
 
 const SUPPORT_EMAIL = 'support@tripgo.com';
 const SUPPORT_PHONE = '+91 80 4567 1234';
@@ -90,10 +91,15 @@ const UserSupport = () => {
 
     setSending(true);
     const t = toast.loading('Sending your message...');
-    await new Promise((r) => setTimeout(r, 1200));
-    toast.success('Message sent! We\'ll reply within 24 hours.', { id: t });
-    setForm({ subject: '', category: '', message: '' });
-    setSending(false);
+    try {
+      await submitSupportTicket({ subject: form.subject.trim(), category: form.category, message: form.message.trim() });
+      toast.success("Message sent! We'll reply within 24 hours.", { id: t });
+      setForm({ subject: '', category: '', message: '' });
+    } catch (e) {
+      toast.error(e.message || 'Failed to send message. Please try again.', { id: t });
+    } finally {
+      setSending(false);
+    }
   };
 
   return (

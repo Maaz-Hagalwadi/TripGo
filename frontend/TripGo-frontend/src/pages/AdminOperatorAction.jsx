@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Box, Container, Typography, CircularProgress } from '@mui/material';
-import { CheckCircle, Cancel } from '@mui/icons-material';
 import TripGoIcon from '../assets/icons/TripGoIcon';
-
 import { API_BASE_URL } from '../config/env';
 
 const AdminOperatorAction = () => {
@@ -13,7 +10,6 @@ const AdminOperatorAction = () => {
 
   useEffect(() => {
     const processAction = async () => {
-      // Handle both parameter formats
       const action = searchParams.get('action') || searchParams.get('status');
       const operatorId = searchParams.get('operatorId') || searchParams.get('operator');
 
@@ -23,7 +19,6 @@ const AdminOperatorAction = () => {
         return;
       }
 
-      // If status is already processed (approved/rejected), just show success
       if (action === 'approved' || action === 'rejected') {
         setStatus('success');
         setMessage(`Operator ${action} successfully!`);
@@ -34,7 +29,7 @@ const AdminOperatorAction = () => {
         const response = await fetch(`${API_BASE_URL}/admin/operator/${action}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ operatorId })
+          body: JSON.stringify({ operatorId }),
         });
 
         if (response.ok) {
@@ -44,7 +39,7 @@ const AdminOperatorAction = () => {
           setStatus('error');
           setMessage('Failed to process request');
         }
-      } catch (error) {
+      } catch {
         setStatus('error');
         setMessage('Network error occurred');
       }
@@ -54,48 +49,51 @@ const AdminOperatorAction = () => {
   }, [searchParams]);
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#050505', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <Container maxWidth="sm">
-        <Box sx={{ textAlign: 'center', p: 4 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
-            <TripGoIcon style={{ width: 48, height: 48, color: '#00d4ff' }} />
-          </Box>
-          
+    <div className="min-h-screen bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] flex items-center justify-center p-4">
+      <div className="w-full max-w-sm">
+        <div className="rounded-2xl bg-white p-8 shadow-2xl ring-1 ring-white/10 text-center">
+
+          {/* Logo */}
+          <div className="flex justify-center mb-6">
+            <div className="w-12 h-12 rounded-2xl bg-[#002046] flex items-center justify-center shadow-lg">
+              <TripGoIcon className="w-7 h-6 text-white" />
+            </div>
+          </div>
+
           {status === 'loading' && (
             <>
-              <CircularProgress sx={{ color: '#00d4ff', mb: 2 }} />
-              <Typography variant="h6" sx={{ color: 'white', mb: 1 }}>
-                Processing Request...
-              </Typography>
+              <div className="mx-auto mb-5 h-14 w-14 rounded-full bg-[#002046]/[0.08] flex items-center justify-center">
+                <div className="h-7 w-7 animate-spin rounded-full border-3 border-[#002046]/20 border-t-[#002046]" />
+              </div>
+              <h2 className="text-xl font-black text-slate-900">Processing Request</h2>
+              <p className="mt-2 text-sm text-slate-500">Please wait while we process the operator action.</p>
             </>
           )}
 
           {status === 'success' && (
             <>
-              <CheckCircle sx={{ fontSize: 64, color: '#4caf50', mb: 2 }} />
-              <Typography variant="h6" sx={{ color: 'white', mb: 1 }}>
-                Success!
-              </Typography>
-              <Typography variant="body1" sx={{ color: '#94a3b8' }}>
-                {message}
-              </Typography>
+              <div className="mx-auto mb-5 h-14 w-14 rounded-full bg-emerald-50 ring-1 ring-emerald-200 flex items-center justify-center">
+                <span className="material-symbols-outlined text-3xl text-emerald-600">check_circle</span>
+              </div>
+              <h2 className="text-xl font-black text-slate-900">Success</h2>
+              <p className="mt-2 text-sm text-slate-500">{message}</p>
             </>
           )}
 
           {status === 'error' && (
             <>
-              <Cancel sx={{ fontSize: 64, color: '#f44336', mb: 2 }} />
-              <Typography variant="h6" sx={{ color: 'white', mb: 1 }}>
-                Error
-              </Typography>
-              <Typography variant="body1" sx={{ color: '#94a3b8' }}>
-                {message}
-              </Typography>
+              <div className="mx-auto mb-5 h-14 w-14 rounded-full bg-red-50 ring-1 ring-red-200 flex items-center justify-center">
+                <span className="material-symbols-outlined text-3xl text-red-500">cancel</span>
+              </div>
+              <h2 className="text-xl font-black text-slate-900">Error</h2>
+              <p className="mt-2 text-sm text-slate-500">{message}</p>
             </>
           )}
-        </Box>
-      </Container>
-    </Box>
+
+          <p className="mt-6 text-xs text-slate-400">TripGo Admin · Operator Management</p>
+        </div>
+      </div>
+    </div>
   );
 };
 

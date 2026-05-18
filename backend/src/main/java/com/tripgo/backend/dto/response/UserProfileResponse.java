@@ -17,6 +17,8 @@ public class UserProfileResponse {
     private boolean emailVerified;
     private List<String> roles;
     private String operatorStatus;
+    private String profilePictureUrl;
+    private boolean isPremium;
 
     public static UserProfileResponse from(User user) {
         String operatorStatus = null;
@@ -32,8 +34,9 @@ public class UserProfileResponse {
                 user.getRoles().stream()
                     .map(role -> role.getName().name())
                     .toList(),
-                operatorStatus
+                operatorStatus,
+                user.getProfilePictureUrl(),
+                user.isPremium()
         );
     }
 }
-

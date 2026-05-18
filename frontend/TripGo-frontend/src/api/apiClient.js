@@ -220,3 +220,48 @@ export const apiDelete = async (endpoint) => {
   const response = await fetchWithAuth(`${API_BASE_URL}${endpoint}`, { method: 'DELETE' });
   if (!response.ok) throw new Error(await parseErrorMessage(response));
 };
+
+/**
+ * Authenticated multipart POST — for file uploads.
+ * Does NOT set Content-Type so the browser can include the multipart boundary.
+ * @param {string} endpoint
+ * @param {FormData} formData
+ * @returns {Promise<any>}
+ */
+export const apiPostMultipart = async (endpoint, formData) => {
+  let token = localStorage.getItem('accessToken');
+  if (token && isTokenExpiringSoon(token)) {
+    await refreshAccessToken();
+    token = localStorage.getItem('accessToken');
+  }
+  const lang = localStorage.getItem('tripgo_lang') || 'en';
+
+  const makeRequest = (t) =>
+    fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Accept-Language': lang,
+        ...(t && { Authorization: `Bearer ${t}` }),
+      },
+    });
+
+  let response = await makeRequest(token);
+
+  if (response.status === 401) {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      response = await makeRequest(localStorage.getItem('accessToken'));
+    } else {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      window.location.href = '/login';
+      return response;
+    }
+  }
+
+  if (response.status === 403) throw new Error('You do not have permission to perform this action.');
+  if (response.status >= 500) throw new Error((await parseErrorMessage(response)) || 'Server error.');
+  if (!response.ok) throw new Error(await parseErrorMessage(response));
+  return parseJsonIfPresent(response);
+};

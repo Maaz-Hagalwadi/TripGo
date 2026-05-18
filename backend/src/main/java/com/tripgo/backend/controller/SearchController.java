@@ -118,57 +118,5 @@ public class SearchController {
         return targetDate.atTime(timeOfDay).toInstant(java.time.ZoneOffset.UTC);
     }
     
-    @GetMapping("/debug")
-    public List<String> debugSchedules() {
-        return scheduleRepo.findAll().stream()
-                .map(s -> "Route: " + s.getRoute().getOrigin() + " -> " + s.getRoute().getDestination() + 
-                         ", Date: " + s.getDepartureTime() + ", Active: " + s.getActive())
-                .toList();
-    }
-    
-    @GetMapping("/debug/route")
-    public List<String> debugByRoute(@RequestParam String from, @RequestParam String to) {
-        List<RouteSchedule> all = scheduleRepo.findAll();
-        System.out.println("Total schedules in DB: " + all.size());
-        
-        return all.stream()
-                .filter(s -> s.getRoute().getOrigin().equalsIgnoreCase(from) && 
-                            s.getRoute().getDestination().equalsIgnoreCase(to))
-                .map(s -> "ID: " + s.getId() + 
-                         ", Route: " + s.getRoute().getOrigin() + " -> " + s.getRoute().getDestination() + 
-                         ", Departure: " + s.getDepartureTime() + 
-                         ", Active: " + s.getActive())
-                .toList();
-    }
-    
-    @GetMapping("/debug/segments")
-    public List<String> debugSegments(@RequestParam String from, @RequestParam String to) {
-        // First find schedules
-        List<RouteSchedule> schedules = scheduleRepo.findAll().stream()
-                .filter(s -> s.getRoute().getOrigin().equalsIgnoreCase(from) && 
-                            s.getRoute().getDestination().equalsIgnoreCase(to))
-                .toList();
-        
-        if (schedules.isEmpty()) {
-            return List.of("No schedules found for " + from + " -> " + to);
-        }
-        
-        RouteSchedule schedule = schedules.get(0);
-        List<String> result = new java.util.ArrayList<>();
-        result.add("Route: " + schedule.getRoute().getOrigin() + " -> " + schedule.getRoute().getDestination());
-        result.add("Route ID: " + schedule.getRoute().getId());
-        
-        // Get segments using repository
-        List<com.tripgo.backend.model.entities.RouteSegment> segments = 
-            segmentRepo.findByRouteOrderBySeq(schedule.getRoute());
-        
-        result.add("Total segments: " + segments.size());
-        
-        for (int i = 0; i < segments.size(); i++) {
-            var seg = segments.get(i);
-            result.add("Segment [" + i + "] seq=" + seg.getSeq() + ": fromStop='" + seg.getFromStop() + "' -> toStop='" + seg.getToStop() + "'");
-        }
-        return result;
-    }
 }
 

@@ -47,6 +47,58 @@ public class PaymentController {
     @Value("${stripe.webhook-secret}")
     private String webhookSecret;
 
+    private static final Map<String, Integer> PLAN_DAYS = Map.of(
+            "monthly", 30,
+            "quarterly", 90,
+            "yearly", 365
+    );
+
+    private static final Map<String, Long> PLAN_PAISE = Map.of(
+            "monthly", 29900L,
+            "quarterly", 74900L,
+            "yearly", 249900L
+    );
+
+    @PostMapping("/premium/create-intent")
+    public ResponseEntity<?> createPremiumIntent(
+            @RequestBody Map<String, Object> body,
+            Authentication auth) {
+        try {
+            User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+            String plan = (String) body.get("plan");
+            if (!PLAN_PAISE.containsKey(plan)) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Invalid plan"));
+            }
+
+            long amount = PLAN_PAISE.get(plan);
+            int days = PLAN_DAYS.get(plan);
+            Instant expiresAt = Instant.now().plus(days, java.time.temporal.ChronoUnit.DAYS);
+
+            PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
+                    .setAmount(amount)
+                    .setCurrency("inr")
+                    .setAutomaticPaymentMethods(
+                            PaymentIntentCreateParams.AutomaticPaymentMethods.builder()
+                                    .setEnabled(true)
+                                    .build()
+                    )
+                    .putMetadata("type", "PREMIUM")
+                    .putMetadata("userId", user.getId().toString())
+                    .putMetadata("plan", plan)
+                    .putMetadata("expiresAt", expiresAt.toString())
+                    .build();
+
+            PaymentIntent intent = PaymentIntent.create(params);
+
+            return ResponseEntity.ok(Map.of(
+                    "clientSecret", intent.getClientSecret(),
+                    "paymentIntentId", intent.getId()
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", e.getMessage()));
+        }
+    }
+
     /**
      * Step 1: Frontend calls this after locking seats.
      * Returns clientSecret which frontend uses to show Stripe payment form.
@@ -408,6 +460,18 @@ public class PaymentController {
                 if (!(event.getDataObjectDeserializer().getObject().orElse(null) instanceof PaymentIntent intent))
                     break;
 
+                if ("PREMIUM".equals(intent.getMetadata().get("type"))) {
+                    String userId = intent.getMetadata().get("userId");
+                    String plan = intent.getMetadata().get("plan");
+                    userRepository.findById(UUID.fromString(userId)).ifPresent(u -> {
+                        u.setPremium(true);
+                        int days = PLAN_DAYS.getOrDefault(plan, 30);
+                        u.setPremiumExpiresAt(Instant.now().plus(days, java.time.temporal.ChronoUnit.DAYS));
+                        userRepository.save(u);
+                    });
+                    break;
+                }
+
                 String bookingId = intent.getMetadata().get("bookingId");
                 String lockToken = intent.getMetadata().get("lockToken");
 
@@ -482,6 +546,8 @@ public class PaymentController {
             case "payment_intent.payment_failed" -> {
                 if (!(event.getDataObjectDeserializer().getObject().orElse(null) instanceof PaymentIntent intent))
                     break;
+
+                if ("PREMIUM".equals(intent.getMetadata().get("type"))) break;
 
                 String bookingId = intent.getMetadata().get("bookingId");
 

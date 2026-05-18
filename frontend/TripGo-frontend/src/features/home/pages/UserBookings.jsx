@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import UserLayout from '../../../shared/components/UserLayout';
-import { cancelMyBooking, getMyBookings, downloadTicketFromApi, viewTicketFromApi } from '../../../api/bookingService';
+import { cancelMyBooking, getMyBookings, downloadTicketFromApi, viewTicketFromApi, getSchedulePolicies } from '../../../api/bookingService';
+import UserRescheduleModal from '../components/UserRescheduleModal';
 import { getMyCompletedTrips, submitTripRating } from '../../../api/reviewService';
 import { ROUTES } from '../../../shared/constants/routes';
 import { formatUtcDateTime } from '../../../shared/utils/scheduleSearchUtils';
@@ -147,9 +148,9 @@ const getDisplayStatus = (booking, pendingPayment) => {
 
 const getRefundStatusMeta = (refundStatus) => {
   const upper = String(refundStatus || 'NA').toUpperCase();
-  if (upper === 'PROCESSED') return { label: 'Refund processed', className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300' };
-  if (upper === 'PENDING') return { label: 'Refund pending', className: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300' };
-  return { label: 'No refund', className: 'bg-slate-100 text-slate-700 dark:bg-white/10 dark:text-slate-300' };
+  if (upper === 'PROCESSED') return { label: 'Refund processed', className: 'bg-emerald-50 text-emerald-700' };
+  if (upper === 'PENDING') return { label: 'Refund pending', className: 'bg-amber-50 text-amber-700' };
+  return { label: 'No refund', className: 'bg-slate-100 text-slate-700' };
 };
 
 const getCancelledByLabel = (cancelledBy) => {
@@ -243,8 +244,23 @@ const getScheduleId = (booking) => String(
   ''
 ).trim();
 
+const canReschedule = (booking) => {
+  const dept = booking?.departureTime;
+  const travelDate = booking?.travelDate;
+  if (!dept) return false;
+  const deptInstant = new Date(dept);
+  let actualDeparture;
+  if (travelDate) {
+    actualDeparture = new Date(travelDate + 'T00:00:00.000Z');
+    actualDeparture.setUTCHours(deptInstant.getUTCHours(), deptInstant.getUTCMinutes(), deptInstant.getUTCSeconds(), 0);
+  } else {
+    actualDeparture = deptInstant;
+  }
+  return (actualDeparture.getTime() - Date.now()) / 3600000 >= 12;
+};
+
 const InlineLoader = ({ label }) => (
-  <div className="inline-flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
+  <div className="inline-flex items-center gap-3 text-sm text-slate-500">
     <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/40 border-t-primary" />
     <span>{label}</span>
   </div>
@@ -252,11 +268,11 @@ const InlineLoader = ({ label }) => (
 
 const CenterScreenLoader = ({ label }) => (
   <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-    <div className="flex min-w-[260px] flex-col items-center gap-4 rounded-[28px] bg-white px-8 py-7 text-center shadow-2xl ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,#080808_0%,#121212_100%)] dark:ring-white/10">
+    <div className="flex min-w-[260px] flex-col items-center gap-4 rounded-[28px] bg-white px-8 py-7 text-center shadow-2xl ring-1 ring-slate-200/70">
       <div className="h-12 w-12 animate-spin rounded-full border-[3px] border-primary/25 border-t-primary" />
       <div>
-        <p className="text-base font-bold text-slate-900 dark:text-white">{label}</p>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Please wait while we update your booking.</p>
+        <p className="text-base font-bold text-slate-900">{label}</p>
+        <p className="mt-1 text-sm text-slate-500">Please wait while we update your booking.</p>
       </div>
     </div>
   </div>
@@ -268,20 +284,20 @@ const RatingModal = ({ booking, onClose, onSubmit, submitting }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-[28px] bg-white p-6 shadow-2xl ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,#080808_0%,#121212_100%)] dark:ring-white/10">
+      <div className="w-full max-w-lg rounded-[28px] bg-white p-6 shadow-2xl ring-1 ring-slate-200/70">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/80">Rate your trip</p>
-            <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{booking?.from || '--'} to {booking?.to || '--'}</h2>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Share a quick review to help future travelers choose with confidence.</p>
+            <h2 className="mt-2 text-2xl font-black text-slate-900">{booking?.from || '--'} to {booking?.to || '--'}</h2>
+            <p className="mt-2 text-sm text-slate-500">Share a quick review to help future travelers choose with confidence.</p>
           </div>
-          <button onClick={onClose} className="rounded-xl bg-slate-100 p-2 text-slate-500 hover:bg-slate-200 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/15">
+          <button onClick={onClose} className="rounded-xl bg-slate-100 p-2 text-slate-500 hover:bg-slate-200">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
 
         <div className="mt-6">
-          <p className="text-sm font-semibold text-slate-900 dark:text-white">How was your trip?</p>
+          <p className="text-sm font-semibold text-slate-900">How was your trip?</p>
           <div className="mt-3 flex items-center gap-1">
             {[1, 2, 3, 4, 5].map((value) => (
               <button
@@ -290,32 +306,32 @@ const RatingModal = ({ booking, onClose, onSubmit, submitting }) => {
                 onClick={() => setRating(value)}
                 className="transition-transform hover:scale-110 active:scale-95 p-1"
               >
-                <span className={`material-symbols-outlined text-4xl transition-colors ${rating >= value ? 'text-amber-400' : 'text-slate-300 dark:text-slate-600'}`}
+                <span className={`material-symbols-outlined text-4xl transition-colors ${rating >= value ? 'text-amber-400' : 'text-slate-300'}`}
                   style={{ fontVariationSettings: rating >= value ? "'FILL' 1" : "'FILL' 0" }}>
                   star
                 </span>
               </button>
             ))}
-            <span className="ml-2 text-sm font-semibold text-slate-600 dark:text-slate-300">{rating}/5</span>
+            <span className="ml-2 text-sm font-semibold text-slate-600">{rating}/5</span>
           </div>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          <p className="mt-1 text-xs text-slate-500">
             {rating === 1 ? 'Poor' : rating === 2 ? 'Fair' : rating === 3 ? 'Good' : rating === 4 ? 'Very Good' : 'Excellent'}
           </p>
         </div>
 
         <div className="mt-5">
-          <label className="mb-2 block text-sm font-semibold text-slate-900 dark:text-white">Review comment</label>
+          <label className="mb-2 block text-sm font-semibold text-slate-900">Review comment</label>
           <textarea
             value={comment}
             onChange={(event) => setComment(event.target.value)}
             rows={4}
             placeholder="Tell us about seat comfort, punctuality, boarding, or overall experience."
-            className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-white/[0.04] dark:text-white dark:ring-white/10"
+            className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary"
           />
         </div>
 
         <div className="mt-6 flex gap-3">
-          <button onClick={onClose} className="flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/15">
+          <button onClick={onClose} className="flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200">
             Maybe later
           </button>
           <button
@@ -335,43 +351,43 @@ const UserCancelModal = ({ booking, reason, setReason, onClose, onConfirm, submi
   const preview = calculateUserRefundPreview(booking);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-xl rounded-[28px] bg-white p-6 shadow-2xl ring-1 ring-slate-200/70 dark:bg-[linear-gradient(180deg,#080808_0%,#121212_100%)] dark:ring-white/10">
+      <div className="w-full max-w-xl rounded-[28px] bg-white p-6 shadow-2xl ring-1 ring-slate-200/70">
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/80">Cancel booking</p>
-            <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{booking?.from || '--'} to {booking?.to || '--'}</h2>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Review the refund policy before cancelling this trip.</p>
+            <h2 className="mt-2 text-2xl font-black text-slate-900">{booking?.from || '--'} to {booking?.to || '--'}</h2>
+            <p className="mt-2 text-sm text-slate-500">Review the refund policy before cancelling this trip.</p>
           </div>
-          <button onClick={onClose} className="rounded-xl bg-slate-100 p-2 text-slate-500 hover:bg-slate-200 dark:bg-white/10 dark:text-slate-300 dark:hover:bg-white/15">
+          <button onClick={onClose} className="rounded-xl bg-slate-100 p-2 text-slate-500 hover:bg-slate-200">
             <span className="material-symbols-outlined">close</span>
           </button>
         </div>
-        <div className="mt-6 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70 dark:bg-white/[0.03] dark:ring-white/10">
-          <p className="text-sm font-semibold text-slate-900 dark:text-white">Refund policy</p>
-          <div className="mt-3 space-y-2 text-sm text-slate-600 dark:text-slate-300">
+        <div className="mt-6 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70">
+          <p className="text-sm font-semibold text-slate-900">Refund policy</p>
+          <div className="mt-3 space-y-2 text-sm text-slate-600">
             <p>{'>'} 24 hrs: 75% refund</p>
             <p>12-24 hrs: 50% refund</p>
             <p>4-12 hrs: 25% refund</p>
             <p>{'<'} 4 hrs: No refund</p>
           </div>
-          <div className="mt-4 rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200/70 dark:bg-black/40 dark:ring-white/10">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Estimated refund</p>
-            <p className="mt-2 text-2xl font-black text-slate-900 dark:text-white">₹{preview.amount}</p>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{preview.percent}% refund based on current departure window.</p>
+          <div className="mt-4 rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200/70">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Estimated refund</p>
+            <p className="mt-2 text-2xl font-black text-slate-900">₹{preview.amount}</p>
+            <p className="mt-1 text-sm text-slate-500">{preview.percent}% refund based on current departure window.</p>
           </div>
         </div>
         <div className="mt-5">
-          <label className="mb-2 block text-sm font-semibold text-slate-900 dark:text-white">Cancellation reason</label>
+          <label className="mb-2 block text-sm font-semibold text-slate-900">Cancellation reason</label>
           <textarea
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             rows={4}
             placeholder="Tell us why you want to cancel this booking."
-            className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary dark:bg-white/[0.04] dark:text-white dark:ring-white/10"
+            className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200/70 focus:ring-2 focus:ring-primary"
           />
         </div>
         <div className="mt-6 flex gap-3">
-          <button onClick={onClose} className="flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-white/10 dark:text-slate-200 dark:hover:bg-white/15">
+          <button onClick={onClose} className="flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200">
             Keep booking
           </button>
           <button onClick={onConfirm} disabled={submitting || !reason.trim()} className="flex-1 rounded-2xl bg-red-500 px-4 py-3 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-60">
@@ -650,6 +666,8 @@ const UserBookings = () => {
   const [cancelModalBooking, setCancelModalBooking] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancellingBookingId, setCancellingBookingId] = useState('');
+  const [rescheduleModalBooking, setRescheduleModalBooking] = useState(null);
+  const [policyMap, setPolicyMap] = useState({});
   const [page, setPage] = useState(0);
   const [selectedBookings, setSelectedBookings] = useState(new Set());
   const [viewMode, setViewMode] = useState(() => window.innerWidth < 768 ? 'grid' : 'list');
@@ -688,6 +706,17 @@ const UserBookings = () => {
   useEffect(() => {
     fetchCompletedTrips();
   }, []);
+
+  useEffect(() => {
+    if (!bookings.length) return;
+    const ids = [...new Set(bookings.filter(isConfirmedBooking).map(getScheduleId).filter(Boolean))];
+    ids.forEach(async (sid) => {
+      try {
+        const p = await getSchedulePolicies(sid);
+        setPolicyMap((prev) => ({ ...prev, [sid]: p }));
+      } catch {}
+    });
+  }, [bookings]);
 
   const latestBooking = location.state?.latestBooking;
   const hasFreshBooking = Boolean(latestBooking);
@@ -1029,11 +1058,10 @@ const UserBookings = () => {
                 <span className="material-symbols-outlined text-base">visibility</span>
                 View Ticket
               </button>
-              {selCanCancel && (
-                <button onClick={() => { setCancelModalBooking({ ...gridActionBooking, from: selFrom, to: selTo }); setCancelReason(''); }} className="flex items-center gap-1.5 rounded-xl bg-rose-50 border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-100 transition-colors whitespace-nowrap">
-                  Cancel
-                </button>
-              )}
+              <button onClick={() => downloadTicket(gridActionBooking)} className="flex items-center gap-1.5 rounded-xl bg-[#002046] px-4 py-2 text-sm font-semibold text-white hover:bg-[#001533] transition-colors whitespace-nowrap">
+                <span className="material-symbols-outlined text-base">download</span>
+                Download Ticket
+              </button>
               <button onClick={() => setSelectedBookings(new Set())} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center flex-shrink-0 transition-colors">
                 <span className="material-symbols-outlined text-sm text-slate-500">close</span>
               </button>
@@ -1119,9 +1147,24 @@ const UserBookings = () => {
                           <button onClick={(e) => { e.stopPropagation(); downloadTicket(booking); }} title="Download Ticket" className="w-8 h-8 rounded-lg bg-[#002046] text-white flex items-center justify-center hover:bg-[#001533] transition-colors">
                             <span className="material-symbols-outlined text-sm">download</span>
                           </button>
+                          {gridCanCancel && policyMap[getScheduleId(booking)]?.dateChange?.allowed !== false && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setRescheduleModalBooking({ ...booking, from: gFrom, to: gTo, scheduleId: getScheduleId(booking) }); }}
+                              disabled={!canReschedule(booking)}
+                              title={!canReschedule(booking) ? 'Rescheduling window has closed. Must reschedule at least 12 hours before departure.' : 'Reschedule'}
+                              className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-50"
+                            >
+                              <span className="material-symbols-outlined text-sm">edit_calendar</span>
+                            </button>
+                          )}
                           {gridCanCancel && (
                             <button onClick={(e) => { e.stopPropagation(); setCancelModalBooking({ ...booking, from: gFrom, to: gTo }); setCancelReason(''); }} className="flex items-center gap-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 px-2 h-8 text-xs font-semibold hover:bg-rose-100 transition-colors whitespace-nowrap">
                               Cancel
+                            </button>
+                          )}
+                          {upper === 'COMPLETED' && (
+                            <button onClick={(e) => { e.stopPropagation(); navigate(ROUTES.SEARCH_RESULTS, { state: { from: gFrom, to: gTo, date: new Date(Date.now() + 86400000).toISOString().split('T')[0] } }); }} title="Book again" className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center hover:bg-emerald-100 transition-colors">
+                              <span className="material-symbols-outlined text-sm">refresh</span>
                             </button>
                           )}
                         </div>
@@ -1163,18 +1206,6 @@ const UserBookings = () => {
                       View Ticket
                     </button>
                   )}
-                  {listActionBooking && (tripTab === 'upcoming' || tripTab === 'all') && isConfirmedBooking(listActionBooking) && (() => {
-                    const { routeFrom: lf, routeTo: lt } = getBookingRouteSegment(listActionBooking);
-                    return (
-                      <button
-                        onClick={() => { setCancelModalBooking({ ...listActionBooking, from: lf, to: lt }); setCancelReason(''); }}
-                        className="flex items-center gap-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap"
-                      >
-                        <span className="material-symbols-outlined text-sm">cancel</span>
-                        Cancel
-                      </button>
-                    );
-                  })()}
                   <button
                     onClick={async () => {
                       for (const booking of paginatedBookings) {
@@ -1290,9 +1321,24 @@ const UserBookings = () => {
                               <button onClick={() => downloadTicket(booking)} title="Download Ticket" className="w-8 h-8 rounded-lg bg-[#002046] text-white flex items-center justify-center hover:bg-[#001533] transition-colors">
                                 <span className="material-symbols-outlined text-sm">download</span>
                               </button>
+                              {canCancelBooking && policyMap[getScheduleId(booking)]?.dateChange?.allowed !== false && (
+                                <button
+                                  onClick={() => { const { routeFrom: rf, routeTo: rt } = getBookingRouteSegment(booking); setRescheduleModalBooking({ ...booking, from: rf, to: rt, scheduleId: getScheduleId(booking) }); }}
+                                  disabled={!canReschedule(booking)}
+                                  title={!canReschedule(booking) ? 'Rescheduling window has closed. Must reschedule at least 12 hours before departure.' : 'Reschedule'}
+                                  className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-50"
+                                >
+                                  <span className="material-symbols-outlined text-sm">edit_calendar</span>
+                                </button>
+                              )}
                               {canRateTrip && (
                                 <button onClick={() => setReviewModalBooking({ ...booking, scheduleId, from: routeFrom, to: routeTo })} title="Rate this trip" className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center hover:bg-amber-100 transition-colors">
                                   <span className="material-symbols-outlined text-sm">star</span>
+                                </button>
+                              )}
+                              {String(booking?.status || '').toUpperCase() === 'COMPLETED' && (
+                                <button onClick={() => navigate(ROUTES.SEARCH_RESULTS, { state: { from: routeFrom, to: routeTo, date: new Date(Date.now() + 86400000).toISOString().split('T')[0] } })} title="Book again" className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center hover:bg-emerald-100 transition-colors">
+                                  <span className="material-symbols-outlined text-sm">refresh</span>
                                 </button>
                               )}
                             </div>
@@ -1395,6 +1441,13 @@ const UserBookings = () => {
         />
       ) : null}
       {cancellingBookingId ? <CenterScreenLoader label="Cancelling your booking..." /> : null}
+      {rescheduleModalBooking && (
+        <UserRescheduleModal
+          booking={rescheduleModalBooking}
+          onClose={() => setRescheduleModalBooking(null)}
+          onSuccess={async () => { setRescheduleModalBooking(null); await fetchBookings(); }}
+        />
+      )}
     </UserLayout>
   );
 };

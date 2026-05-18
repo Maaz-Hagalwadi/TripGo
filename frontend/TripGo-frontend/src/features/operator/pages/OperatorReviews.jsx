@@ -64,7 +64,8 @@ const OperatorReviews = () => {
         } else if (busFilter) {
           response = await getOperatorBusReviews(busFilter, { page, size: 10 });
         } else {
-          response = await getOperatorReviews({ page, size: 10 });
+          const ratingParam = ratingTab !== 'all' ? ratingTab : undefined;
+          response = await getOperatorReviews({ page, size: 10, rating: ratingParam });
         }
         setReviewsPage(normalizePage(response));
       } catch (error) {
@@ -75,7 +76,7 @@ const OperatorReviews = () => {
       }
     };
     loadReviews();
-  }, [busFilter, scheduleFilter, page]);
+  }, [busFilter, scheduleFilter, page, ratingTab]);
 
   useEffect(() => { setPage(0); }, [ratingTab]);
 
@@ -92,26 +93,13 @@ const OperatorReviews = () => {
     ? (allContent.reduce((sum, r) => sum + Number(r.rating || 0), 0) / allContent.length).toFixed(1)
     : null;
 
-  const tabbedReviews = useMemo(() => {
-    if (ratingTab === 'positive') return allContent.filter((r) => Number(r.rating) >= 4);
-    if (ratingTab === 'critical') return allContent.filter((r) => Number(r.rating) <= 3 && Number(r.rating) > 0);
-    return allContent;
-  }, [allContent, ratingTab]);
-
-  const totalPages = Math.max(1, Math.ceil(tabbedReviews.length / PAGE_SIZE));
-  const paginatedReviews = useMemo(
-    () => tabbedReviews.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
-    [tabbedReviews, page]
-  );
-
-  useEffect(() => {
-    if (page >= totalPages) setPage(Math.max(0, totalPages - 1));
-  }, [page, totalPages]);
+  const paginatedReviews = allContent;
+  const totalPages = Math.max(1, reviewsPage.totalPages);
 
   const PaginationBar = () => (
     <div className="border-t border-slate-100 px-5 py-3.5 flex items-center justify-between gap-4">
       <p className="text-sm text-slate-400">
-        Showing {(page * PAGE_SIZE) + 1}–{Math.min(tabbedReviews.length, (page + 1) * PAGE_SIZE)} of {tabbedReviews.length}
+        Showing {reviewsPage.totalElements === 0 ? 0 : (page * PAGE_SIZE) + 1}–{Math.min(reviewsPage.totalElements, (page + 1) * PAGE_SIZE)} of {reviewsPage.totalElements}
       </p>
       <div className="flex items-center gap-1">
         <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30 transition-colors">
@@ -252,7 +240,7 @@ const OperatorReviews = () => {
               Loading reviews...
             </div>
 
-          ) : tabbedReviews.length === 0 ? (
+          ) : allContent.length === 0 ? (
             <div className="p-12 text-center">
               <span className="material-symbols-outlined text-5xl text-slate-300">star_border</span>
               <h2 className="mt-4 text-lg font-bold text-slate-900">No reviews found</h2>
