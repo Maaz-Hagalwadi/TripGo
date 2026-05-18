@@ -1,5 +1,23 @@
-<svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="40" height="40" rx="10" fill="#00d4ff"/>
-  <rect x="10" y="10" width="20" height="4" rx="2" fill="#000"/>
-  <rect x="18" y="14" width="4" height="16" rx="2" fill="#000"/>
+<svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="64" height="64" rx="14" fill="#002046"/>
+
+  <!-- Bus body -->
+  <rect x="6" y="14" width="52" height="24" rx="5" stroke="white" stroke-width="2.8"/>
+  <!-- Windshield -->
+  <rect x="9" y="18" width="12" height="10" rx="2" stroke="white" stroke-width="2.2"/>
+  <!-- Window 1 -->
+  <rect x="25" y="18" width="8" height="10" rx="2" stroke="white" stroke-width="2.2"/>
+  <!-- Window 2 -->
+  <rect x="37" y="18" width="8" height="10" rx="2" stroke="white" stroke-width="2.2"/>
+  <!-- Door line -->
+  <line x1="52" y1="22" x2="52" y2="36" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+  <!-- Ground bar -->
+  <line x1="6" y1="33" x2="58" y2="33" stroke="white" stroke-width="1.6" stroke-opacity="0.35"/>
+  <!-- Left wheel -->
+  <circle cx="18" cy="43" r="6" stroke="white" stroke-width="2.8"/>
+  <circle cx="18" cy="43" r="2.2" fill="white"/>
+  <!-- Right wheel -->
+  <circle cx="46" cy="43" r="6" stroke="white" stroke-width="2.8"/>
+  <circle cx="46" cy="43" r="2.2" fill="white"/>
 </svg>
