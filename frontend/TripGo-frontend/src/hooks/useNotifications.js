@@ -131,6 +131,11 @@ export const useNotifications = (user) => {
 
     fetchNotifications();
 
+    // Polling fallback — refreshes every 30 s regardless of WebSocket state
+    const pollTimer = window.setInterval(() => {
+      if (isMounted) fetchNotifications();
+    }, 30000);
+
     const connect = () => {
       if (!isMounted || !wsUrl || !accessToken) return;
 
@@ -196,6 +201,7 @@ export const useNotifications = (user) => {
 
     return () => {
       isMounted = false;
+      window.clearInterval(pollTimer);
       if (reconnectTimerRef.current) {
         window.clearTimeout(reconnectTimerRef.current);
       }

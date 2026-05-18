@@ -41,7 +41,7 @@ const getBookingStatus = (booking) => {
 const QUICK_ACTIONS = [
   { label: 'Add Bus',       icon: 'directions_bus', route: ROUTES.OPERATOR_ADD_BUS,    color: 'bg-[#002046]/[0.07] text-[#002046]' },
   { label: 'Create Route',  icon: 'add_road',       route: ROUTES.OPERATOR_CREATE_ROUTE, color: 'bg-emerald-50 text-emerald-700' },
-  { label: 'Schedules',     icon: 'calendar_month', route: ROUTES.OPERATOR_SCHEDULES,  color: 'bg-sky-50 text-sky-700' },
+  { label: 'Routes',        icon: 'calendar_month', route: ROUTES.OPERATOR_SCHEDULES,  color: 'bg-sky-50 text-sky-700' },
   { label: 'Bookings',      icon: 'confirmation_number', route: ROUTES.OPERATOR_BOOKINGS, color: 'bg-violet-50 text-violet-700' },
   { label: 'Drivers',       icon: 'badge',          route: ROUTES.OPERATOR_DRIVERS,    color: 'bg-amber-50 text-amber-700' },
   { label: 'Earnings',      icon: 'payments',       route: ROUTES.OPERATOR_EARNINGS,   color: 'bg-rose-50 text-rose-600' },
@@ -84,12 +84,20 @@ const Pulse = ({ w = 'w-16', h = 'h-8' }) => (
   <div className={`${w} ${h} bg-white/20 rounded animate-pulse`} />
 );
 
+const SETUP_STEPS = [
+  { label: 'Add a bus',              sub: 'Register your bus with seat layout',       icon: 'directions_bus', route: ROUTES.OPERATOR_ADD_BUS },
+  { label: 'Wait for admin approval', sub: 'Your bus must be approved before use',    icon: 'verified',       route: ROUTES.OPERATOR_MY_BUSES },
+  { label: 'Create a route',         sub: 'Add stops and set ticket fares',           icon: 'add_road',       route: ROUTES.OPERATOR_CREATE_ROUTE },
+  { label: 'Add a schedule',         sub: 'Set departure times and assign a driver',  icon: 'calendar_month', route: ROUTES.OPERATOR_SCHEDULES },
+];
+
 const OperatorDashboard = () => {
   const navigate = useNavigate();
   const { user, loading, suspendedWhileLoggedIn, setSuspendedWhileLoggedIn } = useAuth();
 
   const [buses, setBuses] = useState([]);
   const [loadingBuses, setLoadingBuses] = useState(true);
+  const [setupDismissed, setSetupDismissed] = useState(() => localStorage.getItem('op_setup_dismissed') === '1');
 
   const [stats, setStats] = useState({ totalBookings: 0, confirmedBookings: 0, cancelledBookings: 0, totalRevenue: 0, totalBuses: 0, totalRoutes: 0 });
   const [loadingStats, setLoadingStats] = useState(true);
@@ -150,6 +158,8 @@ const OperatorDashboard = () => {
     finally { setLoadingBookings(false); }
   };
 
+  const dismissSetup = () => { localStorage.setItem('op_setup_dismissed', '1'); setSetupDismissed(true); };
+
   if (!loading && user?.operatorStatus === 'SUSPENDED') return <SuspendedScreen />;
 
   const activeBuses  = buses.filter(b => b.active).length;
@@ -181,6 +191,42 @@ const OperatorDashboard = () => {
             {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
+
+        {/* Setup guide — shown until dismissed or all buses active */}
+        {!setupDismissed && !loadingBuses && (
+          <div className="rounded-2xl bg-white ring-1 ring-[#002046]/20 shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3.5 bg-[#002046]/[0.03] border-b border-[#002046]/10">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[#002046] text-base">rocket_launch</span>
+                <p className="text-sm font-black text-[#002046]">Getting Started — 4 steps to go live</p>
+              </div>
+              <button onClick={dismissSetup} className="text-slate-400 hover:text-slate-600 transition-colors" title="Dismiss">
+                <span className="material-symbols-outlined text-sm">close</span>
+              </button>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-slate-100">
+              {SETUP_STEPS.map((step, i) => {
+                const done = i === 0 ? buses.length > 0 : i === 1 ? activeBuses > 0 : false;
+                return (
+                  <button key={step.label} onClick={() => navigate(step.route)} className="flex flex-col items-start gap-2 p-4 text-left hover:bg-slate-50 transition-colors group">
+                    <div className="flex items-center justify-between w-full">
+                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${done ? 'bg-emerald-50' : 'bg-[#002046]/[0.07]'}`}>
+                        <span className={`material-symbols-outlined text-base ${done ? 'text-emerald-600' : 'text-[#002046]'}`}>{done ? 'check_circle' : step.icon}</span>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${done ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+                        {done ? 'Done' : `Step ${i + 1}`}
+                      </span>
+                    </div>
+                    <div>
+                      <p className={`text-xs font-bold ${done ? 'text-emerald-700 line-through' : 'text-slate-800'}`}>{step.label}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">{step.sub}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* KPI cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">

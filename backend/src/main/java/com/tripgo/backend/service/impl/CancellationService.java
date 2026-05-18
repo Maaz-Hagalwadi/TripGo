@@ -31,6 +31,7 @@ public class CancellationService {
     private final TicketRepository ticketRepository;
     private final BookingSeatRepository bookingSeatRepository;
     private final EmailService emailService;
+    private final NotificationService notificationService;
 
     @Transactional
     public BigDecimal cancel(Booking booking, CancelledBy cancelledBy, String reason) {
@@ -72,6 +73,19 @@ public class CancellationService {
         emailService.sendCancellationEmail(
                 userEmail, firstName, bookingCode, from, to, busName,
                 cancelledBy, reason, refundAmount, refundStatus);
+
+        // In-app notification
+        if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
+            String refundMsg = "PROCESSED".equals(refundStatus)
+                    ? String.format("₹%.0f has been refunded to your original payment method.", refundAmount)
+                    : String.format("₹%.0f refund has been initiated and will be credited in 5–7 business days.", refundAmount);
+            String notifType = "PROCESSED".equals(refundStatus) ? "REFUND_PROCESSED" : "REFUND_INITIATED";
+            String notifTitle = "PROCESSED".equals(refundStatus) ? "Refund Processed" : "Refund Initiated";
+            notificationService.send(booking.getUser(), notifType, notifTitle, refundMsg, "/bookings");
+        } else {
+            notificationService.send(booking.getUser(), "BOOKING_CANCELLED", "Booking Cancelled",
+                    String.format("Your booking %s (%s → %s) has been cancelled. No refund is applicable.", bookingCode, from, to), "/bookings");
+        }
 
         return refundAmount;
     }

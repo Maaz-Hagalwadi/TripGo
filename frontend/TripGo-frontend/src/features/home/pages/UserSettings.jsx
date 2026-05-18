@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import UserLayout from '../../../shared/components/UserLayout';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ROUTES } from '../../../shared/constants/routes';
+import { STRIPE_PUBLISHABLE_KEY } from '../../../config/env';
 import { changePassword, updateCurrentUser, uploadProfilePicture } from '../../../api/userService';
 import {
   getSavedPassengerProfiles,
@@ -12,6 +15,8 @@ import {
   deleteSavedPassengerProfile,
 } from '../../../api/bookingService';
 
+const stripePromise = STRIPE_PUBLISHABLE_KEY ? loadStripe(STRIPE_PUBLISHABLE_KEY) : null;
+const SAVED_CARDS_KEY = 'tripgo_saved_cards';
 const NOTIF_KEY = 'tripgo_notif_prefs';
 const DEFAULT_NOTIFS = {
   bookingConfirmation: true,
@@ -40,9 +45,92 @@ const Toggle = ({ checked, onChange }) => (
   </button>
 );
 
+const BRAND_STYLES = {
+  visa:       { label: 'VISA',  bg: 'from-[#1a1f71] to-[#0f5298]' },
+  mastercard: { label: 'MC',    bg: 'from-orange-600 to-red-600' },
+  amex:       { label: 'AMEX', bg: 'from-teal-700 to-teal-500' },
+  discover:   { label: 'DISC', bg: 'from-orange-400 to-yellow-400' },
+};
+const getBrand = (brand) => BRAND_STYLES[brand?.toLowerCase()] || { label: (brand || 'CARD').toUpperCase().slice(0, 4), bg: 'from-slate-700 to-slate-500' };
+
+const CARD_ELEMENT_OPTS = {
+  style: { base: { fontSize: '14px', color: '#0f172a', '::placeholder': { color: '#94a3b8' } } },
+  hidePostalCode: true,
+};
+
+const AddCardForm = ({ cardholderName, setCardholderName, onSaved, onCancel }) => {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [saving, setSaving] = useState(false);
+  const [cardError, setCardError] = useState('');
+
+  const handleSave = async () => {
+    if (!stripe || !elements) return;
+    if (!cardholderName.trim()) { setCardError('Cardholder name is required'); return; }
+    setSaving(true);
+    setCardError('');
+    const cardEl = elements.getElement(CardElement);
+    const { paymentMethod, error } = await stripe.createPaymentMethod({
+      type: 'card',
+      card: cardEl,
+      billing_details: { name: cardholderName.trim() },
+    });
+    if (error) { setCardError(error.message); setSaving(false); return; }
+    onSaved({
+      id: paymentMethod.id,
+      brand: paymentMethod.card.brand,
+      last4: paymentMethod.card.last4,
+      exp_month: paymentMethod.card.exp_month,
+      exp_year: paymentMethod.card.exp_year,
+      name: cardholderName.trim(),
+    });
+    setSaving(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Cardholder Name *</label>
+        <input
+          value={cardholderName}
+          onChange={e => setCardholderName(e.target.value)}
+          placeholder="Name on card"
+          className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Card Details *</label>
+        <div className="rounded-2xl bg-slate-50 px-4 py-3.5 ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-[#002046]/40 transition-shadow">
+          <CardElement options={CARD_ELEMENT_OPTS} />
+        </div>
+      </div>
+      {cardError && <p className="text-xs text-rose-500">{cardError}</p>}
+      <div className="flex gap-3 pt-1">
+        <button onClick={onCancel} className="flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-colors">Cancel</button>
+        <button onClick={handleSave} disabled={saving || !stripe} className="flex-1 rounded-2xl bg-[#002046] px-4 py-3 text-sm font-bold text-white hover:bg-[#003a80] transition-colors disabled:opacity-60">
+          {saving ? 'Saving card...' : 'Save Card'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const TABS = [
+  { id: 'passengers', label: 'Saved Passengers', icon: 'group' },
+  { id: 'notifications', label: 'Notifications', icon: 'notifications' },
+  { id: 'cards', label: 'Payment Cards', icon: 'credit_card' },
+];
+
 const UserSettings = () => {
   const navigate = useNavigate();
   const { user, loading, logout, updateUser } = useAuth();
+  const [activeTab, setActiveTab] = useState(null);
+
+  const [savedCards, setSavedCards] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(SAVED_CARDS_KEY) || '[]'); } catch { return []; }
+  });
+  const [addCardOpen, setAddCardOpen] = useState(false);
+  const [cardholderName, setCardholderName] = useState('');
 
   const [passwordModal, setPasswordModal] = useState({ open: false, oldPassword: '', newPassword: '', confirmPassword: '' });
   const [changingPassword, setChangingPassword] = useState(false);
@@ -209,6 +297,22 @@ const UserSettings = () => {
     toast.success(value ? 'Notification enabled' : 'Notification disabled');
   };
 
+  const handleCardSaved = (card) => {
+    const updated = [card, ...savedCards];
+    setSavedCards(updated);
+    localStorage.setItem(SAVED_CARDS_KEY, JSON.stringify(updated));
+    setAddCardOpen(false);
+    setCardholderName('');
+    toast.success('Card saved successfully');
+  };
+
+  const handleDeleteCard = (id) => {
+    const updated = savedCards.filter(c => c.id !== id);
+    setSavedCards(updated);
+    localStorage.setItem(SAVED_CARDS_KEY, JSON.stringify(updated));
+    toast.success('Card removed');
+  };
+
   const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'Traveler';
 
   const notifItems = [
@@ -340,81 +444,184 @@ const UserSettings = () => {
           </div>
         </div>
 
-        {/* Saved Passenger Profiles */}
+        {/* Tab selector */}
         <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-slate-900">Saved Passenger Profiles</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Save co-traveler details to auto-fill during booking</p>
-            </div>
-            <button
-              onClick={openAddProfile}
-              className="flex items-center gap-1.5 rounded-xl bg-[#002046] text-white px-4 py-2 text-sm font-semibold hover:bg-[#003a80] transition-colors"
-            >
-              <span className="material-symbols-outlined text-base">add</span>
-              Add Profile
-            </button>
+          <div className="flex items-center gap-1 p-1.5 border-b border-slate-100">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(activeTab === tab.id ? null : tab.id)}
+                className={`flex-1 flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all ${
+                  activeTab === tab.id
+                    ? 'bg-[#002046] text-white shadow-sm'
+                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">{tab.icon}</span>
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            ))}
           </div>
-          {savedProfiles.length === 0 ? (
-            <div className="px-5 py-8 text-center text-sm text-slate-400">
-              <span className="material-symbols-outlined text-3xl text-slate-300 block mb-2">group</span>
-              No saved profiles yet. Add a co-traveler to speed up future bookings.
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {savedProfiles.map((p) => (
-                <div key={p.id} className="flex items-center justify-between gap-3 px-5 py-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-9 h-9 rounded-full bg-[#002046]/10 flex items-center justify-center flex-shrink-0">
-                      <span className="material-symbols-outlined text-base text-[#002046]">person</span>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-900 truncate">
-                        {p.firstName} {p.lastName}
-                      </p>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        {[p.gender, p.age ? `${p.age} yrs` : null, p.phone].filter(Boolean).join(' · ')}
-                      </p>
-                    </div>
+
+          {/* Saved Passengers panel */}
+          {activeTab === 'passengers' && (
+            <div>
+              <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+                <p className="text-xs text-slate-500">Saved traveler details auto-fill during booking</p>
+                <button
+                  onClick={openAddProfile}
+                  className="flex items-center gap-1.5 rounded-xl bg-[#002046] text-white px-3 py-1.5 text-xs font-semibold hover:bg-[#003a80] transition-colors"
+                >
+                  <span className="material-symbols-outlined text-sm">add</span>
+                  Add
+                </button>
+              </div>
+              {savedProfiles.length === 0 ? (
+                <div className="px-5 py-12 flex flex-col items-center gap-3 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-2xl text-slate-400">group</span>
                   </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <button
-                      onClick={() => openEditProfile(p)}
-                      className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200 transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-sm">edit</span>
-                    </button>
-                    <button
-                      onClick={() => handleDeleteProfile(p.id)}
-                      disabled={deletingProfileId === p.id}
-                      className="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-100 transition-colors disabled:opacity-50"
-                    >
-                      <span className="material-symbols-outlined text-sm">delete</span>
-                    </button>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700">No saved passengers yet</p>
+                    <p className="text-xs text-slate-400 mt-1">Add a co-traveler to speed up future bookings</p>
+                  </div>
+                  <button onClick={openAddProfile} className="mt-1 text-sm font-semibold text-[#002046] hover:underline">
+                    + Add your first passenger
+                  </button>
+                </div>
+              ) : (
+                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {savedProfiles.map((p) => {
+                    const initials = [(p.firstName?.[0] || ''), (p.lastName?.[0] || '')].join('').toUpperCase() || 'P';
+                    const genderColor = p.gender === 'Female' ? 'bg-pink-100 text-pink-700' : p.gender === 'Male' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-600';
+                    return (
+                      <div key={p.id} className="group relative rounded-2xl ring-1 ring-slate-200 bg-slate-50 p-4 flex items-start gap-3 hover:ring-[#002046]/30 hover:bg-white transition-all">
+                        <div className="w-11 h-11 rounded-xl bg-[#002046] flex items-center justify-center flex-shrink-0 shadow-sm">
+                          <span className="text-sm font-black text-white select-none">{initials}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-900 truncate">{p.firstName} {p.lastName}</p>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            {p.gender && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${genderColor}`}>{p.gender}</span>}
+                            {p.age && <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{p.age} yrs</span>}
+                            {p.phone && <span className="text-[10px] text-slate-400 truncate">{p.phone}</span>}
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                          <button onClick={() => openEditProfile(p)} className="w-7 h-7 rounded-lg bg-white ring-1 ring-slate-200 text-slate-500 flex items-center justify-center hover:text-[#002046] hover:ring-[#002046]/30 transition-colors shadow-sm">
+                            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>edit</span>
+                          </button>
+                          <button onClick={() => handleDeleteProfile(p.id)} disabled={deletingProfileId === p.id} className="w-7 h-7 rounded-lg bg-white ring-1 ring-slate-200 text-slate-400 flex items-center justify-center hover:text-rose-500 hover:ring-rose-200 hover:bg-rose-50 transition-colors shadow-sm disabled:opacity-50">
+                            {deletingProfileId === p.id
+                              ? <div className="w-3 h-3 rounded-full border border-rose-300 border-t-rose-500 animate-spin" />
+                              : <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>delete</span>
+                            }
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Notifications panel */}
+          {activeTab === 'notifications' && (
+            <div className="divide-y divide-slate-100">
+              {notifItems.map((item) => (
+                <div key={item.key} className="flex items-center gap-4 px-5 py-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-900">{item.label}</p>
+                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{item.desc}</p>
+                  </div>
+                  <div className="flex-shrink-0 flex items-center gap-2.5">
+                    <span className={`text-[10px] font-bold ${notifPrefs[item.key] ? 'text-emerald-600' : 'text-slate-400'}`}>
+                      {notifPrefs[item.key] ? 'On' : 'Off'}
+                    </span>
+                    <Toggle checked={notifPrefs[item.key]} onChange={(val) => updateNotif(item.key, val)} />
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
 
-        {/* Notification Preferences */}
-        <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100">
-            <h2 className="text-base font-bold text-slate-900">Notification Preferences</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Choose which email notifications you receive from TripGo</p>
-          </div>
-          <div className="divide-y divide-slate-100">
-            {notifItems.map((item) => (
-              <div key={item.key} className="flex items-center justify-between gap-4 px-5 py-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-slate-900">{item.label}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{item.desc}</p>
-                </div>
-                <Toggle checked={notifPrefs[item.key]} onChange={(val) => updateNotif(item.key, val)} />
+          {/* Payment Cards panel */}
+          {activeTab === 'cards' && (
+            <div>
+              <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
+                <p className="text-xs text-slate-500">Saved cards appear at checkout for one-click payment</p>
+                {!addCardOpen && stripePromise && (
+                  <button
+                    onClick={() => setAddCardOpen(true)}
+                    className="flex items-center gap-1.5 rounded-xl bg-[#002046] text-white px-3 py-1.5 text-xs font-semibold hover:bg-[#003a80] transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-sm">add</span>
+                    Add Card
+                  </button>
+                )}
               </div>
-            ))}
-          </div>
+
+              {/* Add card form — inside Elements wrapper */}
+              {addCardOpen && stripePromise && (
+                <div className="px-5 py-5 border-b border-slate-100 bg-slate-50/40">
+                  <p className="text-sm font-bold text-slate-900 mb-4">Add new card</p>
+                  <Elements stripe={stripePromise}>
+                    <AddCardForm
+                      cardholderName={cardholderName}
+                      setCardholderName={setCardholderName}
+                      onSaved={handleCardSaved}
+                      onCancel={() => { setAddCardOpen(false); setCardholderName(''); }}
+                    />
+                  </Elements>
+                </div>
+              )}
+
+              {!addCardOpen && savedCards.length === 0 && (
+                <div className="px-5 py-12 flex flex-col items-center gap-3 text-center">
+                  <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-2xl text-slate-400">credit_card_off</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-700">No saved cards yet</p>
+                    <p className="text-xs text-slate-400 mt-1">Add a card to pay faster at checkout</p>
+                  </div>
+                  {stripePromise && (
+                    <button onClick={() => setAddCardOpen(true)} className="mt-1 text-sm font-semibold text-[#002046] hover:underline">
+                      + Add your first card
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {savedCards.length > 0 && (
+                <div className="p-4 space-y-3">
+                  {savedCards.map(card => {
+                    const brand = getBrand(card.brand);
+                    const expiry = `${String(card.exp_month).padStart(2, '0')}/${String(card.exp_year).slice(-2)}`;
+                    return (
+                      <div key={card.id} className="group flex items-center gap-4 rounded-2xl ring-1 ring-slate-200 p-4 bg-white hover:ring-[#002046]/30 transition-all">
+                        {/* Card visual */}
+                        <div className={`w-14 h-10 rounded-xl bg-gradient-to-br ${brand.bg} flex items-center justify-center flex-shrink-0 shadow-sm`}>
+                          <span className="text-[10px] font-black text-white tracking-wider">{brand.label}</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-900">•••• •••• •••• {card.last4}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{card.name} · Expires {expiry}</p>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteCard(card.id)}
+                          className="w-8 h-8 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
+                        >
+                          <span className="material-symbols-outlined text-sm">delete</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
       </div>
@@ -446,7 +653,7 @@ const UserSettings = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Age</label>
-                  <input type="number" min="1" max="120" value={profileForm.age} onChange={(e) => setProfileForm((p) => ({ ...p, age: e.target.value }))} placeholder="e.g. 28" className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40" />
+                  <input type="number" min="1" max="120" value={profileForm.age} onChange={(e) => setProfileForm((p) => ({ ...p, age: e.target.value }))} placeholder="Enter your age" className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40" />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Gender</label>
@@ -460,7 +667,7 @@ const UserSettings = () => {
               </div>
               <div>
                 <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone</label>
-                <input type="tel" value={profileForm.phone} onChange={(e) => setProfileForm((p) => ({ ...p, phone: e.target.value }))} placeholder="+91 98765 43210" className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40" />
+                <input type="tel" value={profileForm.phone} onChange={(e) => setProfileForm((p) => ({ ...p, phone: e.target.value }))} placeholder="Enter phone number" className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40" />
               </div>
             </div>
             <div className="flex gap-3 mt-6">
@@ -516,7 +723,7 @@ const UserSettings = () => {
                   type="tel"
                   value={editModal.phone}
                   onChange={(e) => setEditModal((p) => ({ ...p, phone: e.target.value }))}
-                  placeholder="+91 98765 43210"
+                  placeholder="Enter phone number"
                   className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40"
                 />
               </div>

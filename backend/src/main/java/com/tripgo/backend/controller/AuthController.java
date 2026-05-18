@@ -4,6 +4,9 @@ import com.tripgo.backend.dto.request.LoginRequest;
 import com.tripgo.backend.dto.request.RefreshTokenRequest;
 import com.tripgo.backend.dto.request.RegisterRequest;
 import com.tripgo.backend.dto.request.ResetPasswordRequest;
+import com.tripgo.backend.dto.request.SendOtpRequest;
+import com.tripgo.backend.dto.request.VerifyOtpRequest;
+import com.tripgo.backend.service.impl.OtpService;
 import com.tripgo.backend.dto.response.AuthResponse;
 import com.tripgo.backend.model.entities.EmailVerificationToken;
 import com.tripgo.backend.model.entities.PasswordResetToken;
@@ -50,6 +53,7 @@ public class AuthController {
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
     private final NotificationService notificationService;
+    private final OtpService otpService;
 
     @Value("${spring.security.oauth2.client.registration.google.client-id}")
     private String googleClientId;
@@ -82,6 +86,38 @@ public class AuthController {
                 "message", "Login successful",
                 "accessToken", response.getHeader("X-Access-Token"),
                 "refreshToken", response.getHeader("X-Refresh-Token")
+            ));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    @PostMapping("/send-otp")
+    public ResponseEntity<Map<String, String>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
+        otpService.generateAndSend(request.getEmailOrPhone().trim());
+        return ResponseEntity.ok(Map.of("message", "OTP sent successfully. Please check your email."));
+    }
+
+    @PostMapping("/verify-otp")
+    public ResponseEntity<?> verifyOtp(@Valid @RequestBody VerifyOtpRequest request,
+                                       HttpServletResponse response) {
+        try {
+            User user = otpService.verify(request.getEmailOrPhone().trim(), request.getOtp().trim());
+
+            Authentication auth = new UsernamePasswordAuthenticationToken(
+                    new CustomUserDetails(user), null, new CustomUserDetails(user).getAuthorities());
+
+            String accessToken = jwtTokenProvider.generateAccessToken(auth);
+            String refreshToken = jwtTokenProvider.generateRefreshToken(auth);
+            refreshTokenService.createRefreshToken(user, refreshToken);
+
+            response.addHeader("X-Access-Token", accessToken);
+            response.addHeader("X-Refresh-Token", refreshToken);
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Login successful",
+                    "accessToken", accessToken,
+                    "refreshToken", refreshToken
             ));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

@@ -60,6 +60,7 @@ public class SecurityConfig {
                                 "/booking/schedules/*/policies",
                                 "/booking/schedules/*/features",
                                 "/payments/webhook",
+                                "/discounts/active",
                                 "/ws/**")
                         .permitAll()
                         .requestMatchers("/admin/**").hasRole("ADMIN")

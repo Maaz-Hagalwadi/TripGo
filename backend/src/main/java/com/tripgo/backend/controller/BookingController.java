@@ -1,12 +1,16 @@
 package com.tripgo.backend.controller;
 
+import com.tripgo.backend.dto.request.ApplyPromoRequest;
+import com.tripgo.backend.dto.response.ApplyPromoResponse;
 import com.tripgo.backend.dto.response.BoardingDroppingPointResponse;
 import com.tripgo.backend.model.entities.*;
 import com.tripgo.backend.repository.*;
 import com.tripgo.backend.security.service.CustomUserDetails;
+import com.tripgo.backend.service.impl.DiscountService;
 import com.tripgo.backend.service.impl.SeatLockService;
 import com.tripgo.backend.service.impl.TicketPdfService;
 import com.tripgo.backend.repository.TicketRepository;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -32,6 +36,7 @@ public class BookingController {
     private final PaymentRepository paymentRepository;
     private final TicketPdfService ticketPdfService;
     private final TicketRepository ticketRepository;
+    private final DiscountService discountService;
 
     // ─── GET seats for schedule ───────────────────────────────────────────────
     @GetMapping("/schedules/{scheduleId}/seats")
@@ -193,6 +198,12 @@ public class BookingController {
                 .header("Content-Disposition", "attachment; filename=ticket-" + booking.getBookingCode() + ".pdf")
                 .contentType(org.springframework.http.MediaType.APPLICATION_PDF)
                 .body(pdf);
+    }
+
+    // ─── POST apply promo code ────────────────────────────────────────────────
+    @PostMapping("/apply-promo")
+    public ResponseEntity<ApplyPromoResponse> applyPromo(@Valid @RequestBody ApplyPromoRequest request) {
+        return ResponseEntity.ok(discountService.applyPromo(request));
     }
 
     // ─── GET my bookings (user) ───────────────────────────────────────────────

@@ -6,6 +6,7 @@ import UserLayout from '../../../shared/components/UserLayout';
 import SearchBar from '../../../shared/components/ui/SearchBar';
 import { getMyBookings } from '../../../api/bookingService';
 import { getSearchRoutes } from '../../../api/routeService';
+import { getSavedRoutes, unsaveRoute } from '../../../api/savedRoutesService';
 
 const normalizeList = (data) => {
   if (Array.isArray(data)) return data;
@@ -66,6 +67,8 @@ const Dashboard = () => {
   const [bookingsLoading, setBookingsLoading] = useState(true);
   const [routes, setRoutes] = useState([]);
   const [routesLoading, setRoutesLoading] = useState(true);
+  const [savedRoutes, setSavedRoutes] = useState([]);
+  const [savedLoading, setSavedLoading] = useState(true);
 
   useEffect(() => {
     if (loading) return;
@@ -85,7 +88,20 @@ const Dashboard = () => {
       .then(data => setRoutes(Array.isArray(data) ? data : []))
       .catch(() => setRoutes([]))
       .finally(() => setRoutesLoading(false));
+    getSavedRoutes()
+      .then(data => setSavedRoutes(Array.isArray(data) ? data : []))
+      .catch(() => setSavedRoutes([]))
+      .finally(() => setSavedLoading(false));
   }, [user]);
+
+  const handleUnsave = async (route) => {
+    try {
+      await unsaveRoute(route.id);
+      setSavedRoutes(prev => prev.filter(r => r.id !== route.id));
+    } catch {
+      // ignore
+    }
+  };
 
   const firstName = user?.firstName || user?.name?.split(' ')[0] || 'Traveler';
 
@@ -386,6 +402,53 @@ const Dashboard = () => {
                   </button>
                 ))}
               </div>
+            </section>
+
+            {/* Saved Routes */}
+            <section className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-base font-bold text-slate-900">Saved Routes</h3>
+                <span className="material-symbols-outlined text-rose-400 text-lg">favorite</span>
+              </div>
+              {savedLoading ? (
+                <div className="flex items-center gap-2 py-4 justify-center">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-rose-400" />
+                  <span className="text-xs text-slate-400">Loading...</span>
+                </div>
+              ) : savedRoutes.length === 0 ? (
+                <div className="text-center py-4">
+                  <p className="text-sm text-slate-400">No saved routes yet</p>
+                  <p className="text-xs text-slate-300 mt-1">Heart a route on the search page to save it</p>
+                </div>
+              ) : (
+                <ul className="space-y-1 max-h-56 overflow-y-auto pr-1">
+                  {savedRoutes.map(r => (
+                    <li
+                      key={r.id}
+                      className="flex items-center justify-between group rounded-xl px-2 py-2 hover:bg-slate-50 transition-colors"
+                    >
+                      <button
+                        className="flex items-center gap-2.5 min-w-0 flex-1 text-left cursor-pointer"
+                        onClick={() => navigate(ROUTES.SEARCH_RESULTS, {
+                          state: { from: r.fromCity, to: r.toCity, date: new Date().toISOString().split('T')[0] }
+                        })}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-rose-400 flex-shrink-0" />
+                        <span className="text-sm font-medium text-slate-700 group-hover:text-rose-600 transition-colors truncate">
+                          {r.fromCity} → {r.toCity}
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => handleUnsave(r)}
+                        className="w-7 h-7 flex-shrink-0 flex items-center justify-center rounded-lg hover:bg-rose-50 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Remove"
+                      >
+                        <span className="material-symbols-outlined text-rose-400 text-sm">close</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
 
             {/* Available Routes */}

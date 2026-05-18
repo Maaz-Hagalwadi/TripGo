@@ -13,6 +13,7 @@ import {
   isSeatBooked,
 } from '../../../shared/utils/scheduleSearchUtils';
 import {
+  applyPromoCode,
   getBusRatingSummary,
   getScheduleFeatures,
   getSchedulePointsForBooking,
@@ -21,6 +22,7 @@ import {
   getScheduleSeats,
   lockScheduleSeats,
   getSavedPassengerProfiles,
+  createSavedPassengerProfile,
 } from '../../../api/bookingService';
 
 const CURRENT_BOOKING_STORAGE_KEY = 'tripgo_current_booking_state';
@@ -343,6 +345,7 @@ const Booking = () => {
   const [selection, setSelection] = useState(savedDraft?.selection || { boardingPointId: '', droppingPointId: '' });
   const [contact, setContact] = useState(savedDraft?.contact || { countryCode: '+91', phone: '', email: '', stateOfResidence: '', whatsappOptIn: false });
   const [passengers, setPassengers] = useState([]);
+  const [savePassengerFlags, setSavePassengerFlags] = useState({});
   const [routeInfo, setRouteInfo] = useState(null);
   const [policiesInfo, setPoliciesInfo] = useState(null);
   const [featuresInfo, setFeaturesInfo] = useState(null);
@@ -350,6 +353,10 @@ const Booking = () => {
   const [loadingMeta, setLoadingMeta] = useState(false);
   const recentTravelers = useMemo(() => dedupeTravelers(savedTravelers), [savedTravelers]);
   const [savedProfilesList, setSavedProfilesList] = useState([]);
+  const [promoInput, setPromoInput] = useState('');
+  const [promoResult, setPromoResult] = useState(null);
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState('');
 
   const refreshSeats = async () => {
     if (!scheduleId) return;
@@ -988,6 +995,15 @@ const Booking = () => {
                         <div><label className="mb-1 block text-xs text-slate-500">Phone *</label><input value={passenger.phone} onChange={(e) => updatePassenger(passenger.seatNumber, 'phone', e.target.value.replace(/[^\d]/g, '').slice(0, 10))} placeholder="Enter phone number" className={INPUT_SHELL_CLASS} /></div>
                         <div className="md:col-span-2"><label className="mb-1 block text-xs text-slate-500">Email *</label><input type="email" value={passenger.email} onChange={(e) => updatePassenger(passenger.seatNumber, 'email', e.target.value)} placeholder="Enter email" className={INPUT_SHELL_CLASS} /></div>
                       </div>
+                      <label className="mt-3 flex items-center gap-2.5 cursor-pointer select-none group">
+                        <input
+                          type="checkbox"
+                          checked={!!savePassengerFlags[passenger.seatNumber]}
+                          onChange={(e) => setSavePassengerFlags((prev) => ({ ...prev, [passenger.seatNumber]: e.target.checked }))}
+                          className="w-4 h-4 rounded border-slate-300 text-[#002046] accent-[#002046] cursor-pointer"
+                        />
+                        <span className="text-xs text-slate-500 group-hover:text-slate-700 transition-colors">Save this passenger for future bookings</span>
+                      </label>
                     </div>
                   ))}
                 </div>
@@ -1017,6 +1033,61 @@ const Booking = () => {
                   <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Selected seats</span><span className="font-bold text-slate-900">{selectedSeats.join(', ') || '--'}</span></div>
                   <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Travelers</span><span className="font-bold text-slate-900">{passengers.length || selectedSeats.length || 0}</span></div>
                   <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Seat fare</span><span className="font-bold text-slate-900">₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}</span></div>
+                  {promoResult && (
+                    <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3 bg-emerald-50 ring-emerald-200`}>
+                      <span className="text-emerald-700">Discount ({promoResult.code})</span>
+                      <span className="font-bold text-emerald-700">−₹{Math.round(promoResult.discountAmount)}</span>
+                    </div>
+                  )}
+                  {promoResult && (
+                    <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}>
+                      <span className="font-semibold text-slate-900">Total</span>
+                      <span className="font-black text-[#002046]">₹{Math.round(promoResult.finalAmount)}</span>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={promoInput}
+                        onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoError(''); }}
+                        placeholder="Promo code"
+                        className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-[#002046] focus:ring-1 focus:ring-[#002046]"
+                        disabled={!!promoResult}
+                      />
+                      {promoResult ? (
+                        <button
+                          onClick={() => { setPromoResult(null); setPromoInput(''); setPromoError(''); }}
+                          className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-100 transition-colors"
+                        >
+                          Remove
+                        </button>
+                      ) : (
+                        <button
+                          onClick={async () => {
+                            if (!promoInput.trim()) return;
+                            setPromoLoading(true);
+                            setPromoError('');
+                            try {
+                              const result = await applyPromoCode(promoInput.trim(), selectedFare?.totalFare || 0);
+                              setPromoResult(result);
+                              toast.success(result.message);
+                            } catch (e) {
+                              setPromoError(e.message || 'Invalid promo code');
+                            } finally {
+                              setPromoLoading(false);
+                            }
+                          }}
+                          disabled={promoLoading || !promoInput.trim()}
+                          className="rounded-xl bg-[#002046] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#003a80] transition-colors disabled:opacity-50"
+                        >
+                          {promoLoading ? '...' : 'Apply'}
+                        </button>
+                      )}
+                    </div>
+                    {promoError && <p className="text-xs text-rose-500">{promoError}</p>}
+                    {promoResult && <p className="text-xs text-emerald-600 font-medium">{promoResult.message}</p>}
+                  </div>
                   <div className="rounded-xl bg-[#002046]/[0.07] px-4 py-4 ring-1 ring-[#002046]/20">
                     <p className="text-xs font-semibold uppercase tracking-widest text-[#002046] opacity-80">Payment timer</p>
                     <p className="mt-2 text-xl font-black text-slate-900">{lockSecondsLeft > 0 ? formatCountdown(lockSecondsLeft) : 'Expired'}</p>
@@ -1058,7 +1129,18 @@ const Booking = () => {
                         ]),
                         localStorage
                       );
-                      navigate(ROUTES.PAYMENT, { state: { bus, scheduleId, selectedSeats, selectedFare, selectedType, searchParams, travelDate: searchParams?.date || '', contact, passengers, selection, lockSecondsLeft, lockExpiresAt, lockToken: lockInfo?.lockToken || '', lockInfo } });
+                      passengers.forEach((passenger) => {
+                        if (!savePassengerFlags[passenger.seatNumber]) return;
+                        const nameParts = (passenger.name || '').trim().split(' ');
+                        createSavedPassengerProfile({
+                          firstName: nameParts[0] || '',
+                          lastName: nameParts.slice(1).join(' ') || '',
+                          age: passenger.age ? Number(passenger.age) : null,
+                          gender: passenger.gender || '',
+                          phone: passenger.phone || '',
+                        }).catch(() => {});
+                      });
+                      navigate(ROUTES.PAYMENT, { state: { bus, scheduleId, selectedSeats, selectedFare, selectedType, searchParams, travelDate: searchParams?.date || '', contact, passengers, selection, lockSecondsLeft, lockExpiresAt, lockToken: lockInfo?.lockToken || '', lockInfo, promoResult } });
                     }}
                     className="flex-1 rounded-xl bg-[#002046] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#003a80] transition-colors"
                   >

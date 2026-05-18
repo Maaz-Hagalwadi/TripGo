@@ -46,6 +46,17 @@ public class EmailService {
     private String frontendUrl;
 
     @Async
+    public void sendOtpEmail(String toEmail, String firstName, String otpCode) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("subject", "Your TripGo Login OTP");
+        data.put("firstName", firstName);
+        data.put("otpCode", otpCode);
+        data.put("expiryMinutes", 10);
+        data.put("frontendUrl", frontendUrl);
+        sendResendTemplate(toEmail, "otp-login", data);
+    }
+
+    @Async
     public void sendCancellationEmail(String userEmail, String firstName, String bookingCode,
                                        String from, String to, String busName,
                                        com.tripgo.backend.model.enums.CancelledBy cancelledBy,

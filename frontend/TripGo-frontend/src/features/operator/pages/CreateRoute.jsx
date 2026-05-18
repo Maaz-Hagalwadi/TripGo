@@ -303,7 +303,7 @@ const CreateRoute = () => {
                     </div>
                     <div>
                       <h2 className="text-sm font-black text-white">Fares</h2>
-                      <p className="text-white/60 text-xs mt-0.5">Set base fares per segment (optional)</p>
+                      <p className="text-white/60 text-xs mt-0.5">Set ticket prices — passengers cannot book without fares</p>
                     </div>
                   </div>
                   {selectedBus && (
@@ -334,7 +334,7 @@ const CreateRoute = () => {
                     </div>
                   </div>
                 ))}
-                <p className="text-xs text-slate-400 text-center">Fares can also be managed later from the route detail page.</p>
+                <p className="text-xs text-amber-600 text-center flex items-center justify-center gap-1"><span className="material-symbols-outlined text-sm">warning</span>Passengers cannot book tickets on this route until fares are set.</p>
               </div>
               <div className="px-5 py-4 border-t border-slate-100 flex gap-3">
                 <button onClick={() => setStep(2)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Back</button>

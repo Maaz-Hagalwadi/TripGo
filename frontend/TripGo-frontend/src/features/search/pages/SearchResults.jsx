@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { searchBuses } from '../../../api/busService';
 import { getScheduleFeatures, getScheduleSeats } from '../../../api/bookingService';
+import { getSavedRoutes, saveRoute, unsaveRoute } from '../../../api/savedRoutesService';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ROUTES } from '../../../shared/constants/routes';
 import UserLayout from '../../../shared/components/UserLayout';
@@ -527,6 +528,8 @@ const SearchResults = () => {
   const [sortBy, setSortBy] = useState('cheapest');
   const [page, setPage] = useState(0);
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+  const [savedRoutes, setSavedRoutes] = useState([]);
+  const [savingRoute, setSavingRoute] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -536,8 +539,36 @@ const SearchResults = () => {
 
   useEffect(() => {
     if (!user || user.role !== 'USER') return;
+    getSavedRoutes().then(data => setSavedRoutes(Array.isArray(data) ? data : [])).catch(() => {});
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || user.role !== 'USER') return;
     if (appliedSearch.from && appliedSearch.to && appliedSearch.date) fetchBuses(appliedSearch);
   }, [appliedSearch, user]);
+
+  const currentSaved = savedRoutes.find(
+    r => r.fromCity?.toLowerCase() === appliedSearch.from?.toLowerCase() &&
+         r.toCity?.toLowerCase()   === appliedSearch.to?.toLowerCase()
+  );
+
+  const handleToggleSave = async () => {
+    if (!appliedSearch.from || !appliedSearch.to) return;
+    setSavingRoute(true);
+    try {
+      if (currentSaved) {
+        await unsaveRoute(currentSaved.id);
+        setSavedRoutes(prev => prev.filter(r => r.id !== currentSaved.id));
+      } else {
+        const saved = await saveRoute(appliedSearch.from, appliedSearch.to);
+        if (saved?.id) setSavedRoutes(prev => [...prev, saved]);
+      }
+    } catch {
+      // silently ignore
+    } finally {
+      setSavingRoute(false);
+    }
+  };
 
   const fetchBuses = async (params = appliedSearch) => {
     setLoadingBuses(true);
@@ -934,6 +965,16 @@ const SearchResults = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {appliedSearch.from && appliedSearch.to && (
+                    <button
+                      onClick={handleToggleSave}
+                      disabled={savingRoute}
+                      title={currentSaved ? 'Remove from saved routes' : 'Save this route'}
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors flex-shrink-0 ${currentSaved ? 'bg-rose-50 text-rose-500 hover:bg-rose-100' : 'bg-slate-100 text-slate-400 hover:bg-rose-50 hover:text-rose-400'}`}
+                    >
+                      <span className="material-symbols-outlined text-lg" style={{ fontVariationSettings: currentSaved ? "'FILL' 1" : "'FILL' 0" }}>favorite</span>
+                    </button>
+                  )}
                   <select value={sortBy} onChange={e => setSortBy(e.target.value)}
                     className="cursor-pointer rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 outline-none border border-slate-200">
                     <option value="cheapest">Cheapest</option>

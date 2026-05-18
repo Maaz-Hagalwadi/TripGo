@@ -115,6 +115,12 @@ export const submitTripRating = async (scheduleId, payload) => {
   return apiPost(`/booking/trips/${encodeURIComponent(scheduleId)}/rating`, payload);
 };
 
+export const applyPromoCode = async (code, bookingAmount) =>
+  apiPost('/booking/apply-promo', { code, bookingAmount });
+
+export const getLatestBusTracking = async (scheduleId) =>
+  apiGet(`/tracking/${encodeURIComponent(scheduleId)}/latest`);
+
 // ── Saved Passenger Profiles ───────────────────────────────────────────────
 export const getSavedPassengerProfiles = () => apiGet('/user/passengers');
 export const createSavedPassengerProfile = (payload) => apiPost('/user/passengers', payload);
