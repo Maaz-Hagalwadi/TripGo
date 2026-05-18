@@ -70,8 +70,12 @@ const HeaderAuth = () => {
                 onClick={() => setShowProfileDropdown(!showProfileDropdown)}
                 className="flex items-center gap-2 px-2 py-1.5 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-200"
               >
-                <div className="w-8 h-8 bg-[#002046]/10 rounded-full flex items-center justify-center">
-                  <span className="material-symbols-outlined text-[#002046] text-lg">person</span>
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-[#002046]/10 flex items-center justify-center flex-shrink-0">
+                  {user?.profilePictureUrl ? (
+                    <img src={user.profilePictureUrl} alt="" className="w-8 h-8 object-cover" />
+                  ) : (
+                    <span className="material-symbols-outlined text-[#002046] text-lg">person</span>
+                  )}
                 </div>
                 <div className="hidden md:block text-left">
                   <p className="text-slate-800 text-sm font-semibold leading-tight">{user?.name || 'User'}</p>
@@ -86,8 +90,12 @@ const HeaderAuth = () => {
                 <div className="absolute right-0 mt-2 w-60 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden">
                   <div className="p-4 bg-slate-50 border-b border-slate-100">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-[#002046]/10 rounded-full flex items-center justify-center">
-                        <span className="material-symbols-outlined text-[#002046] text-xl">person</span>
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-[#002046]/10 flex items-center justify-center flex-shrink-0">
+                        {user?.profilePictureUrl ? (
+                          <img src={user.profilePictureUrl} alt="" className="w-10 h-10 object-cover" />
+                        ) : (
+                          <span className="material-symbols-outlined text-[#002046] text-xl">person</span>
+                        )}
                       </div>
                       <div>
                         <p className="text-slate-800 font-semibold text-sm">{user?.name || 'User'}</p>
@@ -110,12 +118,6 @@ const HeaderAuth = () => {
                     >
                       <span className="material-symbols-outlined text-lg text-slate-400">confirmation_number</span>
                       My Bookings
-                    </button>
-                    <button
-                      className="w-full px-4 py-2.5 text-left text-slate-700 hover:bg-slate-50 hover:text-[#002046] transition-colors flex items-center gap-3 text-sm"
-                    >
-                      <span className="material-symbols-outlined text-lg text-slate-400">payment</span>
-                      Payment Methods
                     </button>
                     <button
                       onClick={() => { navigate('/user/settings'); setShowProfileDropdown(false); }}

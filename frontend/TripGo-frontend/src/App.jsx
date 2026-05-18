@@ -50,6 +50,7 @@ const CompleteProfile = lazy(() => import('./features/auth/pages/CompleteProfile
 const AdminOperatorAction = lazy(() => import('./pages/AdminOperatorAction'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const AdminReviews = lazy(() => import('./pages/AdminReviews'));
+const AdminUsers = lazy(() => import('./pages/AdminUsers'));
 const AdminSettings = lazy(() => import('./pages/AdminSettings'));
 const AdminSupport = lazy(() => import('./pages/AdminSupport'));
 const Unauthorized = lazy(() => import('./pages/Unauthorized'));
@@ -86,6 +87,9 @@ function App() {
           } />
           <Route path={ROUTES.ADMIN_REVIEWS} element={
             <ProtectedRoute allowedRoles={['ADMIN']}><AdminReviews /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.ADMIN_USERS} element={
+            <ProtectedRoute allowedRoles={['ADMIN']}><AdminUsers /></ProtectedRoute>
           } />
           <Route path={ROUTES.ADMIN_SETTINGS} element={
             <ProtectedRoute allowedRoles={['ADMIN']}><AdminSettings /></ProtectedRoute>

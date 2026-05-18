@@ -6,7 +6,7 @@ const menuItems = [
   { id: 'overview',  icon: 'dashboard',      label: 'Overview',  route: ROUTES.ADMIN_DASHBOARD },
   { id: 'operators', icon: 'business',       label: 'Operators', route: `${ROUTES.ADMIN_DASHBOARD}?tab=operators` },
   { id: 'buses',     icon: 'directions_bus', label: 'Buses',     route: `${ROUTES.ADMIN_DASHBOARD}?tab=buses` },
-  { id: 'users',     icon: 'group',          label: 'Users',     route: `${ROUTES.ADMIN_DASHBOARD}?tab=users` },
+  { id: 'users',     icon: 'group',          label: 'Users',     route: ROUTES.ADMIN_USERS },
   { id: 'reviews',   icon: 'reviews',        label: 'Reviews',   route: ROUTES.ADMIN_REVIEWS },
 ];
 

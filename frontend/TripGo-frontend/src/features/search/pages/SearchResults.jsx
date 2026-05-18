@@ -110,31 +110,31 @@ const getTripStatusMeta = (tripStatus, delayMinutes) => {
   if (status === 'DELAYED' || delay > 0) {
     return {
       label: 'Delayed',
-      textClass: 'text-amber-500 dark:text-amber-300',
-      chipClass: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-200',
+      textClass: 'text-amber-500',
+      chipClass: 'bg-amber-50 text-amber-700',
     };
   }
 
   if (status === 'STARTED') {
     return {
       label: 'Started',
-      textClass: 'text-sky-500 dark:text-sky-300',
-      chipClass: 'bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-200',
+      textClass: 'text-sky-500',
+      chipClass: 'bg-sky-50 text-sky-700',
     };
   }
 
   if (status === 'COMPLETED') {
     return {
       label: 'Completed',
-      textClass: 'text-emerald-500 dark:text-emerald-300',
-      chipClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200',
+      textClass: 'text-emerald-500',
+      chipClass: 'bg-emerald-50 text-emerald-700',
     };
   }
 
   return {
     label: 'On Time',
-    textClass: 'text-emerald-500 dark:text-emerald-300',
-    chipClass: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-200',
+    textClass: 'text-emerald-500',
+    chipClass: 'bg-emerald-50 text-emerald-700',
   };
 };
 
@@ -146,7 +146,7 @@ const normalizeCityLabel = (value) => String(value || '')
 const SEARCH_DRAFT_STORAGE_KEY = 'tripgo_search_draft';
 
 const InlineLoader = ({ label }) => (
-  <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+  <div className="flex items-center gap-3 text-sm text-slate-600">
     <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/40 border-t-primary" />
     <span>{label}</span>
   </div>
@@ -175,21 +175,21 @@ const BusCard = ({ bus, searchParams }) => {
   const tripStatusMeta = getTripStatusMeta(tripStatus, delayMins);
 
   return (
-    <div className={`rounded-[28px] bg-white shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 transition-all dark:bg-charcoal ${
+    <div className={`rounded-[28px] bg-white shadow-[0_20px_50px_rgba(15,23,42,0.08)] ring-1 transition-all ${
       soldOut
-        ? 'opacity-60 ring-slate-200/40 dark:ring-white/5 cursor-not-allowed'
-        : 'ring-slate-200/70 hover:-translate-y-0.5 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)] dark:ring-white/5 dark:hover:ring-primary/20'
+        ? 'opacity-60 ring-slate-200/40 cursor-not-allowed'
+        : 'ring-slate-200/70 hover:-translate-y-0.5 hover:shadow-[0_24px_60px_rgba(15,23,42,0.12)]'
     }`}>
       {/* Mobile layout */}
       <div className="md:hidden p-4">
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex items-center gap-2">
-            <div className={`flex h-9 w-9 items-center justify-center rounded-xl flex-shrink-0 ${soldOut ? 'bg-slate-100 dark:bg-slate-800' : 'bg-primary/10'}`}>
+            <div className={`flex h-9 w-9 items-center justify-center rounded-xl flex-shrink-0 ${soldOut ? 'bg-slate-100' : 'bg-primary/10'}`}>
               <span className={`material-symbols-outlined text-lg ${soldOut ? 'text-slate-400' : 'text-primary'}`}>directions_bus</span>
             </div>
             <div>
-              <h4 className="font-bold text-sm text-slate-900 dark:text-white leading-tight">{bus.busName}</h4>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">{bus.busType}{bus.operatorName ? ` · ${bus.operatorName}` : ''}</p>
+              <h4 className="font-bold text-sm text-slate-900 leading-tight">{bus.busName}</h4>
+              <p className="text-[11px] text-slate-500">{bus.busType}{bus.operatorName ? ` · ${bus.operatorName}` : ''}</p>
             </div>
           </div>
           <div className="text-right flex-shrink-0">
@@ -204,20 +204,20 @@ const BusCard = ({ bus, searchParams }) => {
 
         <div className="grid grid-cols-3 items-center text-center mb-3">
           <div className="text-left">
-            <p className="text-base font-extrabold text-slate-900 dark:text-white">{formatTime(bus.departureTime)}</p>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">{searchParams.from}</p>
+            <p className="text-base font-extrabold text-slate-900">{formatTime(bus.departureTime)}</p>
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">{searchParams.from}</p>
           </div>
           <div className="flex flex-col items-center">
             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">
               {formatDuration(bus.departureTime, bus.arrivalTime)}
             </p>
-            <div className="relative h-px w-full bg-slate-200 dark:bg-white/10">
+            <div className="relative h-px w-full bg-slate-200">
               <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-primary/40 ring-2 ring-primary/80"></div>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-base font-extrabold text-slate-900 dark:text-white">{formatTime(bus.arrivalTime)}</p>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-wider">{searchParams.to}</p>
+            <p className="text-base font-extrabold text-slate-900">{formatTime(bus.arrivalTime)}</p>
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider">{searchParams.to}</p>
           </div>
         </div>
 
@@ -226,7 +226,7 @@ const BusCard = ({ bus, searchParams }) => {
             {fareEntries.map(([type, fare]) => (
               <button key={type} onClick={() => setSelectedType(type)}
                 className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-all ${
-                  selectedType === type ? 'bg-primary/10 text-primary ring-1 ring-primary/30' : 'bg-slate-100 text-slate-500 dark:bg-white/5 dark:text-slate-400'
+                  selectedType === type ? 'bg-primary/10 text-primary ring-1 ring-primary/30' : 'bg-slate-100 text-slate-500'
                 }`}>
                 {type} · ₹{Math.round(fare.totalFare)}
               </button>
@@ -237,25 +237,25 @@ const BusCard = ({ bus, searchParams }) => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 flex-wrap">
             {soldOut ? (
-              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">Sold Out</span>
+              <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[11px] font-semibold text-rose-600">Sold Out</span>
             ) : (
               <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${tripStatusMeta.chipClass}`}>{tripStatusMeta.label}</span>
             )}
             {!soldOut && availableSeats !== null && (
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${availableSeats < 5 ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'}`}>
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${availableSeats < 5 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
                 {availableSeats < 5 ? `${availableSeats} left` : `${availableSeats} seats`}
               </span>
             )}
             {bus.amenities?.slice(0, 2).map(a => (
-              <span key={a} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500 dark:bg-white/5 dark:text-slate-400">{a}</span>
+              <span key={a} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{a}</span>
             ))}
           </div>
           <button
             disabled={soldOut}
             onClick={() => !soldOut && navigate(ROUTES.BOOKING, { state: { bus, selectedType, selectedFare, searchParams } })}
             className={`rounded-xl px-4 py-2 text-xs font-bold transition-all flex-shrink-0 ${
-              soldOut ? 'cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600'
-                : 'bg-slate-900 text-white hover:bg-primary hover:text-black dark:bg-white/10 dark:hover:bg-primary dark:hover:text-black'
+              soldOut ? 'cursor-not-allowed bg-slate-200 text-slate-400'
+                : 'bg-slate-900 text-white hover:bg-primary hover:text-black'
             }`}>
             {soldOut ? 'Sold Out' : 'Select'}
           </button>
@@ -266,16 +266,16 @@ const BusCard = ({ bus, searchParams }) => {
       <div className="hidden md:block p-6">
         <div className="flex flex-row items-center gap-6">
           <div className="flex items-center gap-4 w-48 flex-shrink-0">
-            <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${soldOut ? 'bg-slate-100 dark:bg-slate-800' : 'bg-primary/10'}`}>
+            <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${soldOut ? 'bg-slate-100' : 'bg-primary/10'}`}>
               <span className={`material-symbols-outlined text-2xl ${soldOut ? 'text-slate-400' : 'text-primary'}`}>directions_bus</span>
             </div>
             <div>
-              <h4 className="font-bold text-slate-900 dark:text-white">{bus.busName}</h4>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{bus.busType}</p>
-              <p className="text-xs text-slate-400 dark:text-slate-500">{bus.operatorName}</p>
+              <h4 className="font-bold text-slate-900">{bus.busName}</h4>
+              <p className="text-xs text-slate-500">{bus.busType}</p>
+              <p className="text-xs text-slate-400">{bus.operatorName}</p>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 {soldOut ? (
-                  <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-semibold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">Sold Out</span>
+                  <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[11px] font-semibold text-rose-600">Sold Out</span>
                 ) : (
                   <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${tripStatusMeta.chipClass}`}>{tripStatusMeta.label}</span>
                 )}
@@ -286,25 +286,25 @@ const BusCard = ({ bus, searchParams }) => {
                 </p>
               )}
               {!soldOut && bus.delayReason ? (
-                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Reason: {bus.delayReason}</p>
+                <p className="mt-1 text-[11px] text-slate-500">Reason: {bus.delayReason}</p>
               ) : null}
             </div>
           </div>
 
           <div className="flex-1 grid grid-cols-3 items-center text-center">
             <div>
-              <p className="text-xl font-extrabold text-slate-900 dark:text-white">{formatTime(bus.departureTime)}</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">{searchParams.from}</p>
+              <p className="text-xl font-extrabold text-slate-900">{formatTime(bus.departureTime)}</p>
+              <p className="text-xs text-slate-500 uppercase tracking-wider mt-1">{searchParams.from}</p>
             </div>
             <div className="flex flex-col items-center">
               <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">{formatDuration(bus.departureTime, bus.arrivalTime)}</p>
-              <div className="relative h-px w-full bg-slate-200 dark:bg-white/10">
+              <div className="relative h-px w-full bg-slate-200">
                 <div className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full bg-primary/40 ring-2 ring-primary/80"></div>
               </div>
             </div>
             <div>
-              <p className="text-xl font-extrabold text-slate-900 dark:text-white">{formatTime(bus.arrivalTime)}</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider mt-1">{searchParams.to}</p>
+              <p className="text-xl font-extrabold text-slate-900">{formatTime(bus.arrivalTime)}</p>
+              <p className="text-xs text-slate-500 uppercase tracking-wider mt-1">{searchParams.to}</p>
             </div>
           </div>
 
@@ -314,7 +314,7 @@ const BusCard = ({ bus, searchParams }) => {
                 {fareEntries.map(([type, fare]) => (
                   <button key={type} onClick={() => setSelectedType(type)}
                     className={`rounded-full px-3 py-1 text-xs font-bold transition-all ${
-                      selectedType === type ? 'bg-primary/10 text-primary ring-1 ring-primary/30' : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:bg-white/10'
+                      selectedType === type ? 'bg-primary/10 text-primary ring-1 ring-primary/30' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
                     }`}>
                     {type} · ₹{Math.round(fare.totalFare)}
                   </button>
@@ -322,7 +322,7 @@ const BusCard = ({ bus, searchParams }) => {
               </div>
             )}
             {!soldOut && fareEntries.length === 1 && (
-              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">{fareEntries[0][0]}</p>
+              <p className="text-xs font-medium text-slate-500">{fareEntries[0][0]}</p>
             )}
             <p className={`text-2xl font-black ${soldOut ? 'text-slate-400 line-through' : 'text-primary'}`}>
               ₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}
@@ -330,14 +330,14 @@ const BusCard = ({ bus, searchParams }) => {
             {bus.amenities?.length > 0 && (
               <div className="flex gap-1 flex-wrap justify-end">
                 {bus.amenities.slice(0, 4).map(a => (
-                  <span key={a} className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] text-slate-500 dark:bg-white/5 dark:text-slate-400">{a}</span>
+                  <span key={a} className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] text-slate-500">{a}</span>
                 ))}
               </div>
             )}
             {soldOut ? (
-              <p className="rounded-full bg-rose-100 px-4 py-1.5 text-[11px] font-bold text-rose-600 dark:bg-rose-500/10 dark:text-rose-400">No seats available</p>
+              <p className="rounded-full bg-rose-100 px-4 py-1.5 text-[11px] font-bold text-rose-600">No seats available</p>
             ) : availableSeats !== null ? (
-              <p className={`rounded-full px-3 py-1 text-[11px] font-semibold ${availableSeats < 5 ? 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400'}`}>
+              <p className={`rounded-full px-3 py-1 text-[11px] font-semibold ${availableSeats < 5 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
                 {availableSeats < 5 ? `Only ${availableSeats} seats left!` : `${availableSeats} seats available`}
               </p>
             ) : null}
@@ -345,8 +345,8 @@ const BusCard = ({ bus, searchParams }) => {
               disabled={soldOut}
               onClick={() => !soldOut && navigate(ROUTES.BOOKING, { state: { bus, selectedType, selectedFare, searchParams } })}
               className={`w-full rounded-2xl px-6 py-3 text-sm font-bold transition-all ${
-                soldOut ? 'cursor-not-allowed bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-600'
-                  : 'bg-slate-900 text-white hover:bg-primary hover:text-black dark:bg-white/10 dark:hover:bg-primary dark:hover:text-black'
+                soldOut ? 'cursor-not-allowed bg-slate-200 text-slate-400'
+                  : 'bg-slate-900 text-white hover:bg-primary hover:text-black'
               }`}>
               {soldOut ? 'Sold Out' : 'Select Seat'}
             </button>
@@ -707,7 +707,7 @@ const SearchResults = () => {
 
           <aside className="hidden lg:block flex-shrink-0" style={{width: '320px'}}>
             <div className="lg:sticky lg:top-4 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:pr-0.5">
-              <div className="rounded-[24px] bg-white shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-charcoal dark:ring-white/5 overflow-hidden">
+              <div className="rounded-[24px] bg-white shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 overflow-hidden">
                 {/* Filter header */}
                 <div className="flex items-center justify-between px-5 py-4 bg-gradient-to-r from-[#002046] to-[#003a80] text-white">
                   <div className="flex items-center gap-2">
@@ -725,7 +725,7 @@ const SearchResults = () => {
                 </div>
 
                 {/* Sort By */}
-                <div className="px-5 py-4 border-b border-slate-100 dark:border-white/5">
+                <div className="px-5 py-4 border-b border-slate-100">
                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Sort By</h4>
                   <div className="space-y-2">
                     {[
@@ -739,7 +739,7 @@ const SearchResults = () => {
                           className="h-4 w-4 border-slate-300 text-primary focus:ring-primary" />
                         <div className="flex items-center gap-2">
                           <span className="material-symbols-outlined text-slate-400 text-base">{opt.icon}</span>
-                          <span className="text-sm text-slate-600 group-hover:text-slate-900 dark:text-slate-300 dark:group-hover:text-white">{opt.label}</span>
+                          <span className="text-sm text-slate-600 group-hover:text-slate-900">{opt.label}</span>
                         </div>
                       </label>
                     ))}
@@ -747,30 +747,30 @@ const SearchResults = () => {
                 </div>
 
                 {/* Departure Time */}
-                <div className="px-5 py-4 border-b border-slate-100 dark:border-white/5">
+                <div className="px-5 py-4 border-b border-slate-100">
                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Departure Time</h4>
                   <div className="space-y-2.5">
                     {DEPARTURE_SLOTS.map(({ label }) => (
                       <label key={label} className="flex items-center gap-3 cursor-pointer group">
                         <input type="checkbox" checked={selectedSlots.includes(label)}
                           onChange={() => toggleItem(setSelectedSlots, label)}
-                          className="h-4 w-4 rounded border-slate-300 bg-white text-primary focus:ring-primary dark:border-white/10 dark:bg-input-gray" />
-                        <span className="text-sm text-slate-600 group-hover:text-slate-900 dark:text-slate-300">{label}</span>
+                          className="h-4 w-4 rounded border-slate-300 bg-white text-primary focus:ring-primary" />
+                        <span className="text-sm text-slate-600 group-hover:text-slate-900">{label}</span>
                       </label>
                     ))}
                   </div>
                 </div>
 
                 {/* Arrival Time */}
-                <div className="px-5 py-4 border-b border-slate-100 dark:border-white/5">
+                <div className="px-5 py-4 border-b border-slate-100">
                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Arrival Time</h4>
                   <div className="space-y-2.5">
                     {ARRIVAL_SLOTS.map(({ label }) => (
                       <label key={label} className="flex items-center gap-3 cursor-pointer group">
                         <input type="checkbox" checked={selectedArrivalSlots.includes(label)}
                           onChange={() => toggleItem(setSelectedArrivalSlots, label)}
-                          className="h-4 w-4 rounded border-slate-300 bg-white text-primary focus:ring-primary dark:border-white/10 dark:bg-input-gray" />
-                        <span className="text-sm text-slate-600 group-hover:text-slate-900 dark:text-slate-300">{label}</span>
+                          className="h-4 w-4 rounded border-slate-300 bg-white text-primary focus:ring-primary" />
+                        <span className="text-sm text-slate-600 group-hover:text-slate-900">{label}</span>
                       </label>
                     ))}
                   </div>
@@ -778,15 +778,15 @@ const SearchResults = () => {
 
                 {/* Bus Type */}
                 {[...new Set(buses.map(b => b.busType).filter(Boolean))].length > 0 && (
-                  <div className="px-5 py-4 border-b border-slate-100 dark:border-white/5">
+                  <div className="px-5 py-4 border-b border-slate-100">
                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Bus Type</h4>
                     <div className="space-y-2.5">
                       {[...new Set(buses.map(b => b.busType).filter(Boolean))].map(type => (
                         <label key={type} className="flex items-center gap-3 cursor-pointer group">
                           <input type="checkbox" checked={selectedBusTypes.includes(type)}
                             onChange={() => toggleItem(setSelectedBusTypes, type)}
-                            className="h-4 w-4 rounded border-slate-300 bg-white text-primary focus:ring-primary dark:border-white/10 dark:bg-input-gray" />
-                          <span className="text-sm text-slate-600 group-hover:text-slate-900 dark:text-slate-300">{type}</span>
+                            className="h-4 w-4 rounded border-slate-300 bg-white text-primary focus:ring-primary" />
+                          <span className="text-sm text-slate-600 group-hover:text-slate-900">{type}</span>
                         </label>
                       ))}
                     </div>
@@ -794,14 +794,14 @@ const SearchResults = () => {
                 )}
 
                 {/* Max Price */}
-                <div className="px-5 py-4 border-b border-slate-100 dark:border-white/5">
+                <div className="px-5 py-4 border-b border-slate-100">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Max Price</h4>
                     <span className="text-xs font-bold text-primary">₹{maxPrice}</span>
                   </div>
                   <input type="range" min={0} max={allMaxPrice} value={maxPrice}
                     onChange={e => setMaxPrice(Number(e.target.value))}
-                    className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-200 accent-primary dark:bg-input-gray" />
+                    className="h-2 w-full cursor-pointer appearance-none rounded-lg bg-slate-200 accent-primary" />
                   <div className="mt-2 flex justify-between text-[10px] font-semibold text-slate-400">
                     <span>₹0</span>
                     <span>₹{allMaxPrice}</span>
@@ -809,7 +809,7 @@ const SearchResults = () => {
                 </div>
 
                 {/* Min Seats */}
-                <div className="px-5 py-4 border-b border-slate-100 dark:border-white/5">
+                <div className="px-5 py-4 border-b border-slate-100">
                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Min Seats Available</h4>
                   <div className="grid grid-cols-2 gap-2">
                     {MIN_SEATS_OPTIONS.map(opt => (
@@ -817,7 +817,7 @@ const SearchResults = () => {
                         className={`rounded-xl px-3 py-2 text-xs font-semibold transition-all ${
                           minSeats === opt.value
                             ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-input-gray dark:text-slate-300'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}>
                         {opt.label}
                       </button>
@@ -826,7 +826,7 @@ const SearchResults = () => {
                 </div>
 
                 {/* Trip Status */}
-                <div className="px-5 py-4 border-b border-slate-100 dark:border-white/5">
+                <div className="px-5 py-4 border-b border-slate-100">
                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Trip Status</h4>
                   <div className="flex flex-wrap gap-2">
                     {['On Time', 'Delayed', 'Started'].map(s => (
@@ -836,7 +836,7 @@ const SearchResults = () => {
                             ? s === 'On Time' ? 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-300'
                               : s === 'Delayed' ? 'bg-amber-100 text-amber-700 ring-1 ring-amber-300'
                               : 'bg-sky-100 text-sky-700 ring-1 ring-sky-300'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-input-gray dark:text-slate-300'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}>
                         {s}
                       </button>
@@ -853,7 +853,7 @@ const SearchResults = () => {
                         className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
                           selectedAmenities.includes(a)
                             ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-input-gray dark:text-slate-300 dark:hover:bg-slate-800'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                         }`}>
                         {a}
                       </button>
@@ -905,7 +905,7 @@ const SearchResults = () => {
               </select>
             </div>
 
-            <div className="rounded-[28px] bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-charcoal dark:ring-white/5">
+            <div className="rounded-[28px] bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
               <SearchBar
                 showQuickDates={false}
                 initialValues={appliedSearch}
@@ -918,24 +918,24 @@ const SearchResults = () => {
                 }}
               />
             </div>
-            <div className="rounded-[28px] bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-charcoal dark:ring-white/5">
+            <div className="rounded-[28px] bg-white p-4 shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
                     <span className="material-symbols-outlined text-primary text-lg">directions_bus</span>
                   </div>
                   <div>
-                    <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                    <h2 className="text-base font-bold text-slate-900">
                       {loadingBuses ? 'Searching buses...' : `${availableBuses.length} bus${availableBuses.length !== 1 ? 'es' : ''} found`}
                     </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-xs text-slate-500">
                       {appliedSearch.from} → {appliedSearch.to} · {appliedSearch.date}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-                    className="cursor-pointer rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 outline-none border border-slate-200 dark:bg-white/5 dark:text-white">
+                    className="cursor-pointer rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 outline-none border border-slate-200">
                     <option value="cheapest">Cheapest</option>
                     <option value="earliest">Earliest</option>
                     <option value="latest">Latest</option>
@@ -958,17 +958,17 @@ const SearchResults = () => {
             )}
 
             {!loadingBuses && !error && !hasSearched && (
-              <div className="rounded-[28px] bg-white p-12 text-center shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-charcoal dark:ring-white/5">
+              <div className="rounded-[28px] bg-white p-12 text-center shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
                 <span className="material-symbols-outlined text-slate-300 text-6xl mb-4">directions_bus</span>
-                <h3 className="mb-2 text-xl font-bold text-slate-900 dark:text-white">Where would you like to go?</h3>
-                <p className="text-slate-500 dark:text-slate-400">Enter a departure city, destination and travel date above to find available buses.</p>
+                <h3 className="mb-2 text-xl font-bold text-slate-900">Where would you like to go?</h3>
+                <p className="text-slate-500">Enter a departure city, destination and travel date above to find available buses.</p>
               </div>
             )}
             {!loadingBuses && !error && hasSearched && availableBuses.length === 0 && (
-              <div className="rounded-[28px] bg-white p-12 text-center shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 dark:bg-charcoal dark:ring-white/5">
+              <div className="rounded-[28px] bg-white p-12 text-center shadow-[0_18px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70">
                 <span className="material-symbols-outlined text-slate-300 text-6xl mb-4">search_off</span>
-                <h3 className="mb-2 text-xl font-bold text-slate-900 dark:text-white">No buses found</h3>
-                <p className="text-slate-500 dark:text-slate-400">
+                <h3 className="mb-2 text-xl font-bold text-slate-900">No buses found</h3>
+                <p className="text-slate-500">
                   {activeFilterCount > 0 ? 'Try removing some filters or ' : 'Try '}searching for a different date or route.
                 </p>
                 {activeFilterCount > 0 && (

@@ -73,6 +73,10 @@ public class AuthController {
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request,
                                       HttpServletResponse response) {
         try {
+            userRepository.findByEmailOrPhone(request.getEmailOrPhone(), request.getEmailOrPhone()).ifPresent(u -> {
+                if (u.isSuspended())
+                    throw new RuntimeException("Your account has been suspended. Please contact support@tripgo.com.");
+            });
             authService.login(request, response);
             return ResponseEntity.ok(Map.of(
                 "message", "Login successful",
@@ -81,36 +85,6 @@ public class AuthController {
             ));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
-    }
-
-    @GetMapping("/test")
-    public String testApi(){
-        return "Successfully validated with api";
-    }
-
-    @GetMapping("/test-email")
-    public ResponseEntity<Map<String, Object>> testEmail(@RequestParam String to) {
-        try {
-            // Log configuration for debugging
-            System.out.println("=== EMAIL CONFIG DEBUG ===");
-            System.out.println("Mail Host: smtp.resend.com");
-            System.out.println("Mail Port: 587");
-            System.out.println("Mail Username: resend");
-            System.out.println("From Email: " + fromEmail);
-            System.out.println("API Key Set: " + (System.getenv("RESEND_API_KEY") != null ? "YES" : "NO"));
-            System.out.println("=========================");
-            
-            User testUser = new User();
-            testUser.setFirstName("Test");
-            testUser.setEmail(to);
-            
-            emailService.sendUserVerificationEmail(testUser, "http://test-link.com");
-            return ResponseEntity.ok(Map.of("success", true, "message", "Test email sent via Resend"));
-        } catch (Exception e) {
-            System.err.println("Email error: " + e.getMessage());
-            e.printStackTrace();
-            return ResponseEntity.ok(Map.of("success", false, "error", e.getMessage()));
         }
     }
 
@@ -131,6 +105,8 @@ public class AuthController {
 
         RefreshToken storedToken = refreshTokenService.validateRefreshToken(refreshToken);
         User user = storedToken.getUser();
+
+        if (user.isSuspended()) throw new RuntimeException("Your account has been suspended. Please contact support@tripgo.com.");
 
         // Delete old token instead of just revoking to avoid unique constraint violation
         refreshTokenRepository.delete(storedToken);

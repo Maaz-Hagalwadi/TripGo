@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, API_BASE_URL, fetchWithAuth } from './apiClient';
+import { apiGet, apiPost, apiPut, apiDelete, API_BASE_URL, fetchWithAuth } from './apiClient';
 
 const withSeatQuery = (path, params = {}) => {
   const search = new URLSearchParams();
@@ -35,6 +35,9 @@ export const cancelMyBooking = async (bookingId, cancelReason) => {
     reason: cancelReason,
   });
 };
+
+export const rescheduleBooking = async (bookingId, payload) =>
+  apiPost(`/booking/${encodeURIComponent(bookingId)}/reschedule`, payload);
 
 export const getSchedulePointsForBooking = async (scheduleId) => {
   try {
@@ -111,6 +114,12 @@ export const getMyCompletedTrips = async () => {
 export const submitTripRating = async (scheduleId, payload) => {
   return apiPost(`/booking/trips/${encodeURIComponent(scheduleId)}/rating`, payload);
 };
+
+// ── Saved Passenger Profiles ───────────────────────────────────────────────
+export const getSavedPassengerProfiles = () => apiGet('/user/passengers');
+export const createSavedPassengerProfile = (payload) => apiPost('/user/passengers', payload);
+export const updateSavedPassengerProfile = (id, payload) => apiPut(`/user/passengers/${encodeURIComponent(id)}`, payload);
+export const deleteSavedPassengerProfile = (id) => apiDelete(`/user/passengers/${encodeURIComponent(id)}`);
 
 export const downloadTicketFromApi = async (bookingId, fallbackFilename = 'ticket.pdf') => {
   try {

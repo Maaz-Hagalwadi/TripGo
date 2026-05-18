@@ -48,8 +48,12 @@ const ProfileModal = ({ user, onClose, onNameUpdate }) => {
       </div>
       <div className="p-6 space-y-5">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center shrink-0">
-            <span className="material-symbols-outlined text-primary text-3xl">person</span>
+          <div className="w-16 h-16 rounded-full overflow-hidden bg-primary/10 flex items-center justify-center shrink-0">
+            {user?.profilePictureUrl ? (
+              <img src={user.profilePictureUrl} alt="" className="w-16 h-16 object-cover" />
+            ) : (
+              <span className="material-symbols-outlined text-primary text-3xl">person</span>
+            )}
           </div>
           <div>
             <div className="flex items-center gap-1.5">
@@ -120,6 +124,7 @@ const OperatorHeader = ({
   searchPlaceholder = '',
   roleLabel = 'Fleet Manager',
   profileRoute = null,
+  settingsRoute = null,
   showTitle = true,
   showSearch = true,
   children
@@ -165,16 +170,24 @@ const OperatorHeader = ({
           </div>
           <button
             onClick={() => setShowProfileDropdown(p => !p)}
-            className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+            className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors overflow-hidden flex-shrink-0"
           >
-            <span className="material-symbols-outlined text-slate-600 dark:text-slate-300">person</span>
+            {user?.profilePictureUrl ? (
+              <img src={user.profilePictureUrl} alt="" className="w-10 h-10 object-cover" />
+            ) : (
+              <span className="material-symbols-outlined text-slate-600 dark:text-slate-300">person</span>
+            )}
           </button>
           {showProfileDropdown && (
             <div className="absolute right-0 top-12 w-64 bg-white dark:bg-op-card border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl overflow-hidden z-50">
               <div className="p-4 border-b border-slate-200 dark:border-slate-800">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-full flex items-center justify-center">
-                    <span className="material-symbols-outlined text-slate-600 dark:text-slate-300 text-xl">person</span>
+                  <div className="w-12 h-12 rounded-full overflow-hidden bg-slate-200 dark:bg-slate-700 flex items-center justify-center flex-shrink-0">
+                    {user?.profilePictureUrl ? (
+                      <img src={user.profilePictureUrl} alt="" className="w-12 h-12 object-cover" />
+                    ) : (
+                      <span className="material-symbols-outlined text-slate-600 dark:text-slate-300 text-xl">person</span>
+                    )}
                   </div>
                   <div>
                     <p className="font-semibold text-sm">{user?.firstName} {user?.lastName}</p>
@@ -198,7 +211,7 @@ const OperatorHeader = ({
                   My Profile
                 </button>
                 <button
-                  onClick={() => { setShowProfileDropdown(false); navigate(ROUTES.OPERATOR_SETTINGS); }}
+                  onClick={() => { setShowProfileDropdown(false); navigate(settingsRoute || ROUTES.OPERATOR_SETTINGS); }}
                   className="w-full px-4 py-3 text-left text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-3"
                 >
                   <span className="material-symbols-outlined text-lg">settings</span>

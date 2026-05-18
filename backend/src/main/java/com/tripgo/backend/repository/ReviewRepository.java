@@ -19,6 +19,8 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
     // Operator queries
     Page<Review> findByOperatorId(UUID operatorId, Pageable pageable);
+    Page<Review> findByOperatorIdAndRatingGreaterThanEqual(UUID operatorId, int minRating, Pageable pageable);
+    Page<Review> findByOperatorIdAndRatingLessThanEqual(UUID operatorId, int maxRating, Pageable pageable);
     Page<Review> findByBusId(UUID busId, Pageable pageable);
     Page<Review> findByRouteScheduleId(UUID scheduleId, Pageable pageable);
 

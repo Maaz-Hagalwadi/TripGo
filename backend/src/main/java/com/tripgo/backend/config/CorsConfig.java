@@ -26,6 +26,15 @@ public class CorsConfig {
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
+
+        // WebSocket upgrade requests need origin-pattern matching (SockJS sends various sub-paths)
+        CorsConfiguration wsConfig = new CorsConfiguration();
+        wsConfig.setAllowedOriginPatterns(Arrays.asList("*"));
+        wsConfig.setAllowedMethods(Arrays.asList("GET", "POST", "OPTIONS"));
+        wsConfig.setAllowedHeaders(Arrays.asList("*"));
+        wsConfig.setAllowCredentials(true);
+        source.registerCorsConfiguration("/ws/**", wsConfig);
+
         return source;
     }
 }

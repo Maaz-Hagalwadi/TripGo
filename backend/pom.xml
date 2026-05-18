@@ -123,6 +123,13 @@
 			<version>8.10.1</version>
 		</dependency>
 
+		<!-- AWS SDK v2 S3 -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<version>2.25.16</version>
+		</dependency>
+
 		<!-- PDF generation -->
 		<dependency>
 			<groupId>com.itextpdf</groupId>

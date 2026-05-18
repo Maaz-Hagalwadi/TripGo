@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Trip Reminder</title>
+  <style>
+    body { margin: 0; padding: 0; background: #f4f6f9; font-family: 'Segoe UI', Arial, sans-serif; }
+    .wrapper { max-width: 600px; margin: 30px auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .header { background: linear-gradient(135deg, #002046, #003a80); padding: 36px 32px; text-align: center; }
+    .header h1 { color: #ffffff; margin: 0; font-size: 26px; font-weight: 700; }
+    .header p { color: rgba(255,255,255,0.85); margin: 6px 0 0; font-size: 14px; }
+    .badge { display: inline-block; background: #fbbf24; color: #1c1917; padding: 6px 18px; border-radius: 20px; font-size: 13px; font-weight: 700; margin-top: 14px; }
+    .body { padding: 32px; }
+    .greeting { font-size: 16px; color: #333; margin-bottom: 24px; }
+    .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+    .label { color: #888; }
+    .value { font-weight: 600; color: #222; }
+    .info-box { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 16px 20px; margin: 24px 0; }
+    .info-box p { margin: 0; font-weight: 700; color: #92400e; font-size: 14px; }
+    .info-box span { display: block; margin-top: 6px; font-size: 13px; color: #555; font-weight: 400; }
+    .btn { display: inline-block; background: #002046; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-size: 14px; font-weight: 600; margin-top: 24px; }
+    .footer { background: #f4f6f9; padding: 24px 32px; text-align: center; font-size: 12px; color: #999; border-top: 1px solid #eee; }
+    .footer a { color: #002046; text-decoration: none; }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="header">
+    <h1>🚌 TripGo</h1>
+    <p>Your trip is tomorrow!</p>
+    <div class="badge">⏰ TRIP REMINDER</div>
+  </div>
+  <div class="body">
+    <p class="greeting">Hi <strong th:text="${firstName}">User</strong>, just a reminder — your bus trip is scheduled for tomorrow. Have a great journey!</p>
+    <div class="detail-row"><span class="label">Booking Code</span><span class="value" th:text="${bookingCode}">TG12345</span></div>
+    <div class="detail-row"><span class="label">Route</span><span class="value" th:text="${from + ' → ' + to}">A → B</span></div>
+    <div class="detail-row"><span class="label">Bus</span><span class="value" th:text="${busName}">Bus</span></div>
+    <div class="detail-row"><span class="label">Travel Date</span><span class="value" th:text="${travelDate}">-</span></div>
+    <div class="detail-row"><span class="label">Departure</span><span class="value" th:text="${departureTime}">-</span></div>
+    <div class="detail-row"><span class="label">Seats</span><span class="value" th:text="${seatNumbers}">-</span></div>
+    <div class="info-box">
+      <p>📋 Before you go</p>
+      <span>Arrive at the boarding point at least 15 minutes early. Keep your ticket QR code handy for boarding.</span>
+    </div>
+    <a th:href="${frontendUrl + '/my-bookings'}" class="btn">View Ticket</a>
+  </div>
+  <div class="footer">
+    <p>© 2026 TripGo. All rights reserved.</p>
+    <p>Need help? <a th:href="${frontendUrl + '/support'}">Contact Support</a></p>
+  </div>
+</div>
+</body>
+</html>

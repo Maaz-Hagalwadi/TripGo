@@ -6,6 +6,7 @@ import com.tripgo.backend.security.service.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -27,16 +28,19 @@ public class ReviewController {
     public ResponseEntity<?> getOperatorReviews(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String rating,
             Authentication auth) {
 
         User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
         Operator operator = user.getOperator();
         if (operator == null) return ResponseEntity.status(403).body("Not an operator");
 
-        Page<Review> reviews = reviewRepository.findByOperatorId(
-                operator.getId(),
-                PageRequest.of(page, size, Sort.by("createdAt").descending())
-        );
+        Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Page<Review> reviews = switch (rating != null ? rating : "") {
+            case "positive" -> reviewRepository.findByOperatorIdAndRatingGreaterThanEqual(operator.getId(), 4, pageable);
+            case "critical" -> reviewRepository.findByOperatorIdAndRatingLessThanEqual(operator.getId(), 3, pageable);
+            default -> reviewRepository.findByOperatorId(operator.getId(), pageable);
+        };
 
         return ResponseEntity.ok(toPageResponse(reviews, true));
     }

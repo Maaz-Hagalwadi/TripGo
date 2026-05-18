@@ -8,7 +8,7 @@ const MOBILE_NAV = [
   { id: 'overview',   icon: 'dashboard',      label: 'Overview',  route: ROUTES.ADMIN_DASHBOARD },
   { id: 'operators',  icon: 'business',       label: 'Operators', route: `${ROUTES.ADMIN_DASHBOARD}?tab=operators` },
   { id: 'buses',      icon: 'directions_bus', label: 'Buses',     route: `${ROUTES.ADMIN_DASHBOARD}?tab=buses` },
-  { id: 'users',      icon: 'group',          label: 'Users',     route: `${ROUTES.ADMIN_DASHBOARD}?tab=users` },
+  { id: 'users',      icon: 'group',          label: 'Users',     route: ROUTES.ADMIN_USERS },
   { id: 'reviews',    icon: 'reviews',        label: 'Reviews',   route: ROUTES.ADMIN_REVIEWS },
 ];
 
@@ -16,7 +16,11 @@ const AdminLayout = ({ title, activeItemOverride, children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const activeItem = activeItemOverride || (location.pathname === ROUTES.ADMIN_REVIEWS ? 'reviews' : (searchParams.get('tab') || 'overview'));
+  const activeItem = activeItemOverride || (
+    location.pathname === ROUTES.ADMIN_REVIEWS ? 'reviews' :
+    location.pathname === ROUTES.ADMIN_USERS ? 'users' :
+    (searchParams.get('tab') || 'overview')
+  );
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   return (
