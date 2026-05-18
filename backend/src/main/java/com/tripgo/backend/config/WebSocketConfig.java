@@ -29,7 +29,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         // In-memory broker for user-specific queues
-        registry.enableSimpleBroker("/user");
+        registry.enableSimpleBroker("/user", "/topic");
         // Prefix for messages FROM client TO server (not needed for notifications but good practice)
         registry.setApplicationDestinationPrefixes("/app");
         // Prefix for user-specific destinations

@@ -25,6 +25,12 @@ JWT_SECRET=your_jwt_secret_key
 # URLs (optional, defaults provided)
 FRONTEND_URL=http://localhost:5174
 BACKEND_URL=http://localhost:8080
+
+# Rate limiting — trusted reverse proxy IPs (comma-separated)
+# Add your load balancer / Render proxy IP here so X-Forwarded-For is only
+# trusted from known proxies and cannot be spoofed by clients.
+# Default: 127.0.0.1,::1 (loopback only)
+APP_TRUSTED_PROXIES=127.0.0.1,::1
 ```
 
 ### Security Note:

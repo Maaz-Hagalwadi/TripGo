@@ -4,6 +4,7 @@ import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ROUTES } from '../../../shared/constants/routes';
 import Header from '../../../shared/components/layout/Header';
 import HeroSection from './HeroSection';
+import OffersSection from './OffersSection';
 import WhyChooseUs from './WhyChooseUs';
 import ExploreSection from './ExploreSection';
 
@@ -59,6 +60,7 @@ const Home = () => {
     <div className="min-h-screen bg-white">
       <Header />
       <HeroSection />
+      <OffersSection />
       <WhyChooseUs />
       <ExploreSection />
     </div>

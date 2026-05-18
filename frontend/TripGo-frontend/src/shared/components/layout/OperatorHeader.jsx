@@ -127,6 +127,7 @@ const OperatorHeader = ({
   settingsRoute = null,
   showTitle = true,
   showSearch = true,
+  onMenuToggle,
   children
 }) => {
   const navigate = useNavigate();
@@ -141,6 +142,14 @@ const OperatorHeader = ({
     <>
     <header className="sticky top-0 z-50 h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-op-bg flex items-center justify-between px-4 lg:px-8 shrink-0">
       <div className="flex items-center gap-4 flex-1">
+        {onMenuToggle && (
+          <button
+            onClick={onMenuToggle}
+            className="md:hidden p-2 -ml-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          >
+            <span className="material-symbols-outlined text-slate-600 dark:text-slate-300">menu</span>
+          </button>
+        )}
         <button className="flex items-center gap-2 group flex-shrink-0" onClick={() => navigate('/')}>
           <div className="w-8 h-8 rounded-xl bg-[#002046] flex items-center justify-center shadow-sm group-hover:bg-[#001533] transition-colors">
             <TripGoIcon className="w-5 h-4 text-white" />

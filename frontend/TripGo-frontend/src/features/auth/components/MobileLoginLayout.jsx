@@ -2,22 +2,22 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../../../shared/contexts/AuthContext';
-import { 
-  Box, 
-  Container, 
-  TextField, 
-  Button, 
-  Typography, 
-  InputAdornment, 
+import {
+  Box,
+  Container,
+  TextField,
+  Button,
+  Typography,
+  InputAdornment,
   IconButton,
   Divider,
   ThemeProvider
 } from '@mui/material';
-import { 
-  Email, 
-  Lock, 
-  Visibility, 
-  VisibilityOff 
+import {
+  Email,
+  Lock,
+  Visibility,
+  VisibilityOff
 } from '@mui/icons-material';
 import TripGoIcon from '../../../assets/icons/TripGoIcon';
 import { darkTheme } from '../../../shared/utils/darkTheme';
@@ -26,11 +26,15 @@ import { API_BASE_URL } from '../../../config/env';
 
 const MobileLoginLayout = () => {
   const navigate = useNavigate();
-  const { login, user } = useAuth();
+  const { login, sendLoginOtp, loginWithOtp, user } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
+  const [loginMode, setLoginMode] = useState('password');
+  const [otpSent, setOtpSent] = useState(false);
+  const [isOtpSending, setIsOtpSending] = useState(false);
   const [formData, setFormData] = useState({
     emailOrPhone: '',
-    password: ''
+    password: '',
+    otp: ''
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
@@ -54,62 +58,96 @@ const MobileLoginLayout = () => {
     }
   }, [user, loginSuccess, navigate]);
 
-  const loginUser = async (formData) => {
-    try {
-      const result = await login({
-        emailOrPhone: formData.emailOrPhone,
-        password: formData.password
-      });
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
+  };
 
+  const switchMode = (mode) => {
+    setLoginMode(mode);
+    setOtpSent(false);
+    setErrors({});
+    setFormData(prev => ({ ...prev, password: '', otp: '' }));
+  };
+
+  const handleSendOtp = async () => {
+    setErrors({});
+    if (!formData.emailOrPhone.trim()) {
+      setErrors({ emailOrPhone: 'Email or phone is required' });
+      return;
+    }
+    setIsOtpSending(true);
+    try {
+      const result = await sendLoginOtp({ emailOrPhone: formData.emailOrPhone.trim() });
       if (result.success) {
-        toast.success('Login successful!');
-        setLoginSuccess(true);
+        setOtpSent(true);
+        toast.success('OTP sent. Check your email.');
       } else {
-        const isSuspended = result.error?.toLowerCase().includes('suspend');
-        if (isSuspended) {
-          setSuspended(true);
-        } else {
-          toast.error(result.error);
-        }
+        toast.error(result.error || 'Failed to send OTP');
       }
     } catch {
       toast.error('Network error. Please try again.');
+    } finally {
+      setIsOtpSending(false);
     }
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    // Clear error when user starts typing
-    if (errors[name]) {
-      setErrors(prev => ({ ...prev, [name]: '' }));
+  const handleResult = (result) => {
+    if (result.success) {
+      toast.success('Login successful!');
+      setLoginSuccess(true);
+    } else {
+      if (result.error?.toLowerCase().includes('suspend')) {
+        setSuspended(true);
+      } else {
+        toast.error(result.error);
+      }
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrors({});
-    
+
     if (!formData.emailOrPhone.trim()) {
       setErrors({ emailOrPhone: 'Email or phone is required' });
       return;
     }
-    if (!formData.password.trim()) {
-      setErrors({ password: 'Password is required' });
-      return;
-    }
-    
+
     setIsLoading(true);
-    await loginUser(formData);
-    setIsLoading(false);
+    try {
+      if (loginMode === 'otp') {
+        if (!formData.otp.trim()) {
+          setErrors({ otp: 'OTP is required' });
+          setIsLoading(false);
+          return;
+        }
+        const result = await loginWithOtp({
+          emailOrPhone: formData.emailOrPhone.trim(),
+          otp: formData.otp.trim()
+        });
+        handleResult(result);
+      } else {
+        if (!formData.password.trim()) {
+          setErrors({ password: 'Password is required' });
+          setIsLoading(false);
+          return;
+        }
+        const result = await login({
+          emailOrPhone: formData.emailOrPhone,
+          password: formData.password
+        });
+        handleResult(result);
+      }
+    } catch {
+      toast.error('Network error. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleClickShowPassword = () => {
-    setShowPassword(!showPassword);
-  };
+  const handleClickShowPassword = () => setShowPassword(!showPassword);
 
   return (
     <ThemeProvider theme={darkTheme}>
@@ -199,91 +237,142 @@ const MobileLoginLayout = () => {
               </Box>
             )}
 
-            <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <TextField
-                fullWidth
-                required
-                name="emailOrPhone"
-                type="text"
-                placeholder="Enter the email"
-                value={formData.emailOrPhone}
-                onChange={handleInputChange}
-                error={!!errors.emailOrPhone}
-                helperText={errors.emailOrPhone}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Email sx={{ color: '#64748b' }} />
-                    </InputAdornment>
-                  ),
-                }}
-                size="small"
-              />
-
-              <TextField
-                fullWidth
-                required
-                name="password"
-                type={showPassword ? 'text' : 'password'}
-                placeholder="••••••••"
-                value={formData.password}
-                onChange={handleInputChange}
-                error={!!errors.password}
-                helperText={errors.password}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Lock sx={{ color: '#64748b' }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={handleClickShowPassword}
-                        edge="end"
-                        sx={{ color: '#64748b' }}
-                      >
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-                size="small"
-              />
-
-              <Box sx={{ textAlign: 'right', mb: 1 }}>
-                <Typography 
-                  variant="caption" 
-                  sx={{ color: '#0B1F3A', fontWeight: 700, cursor: 'pointer' }}
-                  onClick={() => navigate('/forgot-password')}
+            {/* Mode toggle */}
+            <Box sx={{ display: 'flex', p: '4px', bgcolor: 'rgba(255,255,255,0.06)', borderRadius: 2, mb: 3, gap: '4px' }}>
+              {[['password', 'Password'], ['otp', 'Login with OTP']].map(([mode, label]) => (
+                <Button
+                  key={mode}
+                  size="small"
+                  onClick={() => switchMode(mode)}
+                  sx={{
+                    flex: 1, py: 1, fontWeight: 700, fontSize: '0.75rem',
+                    borderRadius: 1.5, textTransform: 'none',
+                    bgcolor: loginMode === mode ? '#0B1F3A' : 'transparent',
+                    color: loginMode === mode ? 'white' : '#64748b',
+                    boxShadow: loginMode === mode ? '0 2px 8px rgba(11,31,58,0.3)' : 'none',
+                    '&:hover': { bgcolor: loginMode === mode ? '#102A4C' : 'rgba(255,255,255,0.06)' },
+                  }}
                 >
-                  Forgot Password?
-                </Typography>
-              </Box>
+                  {label}
+                </Button>
+              ))}
+            </Box>
 
-              <Button
-                type="submit"
-                fullWidth
-                variant="contained"
-                disabled={isLoading}
-                sx={{
-                  bgcolor: '#0B1F3A',
-                  color: 'white',
-                  py: 1.5,
-                  fontWeight: 800,
-                  fontSize: '1rem',
-                  boxShadow: '0 4px 20px rgba(11,31,58,0.25)',
-                  '&:hover': {
-                    bgcolor: '#102A4C',
-                  },
-                  '&:disabled': {
-                    bgcolor: 'rgba(11,31,58,0.5)',
-                    color: 'white'
-                  }
-                }}
-              >
-                {isLoading ? 'Signing In...' : 'Sign In'}
-              </Button>
+            <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+
+              {/* ── PASSWORD MODE ── */}
+              {loginMode === 'password' && (
+                <>
+                  <TextField
+                    fullWidth name="emailOrPhone" type="text"
+                    placeholder="Email or phone number"
+                    value={formData.emailOrPhone} onChange={handleInputChange}
+                    error={!!errors.emailOrPhone} helperText={errors.emailOrPhone}
+                    InputProps={{ startAdornment: <InputAdornment position="start"><Email sx={{ color: '#64748b' }} /></InputAdornment> }}
+                    size="small"
+                  />
+                  <TextField
+                    fullWidth name="password" type={showPassword ? 'text' : 'password'}
+                    placeholder="••••••••"
+                    value={formData.password} onChange={handleInputChange}
+                    error={!!errors.password} helperText={errors.password}
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start"><Lock sx={{ color: '#64748b' }} /></InputAdornment>,
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton onClick={handleClickShowPassword} edge="end" sx={{ color: '#64748b' }}>
+                            {showPassword ? <VisibilityOff /> : <Visibility />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                    size="small"
+                  />
+                  <Box sx={{ textAlign: 'right', mt: -1 }}>
+                    <Typography variant="caption" sx={{ color: '#0B1F3A', fontWeight: 700, cursor: 'pointer' }} onClick={() => navigate('/forgot-password')}>
+                      Forgot Password?
+                    </Typography>
+                  </Box>
+                  <Button type="submit" fullWidth variant="contained" disabled={isLoading}
+                    sx={{ bgcolor: '#0B1F3A', color: 'white', py: 1.5, fontWeight: 800, fontSize: '1rem', borderRadius: 2, textTransform: 'none', boxShadow: '0 4px 20px rgba(11,31,58,0.25)', '&:hover': { bgcolor: '#102A4C' }, '&:disabled': { bgcolor: 'rgba(11,31,58,0.5)', color: 'white' } }}
+                  >
+                    {isLoading ? 'Signing In...' : 'Sign In'}
+                  </Button>
+                </>
+              )}
+
+              {/* ── OTP MODE — STEP 1: enter email/phone + Send OTP ── */}
+              {loginMode === 'otp' && !otpSent && (
+                <>
+                  <TextField
+                    fullWidth name="emailOrPhone" type="text"
+                    placeholder="Email or phone number"
+                    value={formData.emailOrPhone} onChange={handleInputChange}
+                    error={!!errors.emailOrPhone} helperText={errors.emailOrPhone}
+                    InputProps={{ startAdornment: <InputAdornment position="start"><Email sx={{ color: '#64748b' }} /></InputAdornment> }}
+                    size="small"
+                  />
+                  <Button fullWidth variant="contained" disabled={isOtpSending} onClick={handleSendOtp}
+                    sx={{ bgcolor: '#0B1F3A', color: 'white', py: 1.5, fontWeight: 800, fontSize: '1rem', borderRadius: 2, textTransform: 'none', boxShadow: '0 4px 20px rgba(11,31,58,0.25)', '&:hover': { bgcolor: '#102A4C' }, '&:disabled': { bgcolor: 'rgba(11,31,58,0.5)', color: 'white' } }}
+                  >
+                    {isOtpSending ? 'Sending OTP...' : 'Send OTP'}
+                  </Button>
+                </>
+              )}
+
+              {/* ── OTP MODE — STEP 2: locked email + OTP input ── */}
+              {loginMode === 'otp' && otpSent && (
+                <>
+                  {/* Locked identifier row */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1.5, bgcolor: 'rgba(255,255,255,0.06)', borderRadius: 2, border: '1px solid rgba(255,255,255,0.08)' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                      <Email sx={{ color: '#64748b', fontSize: 18, flexShrink: 0 }} />
+                      <Typography variant="caption" sx={{ color: '#cbd5e1', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {formData.emailOrPhone}
+                      </Typography>
+                    </Box>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: '#0B1F3A', fontWeight: 700, cursor: 'pointer', flexShrink: 0, ml: 1 }}
+                      onClick={() => { setOtpSent(false); setFormData(p => ({ ...p, otp: '' })); }}
+                    >
+                      Change
+                    </Typography>
+                  </Box>
+
+                  <Box>
+                    <Typography variant="caption" sx={{ color: '#94a3b8', display: 'block', mb: 1 }}>
+                      We sent a 6-digit code to your registered email.
+                    </Typography>
+                    <TextField
+                      fullWidth name="otp" type="text" inputMode="numeric"
+                      placeholder="Enter 6-digit OTP"
+                      value={formData.otp} onChange={handleInputChange}
+                      error={!!errors.otp} helperText={errors.otp}
+                      inputProps={{ maxLength: 6 }}
+                      autoFocus
+                      size="small"
+                    />
+                  </Box>
+
+                  <Button type="submit" fullWidth variant="contained" disabled={isLoading}
+                    sx={{ bgcolor: '#0B1F3A', color: 'white', py: 1.5, fontWeight: 800, fontSize: '1rem', borderRadius: 2, textTransform: 'none', boxShadow: '0 4px 20px rgba(11,31,58,0.25)', '&:hover': { bgcolor: '#102A4C' }, '&:disabled': { bgcolor: 'rgba(11,31,58,0.5)', color: 'white' } }}
+                  >
+                    {isLoading ? 'Verifying...' : 'Verify & Sign In'}
+                  </Button>
+
+                  <Typography variant="caption" sx={{ textAlign: 'center', color: '#64748b' }}>
+                    Didn't receive it?{' '}
+                    <span
+                      style={{ color: '#0B1F3A', fontWeight: 700, cursor: 'pointer' }}
+                      onClick={handleSendOtp}
+                    >
+                      {isOtpSending ? 'Sending...' : 'Resend OTP'}
+                    </span>
+                  </Typography>
+                </>
+              )}
+
             </Box>
 
             <Box sx={{ my: 4, position: 'relative' }}>

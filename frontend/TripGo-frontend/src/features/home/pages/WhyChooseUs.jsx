@@ -1,27 +1,42 @@
+import { useNavigate } from 'react-router-dom';
+import { ROUTES } from '../../../shared/constants/routes';
+
 const features = [
   {
-    icon: 'verified_user',
-    title: 'Safe & Secure',
-    description: 'Every booking is protected with bank-grade encryption and verified operators only.',
+    icon: 'location_on',
+    title: 'Live Bus Tracking',
+    description: 'Track your bus in real time on a live map. Always know exactly where your ride is.',
     color: 'bg-emerald-50 text-emerald-600',
   },
   {
-    icon: 'payments',
-    title: 'Best Price Guarantee',
-    description: "Find a lower price anywhere else? We'll match it. No hidden fees, ever.",
-    color: 'bg-blue-50 text-blue-600',
+    icon: 'event_repeat',
+    title: 'Free Reschedule',
+    description: 'Plans changed? Reschedule your trip for free up to 4 hours before departure.',
+    color: 'bg-sky-50 text-sky-600',
+  },
+  {
+    icon: 'confirmation_number',
+    title: 'Instant Digital Tickets',
+    description: 'Booking confirmed in seconds. QR-coded PDF ticket sent straight to your inbox.',
+    color: 'bg-amber-50 text-amber-600',
+  },
+  {
+    icon: 'notifications_active',
+    title: 'Real-time Notifications',
+    description: 'Get notified the moment your booking is confirmed, updated, or your bus departs.',
+    color: 'bg-violet-50 text-violet-600',
+  },
+  {
+    icon: 'verified_user',
+    title: 'Verified Operators Only',
+    description: 'Every bus on TripGo is admin-approved. Bank-grade encryption on every payment.',
+    color: 'bg-rose-50 text-rose-600',
   },
   {
     icon: 'support_agent',
     title: '24/7 Customer Support',
     description: 'Real humans ready to help around the clock — by chat, phone, or email.',
-    color: 'bg-violet-50 text-violet-600',
-  },
-  {
-    icon: 'confirmation_number',
-    title: 'Instant Confirmation',
-    description: 'Booking confirmed in seconds. Digital ticket sent to your email & phone.',
-    color: 'bg-amber-50 text-amber-600',
+    color: 'bg-indigo-50 text-indigo-600',
   },
 ];
 
@@ -32,6 +47,7 @@ const steps = [
 ];
 
 const WhyChooseUs = () => {
+  const navigate = useNavigate();
   return (
     <>
       {/* Features */}
@@ -45,7 +61,7 @@ const WhyChooseUs = () => {
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((f) => (
               <div
                 key={f.title}
@@ -75,7 +91,6 @@ const WhyChooseUs = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
-            {/* Connector line (desktop) */}
             <div className="hidden md:block absolute top-8 left-1/3 right-1/3 h-px bg-white/15" />
 
             {steps.map((step, i) => (
@@ -89,6 +104,38 @@ const WhyChooseUs = () => {
             ))}
           </div>
 
+        </div>
+      </section>
+
+      {/* Operator CTA */}
+      <section className="py-14 bg-white border-t border-slate-100">
+        <div className="max-w-screen-xl mx-auto px-4 sm:px-6">
+          <div className="rounded-3xl bg-gradient-to-br from-[#001633] to-[#002f6c] px-8 py-12 md:px-14 flex flex-col md:flex-row items-center justify-between gap-8">
+            <div>
+              <p className="text-xs font-bold text-sky-400 uppercase tracking-widest mb-2">For Bus Operators</p>
+              <h2 className="text-2xl md:text-3xl font-extrabold text-white leading-snug">
+                Run your fleet on TripGo.<br />
+                <span className="text-sky-300">Reach more passengers, earn more.</span>
+              </h2>
+              <p className="mt-3 text-sm text-slate-300 max-w-md leading-relaxed">
+                List your buses, set routes and schedules, manage bookings, and track earnings — all from one dashboard.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 flex-shrink-0">
+              <button
+                onClick={() => navigate(ROUTES.OPERATOR_HOW_IT_WORKS)}
+                className="rounded-2xl border-2 border-white/30 text-white px-6 py-3 text-sm font-bold hover:bg-white/10 transition-colors"
+              >
+                See how it works
+              </button>
+              <button
+                onClick={() => navigate(ROUTES.OPERATOR_REGISTER)}
+                className="rounded-2xl bg-white text-[#002046] px-6 py-3 text-sm font-bold hover:bg-slate-100 transition-colors"
+              >
+                Start as Operator
+              </button>
+            </div>
+          </div>
         </div>
       </section>
     </>

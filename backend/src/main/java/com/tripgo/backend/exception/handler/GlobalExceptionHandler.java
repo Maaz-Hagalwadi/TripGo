@@ -1,13 +1,16 @@
 package com.tripgo.backend.exception.handler;
 
+import com.stripe.exception.StripeException;
 import com.tripgo.backend.dto.response.ApiError;
-import com.tripgo.backend.exception.BadRequestException;
 import com.tripgo.backend.exception.BadRequestException;
 import com.tripgo.backend.exception.ResourceNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -17,107 +20,70 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // 🔴 400 - Bad Request
     @ExceptionHandler(BadRequestException.class)
-    public ResponseEntity<ApiError> handleBadRequest(
-            BadRequestException ex,
-            HttpServletRequest request) {
-
-        ApiError error = new ApiError(
-                LocalDateTime.now(),
-                HttpStatus.BAD_REQUEST.value(),
-                "Bad Request",
-                ex.getMessage(),
-                request.getRequestURI()
-        );
-
-        return ResponseEntity.badRequest().body(error);
+    public ResponseEntity<ApiError> handleBadRequest(BadRequestException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "Bad Request", ex.getMessage(), request);
     }
 
-    // 🔴 404 - Not Found
     @ExceptionHandler(ResourceNotFoundException.class)
-    public ResponseEntity<ApiError> handleNotFound(
-            ResourceNotFoundException ex,
-            HttpServletRequest request) {
-
-        ApiError error = new ApiError(
-                LocalDateTime.now(),
-                HttpStatus.NOT_FOUND.value(),
-                "Not Found",
-                ex.getMessage(),
-                request.getRequestURI()
-        );
-
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
+    public ResponseEntity<ApiError> handleNotFound(ResourceNotFoundException ex, HttpServletRequest request) {
+        return build(HttpStatus.NOT_FOUND, "Not Found", ex.getMessage(), request);
     }
 
-    // 🔴 Validation Errors (DTO @Valid)
-    @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiError> handleValidation(
-            MethodArgumentNotValidException ex,
-            HttpServletRequest request) {
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiError> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+        return build(HttpStatus.FORBIDDEN, "Forbidden", "You do not have permission to access this resource", request);
+    }
 
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiError> handleDataIntegrity(DataIntegrityViolationException ex, HttpServletRequest request) {
+        String message = ex.getMostSpecificCause().getMessage();
+        if (message != null && message.contains("duplicate key")) {
+            return build(HttpStatus.CONFLICT, "Conflict", "A record with this value already exists", request);
+        }
+        log.error("Data integrity violation at {}", request.getRequestURI(), ex);
+        return build(HttpStatus.CONFLICT, "Conflict", "Data integrity violation", request);
+    }
+
+    @ExceptionHandler(StripeException.class)
+    public ResponseEntity<ApiError> handleStripe(StripeException ex, HttpServletRequest request) {
+        log.error("Stripe error at {}: {}", request.getRequestURI(), ex.getMessage());
+        return build(HttpStatus.BAD_GATEWAY, "Payment Error", ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiError> handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
         String message = ex.getBindingResult()
                 .getFieldErrors()
                 .stream()
                 .map(err -> err.getField() + ": " + err.getDefaultMessage())
                 .collect(Collectors.joining(", "));
-
-        ApiError error = new ApiError(
-                LocalDateTime.now(),
-                HttpStatus.BAD_REQUEST.value(),
-                "Validation Failed",
-                message,
-                request.getRequestURI()
-        );
-
-        return ResponseEntity.badRequest().body(error);
+        return build(HttpStatus.BAD_REQUEST, "Validation Failed", message, request);
     }
 
-    // 🔴 Catch-all
-    @ExceptionHandler(Exception.class)
-    public ResponseEntity<ApiError> handleAll(
-            Exception ex,
-            HttpServletRequest request) {
-
-        ApiError error = new ApiError(
-                LocalDateTime.now(),
-                HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                "Internal Server Error",
-                ex.getMessage(),
-                request.getRequestURI()
-        );
-
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
-    }
-
-    // 🔴 400 - Missing or malformed JSON body
     @ExceptionHandler(HttpMessageNotReadableException.class)
-    public ResponseEntity<ApiError> handleNotReadable(
-            HttpMessageNotReadableException ex,
-            HttpServletRequest request) {
-
-        ApiError error = new ApiError(
-                LocalDateTime.now(),
-                HttpStatus.BAD_REQUEST.value(),
-                "Bad Request",
-                "Request body is missing or malformed",
-                request.getRequestURI()
-        );
-
-        return ResponseEntity.badRequest().body(error);
+    public ResponseEntity<ApiError> handleNotReadable(HttpMessageNotReadableException ex, HttpServletRequest request) {
+        return build(HttpStatus.BAD_REQUEST, "Bad Request", "Request body is missing or malformed", request);
     }
 
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Map<String, String>> handleBadCredentials() {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(Map.of(
-                        "error", "Unauthorized",
-                        "message", "Invalid email or password"
-                ));
+                .body(Map.of("error", "Unauthorized", "message", "Invalid email or password"));
     }
 
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiError> handleAll(Exception ex, HttpServletRequest request) {
+        log.error("Unhandled exception at {}", request.getRequestURI(), ex);
+        return build(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error", ex.getMessage(), request);
+    }
+
+    private ResponseEntity<ApiError> build(HttpStatus status, String error, String message, HttpServletRequest request) {
+        ApiError apiError = new ApiError(LocalDateTime.now(), status.value(), error, message, request.getRequestURI());
+        return ResponseEntity.status(status).body(apiError);
+    }
 }

@@ -47,7 +47,7 @@ export const loginRequest = async (credentials) => {
     if (response.ok && data.accessToken && data.refreshToken) {
       return { accessToken: data.accessToken, refreshToken: data.refreshToken };
     }
-    return { error: data.error || data.message || 'Login failed' };
+    return { error: data.message || data.error || 'Login failed' };
   } catch (err) {
     clearTimeout(timeoutId);
     if (err.name === 'AbortError') return { error: 'Request timed out. Please try again.' };
@@ -66,7 +66,7 @@ export const sendOtpRequest = async ({ emailOrPhone }) => {
     if (response.ok) return { success: true };
 
     const data = await response.json().catch(() => ({}));
-    return { error: data.error || data.message || 'Failed to send OTP' };
+    return { error: data.message || data.error || 'Failed to send OTP' };
   } catch {
     return { error: 'Network error. Please try again.' };
   }
@@ -85,7 +85,7 @@ export const verifyOtpRequest = async ({ emailOrPhone, otp }) => {
     if (response.ok && data.accessToken && data.refreshToken) {
       return { accessToken: data.accessToken, refreshToken: data.refreshToken };
     }
-    return { error: data.error || data.message || 'OTP verification failed' };
+    return { error: data.message || data.error || 'OTP verification failed' };
   } catch {
     return { error: 'Network error. Please try again.' };
   }

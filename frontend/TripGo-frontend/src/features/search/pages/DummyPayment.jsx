@@ -10,6 +10,19 @@ import { confirmBookingPayment, createPaymentIntent } from '../../../api/payment
 
 const stripePromise = STRIPE_PUBLISHABLE_KEY ? loadStripe(STRIPE_PUBLISHABLE_KEY) : null;
 const PAYMENT_STORAGE_KEY = 'tripgo_pending_payment';
+const SAVED_CARDS_KEY = 'tripgo_saved_cards';
+
+const loadSavedCards = () => {
+  try { return JSON.parse(localStorage.getItem(SAVED_CARDS_KEY) || '[]'); } catch { return []; }
+};
+
+const BRAND_STYLES = {
+  visa:       { label: 'VISA', bg: 'from-[#1a1f71] to-[#0f5298]' },
+  mastercard: { label: 'MC',   bg: 'from-orange-600 to-red-600' },
+  amex:       { label: 'AMEX', bg: 'from-teal-700 to-teal-500' },
+  discover:   { label: 'DISC', bg: 'from-orange-400 to-yellow-400' },
+};
+const getCardBrand = (brand) => BRAND_STYLES[brand?.toLowerCase()] || { label: (brand || 'CARD').toUpperCase().slice(0, 4), bg: 'from-slate-700 to-slate-500' };
 const PAYMENT_INTENT_CACHE_KEY = 'tripgo_payment_intent_cache';
 const PAYMENT_FLOW_STORAGE_KEY = 'tripgo_payment_flow_state';
 
@@ -132,13 +145,14 @@ const buildPaymentPayload = (booking, totalAmount, gstAmount, payableAmount) => 
   };
 };
 
-const CheckoutForm = ({ booking, paymentMeta, payableAmount, lockSecondsLeft }) => {
+const CheckoutForm = ({ booking, paymentMeta, payableAmount, lockSecondsLeft, savedCards, clientSecret }) => {
   const stripe = useStripe();
   const elements = useElements();
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [paymentElementReady, setPaymentElementReady] = useState(false);
+  const [selectedSource, setSelectedSource] = useState(savedCards?.length ? savedCards[0].id : 'new');
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -221,29 +235,126 @@ const CheckoutForm = ({ booking, paymentMeta, payableAmount, lockSecondsLeft }) 
     }
   };
 
+  const handleSavedCardPayment = async () => {
+    if (!stripe) return;
+    if (lockSecondsLeft <= 0) { toast.error('Seat lock expired. Please select seats again.'); navigate(ROUTES.BOOKING, { state: booking }); return; }
+    setSubmitting(true);
+    setError('');
+    try {
+      const result = await stripe.confirmCardPayment(clientSecret, { payment_method: selectedSource });
+      if (result.error) { setError(result.error.message); toast.error(result.error.message); return; }
+      const pi = result.paymentIntent;
+      if (pi?.status === 'succeeded' && paymentMeta?.bookingId) {
+        await confirmBookingPayment(paymentMeta.bookingId, pi.id);
+        localStorage.setItem(PAYMENT_STORAGE_KEY, JSON.stringify({ ...paymentMeta, paymentIntentId: pi.id }));
+        sessionStorage.removeItem(PAYMENT_INTENT_CACHE_KEY);
+        navigate(`${ROUTES.PAYMENT_SUCCESS}?payment_intent=${encodeURIComponent(pi.id)}&redirect_status=succeeded`, { replace: true });
+      } else {
+        navigate(ROUTES.PAYMENT_SUCCESS, { replace: true });
+      }
+    } catch (e) {
+      setError(e?.message || 'Payment failed. Please try again.');
+      toast.error(e?.message || 'Payment failed.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const usingSavedCard = selectedSource !== 'new';
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <div className="space-y-4">
       {submitting ? <CenterScreenLoader label="Processing your payment..." /> : null}
-      <div className="rounded-xl bg-white ring-1 ring-slate-200 p-5 shadow-sm">
-        <PaymentElement
-          onReady={() => { setPaymentElementReady(true); setError(''); }}
-          onLoaderStart={() => setPaymentElementReady(false)}
-          onLoadError={(loadError) => {
-            setPaymentElementReady(false);
-            setError(loadError?.error?.message || 'Failed to load the payment form. Please refresh and try again.');
-          }}
-        />
-      </div>
-      {error ? <p className="text-sm text-red-500">{error}</p> : null}
-      <button
-        type="submit"
-        disabled={!stripe || !elements || !paymentElementReady || submitting || lockSecondsLeft <= 0}
-        className="rounded-xl bg-[#002046] px-6 py-3.5 text-base font-black text-white hover:bg-[#003a80] transition-colors disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-2"
-      >
-        <span className="material-symbols-outlined text-lg">payments</span>
-        {submitting ? 'Processing payment...' : `Pay ₹${payableAmount}`}
-      </button>
-    </form>
+
+      {/* Saved cards section */}
+      {savedCards?.length > 0 && (
+        <div className="rounded-xl bg-white ring-1 ring-slate-200 overflow-hidden shadow-sm">
+          <p className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">Saved Cards</p>
+          <div className="divide-y divide-slate-100">
+            {savedCards.map(card => {
+              const brand = getCardBrand(card.brand);
+              const expiry = `${String(card.exp_month).padStart(2, '0')}/${String(card.exp_year).slice(-2)}`;
+              const selected = selectedSource === card.id;
+              return (
+                <button
+                  key={card.id}
+                  type="button"
+                  onClick={() => setSelectedSource(card.id)}
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors ${selected ? 'bg-[#002046]/[0.04]' : 'hover:bg-slate-50'}`}
+                >
+                  <div className={`w-12 h-8 rounded-lg bg-gradient-to-br ${brand.bg} flex items-center justify-center flex-shrink-0`}>
+                    <span className="text-[9px] font-black text-white tracking-wider">{brand.label}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-slate-900">•••• {card.last4}</p>
+                    <p className="text-xs text-slate-500">{card.name} · {expiry}</p>
+                  </div>
+                  <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors ${selected ? 'border-[#002046] bg-[#002046]' : 'border-slate-300'}`}>
+                    {selected && <div className="w-full h-full rounded-full scale-50 bg-white" />}
+                  </div>
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() => setSelectedSource('new')}
+              className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors ${!usingSavedCard ? 'bg-[#002046]/[0.04]' : 'hover:bg-slate-50'}`}
+            >
+              <div className="w-12 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+                <span className="material-symbols-outlined text-slate-500 text-base">add_card</span>
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-slate-900">Use a new card</p>
+              </div>
+              <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors ${!usingSavedCard ? 'border-[#002046] bg-[#002046]' : 'border-slate-300'}`}>
+                {!usingSavedCard && <div className="w-full h-full rounded-full scale-50 bg-white" />}
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Stripe PaymentElement — only for new card */}
+      {!usingSavedCard && (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="rounded-xl bg-white ring-1 ring-slate-200 p-5 shadow-sm">
+            <PaymentElement
+              onReady={() => { setPaymentElementReady(true); setError(''); }}
+              onLoaderStart={() => setPaymentElementReady(false)}
+              onLoadError={(loadError) => {
+                setPaymentElementReady(false);
+                setError(loadError?.error?.message || 'Failed to load the payment form. Please refresh and try again.');
+              }}
+            />
+          </div>
+          {error ? <p className="text-sm text-red-500">{error}</p> : null}
+          <button
+            type="submit"
+            disabled={!stripe || !elements || !paymentElementReady || submitting || lockSecondsLeft <= 0}
+            className="w-full rounded-xl bg-[#002046] px-6 py-3.5 text-base font-black text-white hover:bg-[#003a80] transition-colors disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            <span className="material-symbols-outlined text-lg">payments</span>
+            {submitting ? 'Processing payment...' : `Pay ₹${payableAmount}`}
+          </button>
+        </form>
+      )}
+
+      {/* Pay with saved card */}
+      {usingSavedCard && (
+        <div className="space-y-3">
+          {error ? <p className="text-sm text-red-500">{error}</p> : null}
+          <button
+            type="button"
+            onClick={handleSavedCardPayment}
+            disabled={submitting || lockSecondsLeft <= 0}
+            className="w-full rounded-xl bg-[#002046] px-6 py-3.5 text-base font-black text-white hover:bg-[#003a80] transition-colors disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            <span className="material-symbols-outlined text-lg">credit_card</span>
+            {submitting ? 'Processing payment...' : `Pay ₹${payableAmount}`}
+          </button>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -251,6 +362,7 @@ const DummyPayment = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const booking = location.state?.bus ? location.state : (readStoredPaymentFlow() || {});
+  const savedCards = loadSavedCards();
   const [clientSecret, setClientSecret] = useState('');
   const [paymentMeta, setPaymentMeta] = useState(null);
   const [creatingIntent, setCreatingIntent] = useState(false);
@@ -269,10 +381,14 @@ const DummyPayment = () => {
     [booking?.selectedFare]
   );
 
+  const promoResult = booking?.promoResult || null;
+  const discountAmount = promoResult ? Math.round(Number(promoResult.discountAmount || 0)) : 0;
+
   const totalFare = useMemo(() => perSeatTotal * seatCount, [perSeatTotal, seatCount]);
   const gstAmount = useMemo(() => perSeatGst * seatCount, [perSeatGst, seatCount]);
   const totalAmount = useMemo(() => (gstAmount > 0 ? perSeatBase * seatCount : totalFare), [gstAmount, perSeatBase, seatCount, totalFare]);
-  const payableAmount = useMemo(() => (gstAmount > 0 ? totalAmount + gstAmount : totalFare), [gstAmount, totalAmount, totalFare]);
+  const grossAmount = useMemo(() => (gstAmount > 0 ? totalAmount + gstAmount : totalFare), [gstAmount, totalAmount, totalFare]);
+  const payableAmount = useMemo(() => Math.max(0, grossAmount - discountAmount), [grossAmount, discountAmount]);
 
   useEffect(() => {
     if (!booking?.bus) return;
@@ -464,6 +580,8 @@ const DummyPayment = () => {
                       paymentMeta={paymentMeta}
                       payableAmount={payableAmount}
                       lockSecondsLeft={lockSecondsLeft}
+                      savedCards={savedCards}
+                      clientSecret={clientSecret}
                     />
                   </Elements>
                 ) : (
@@ -509,11 +627,40 @@ const DummyPayment = () => {
                 </div>
               ))}
 
+              {/* Subtotal before discount */}
+              {discountAmount > 0 && (
+                <div className="flex items-center justify-between rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3 text-sm">
+                  <span className="text-slate-500">Subtotal</span>
+                  <span className="font-bold text-slate-900">₹{grossAmount}</span>
+                </div>
+              )}
+
+              {/* Promo discount row */}
+              {discountAmount > 0 && (
+                <div className="flex items-center justify-between rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-4 py-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-base text-emerald-600">local_offer</span>
+                    <span className="text-emerald-700 font-semibold">Promo ({promoResult.code})</span>
+                  </div>
+                  <span className="font-bold text-emerald-700">−₹{discountAmount}</span>
+                </div>
+              )}
+
               {/* Total payable — navy gradient */}
               <div className="rounded-xl bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-4 py-4 text-white">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold opacity-80">Total payable</span>
-                  <span className="text-2xl font-black">₹{payableAmount}</span>
+                  <div>
+                    <span className="text-sm font-semibold opacity-80">Total payable</span>
+                    {discountAmount > 0 && (
+                      <p className="text-[11px] opacity-60 mt-0.5">After ₹{discountAmount} discount</p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    {discountAmount > 0 && (
+                      <p className="text-sm line-through opacity-50">₹{grossAmount}</p>
+                    )}
+                    <span className="text-2xl font-black">₹{payableAmount}</span>
+                  </div>
                 </div>
               </div>
 

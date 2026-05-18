@@ -11,6 +11,7 @@ import {
 } from '../../../api/routeService';
 import { getDrivers, assignDriverToSchedule } from '../../../api/operatorDriverService';
 import { getBuses } from '../../../api/busService';
+import { apiPost } from '../../../api/apiClient';
 import { toast } from 'sonner';
 import { ROUTES } from '../../../shared/constants/routes';
 import CenterScreenLoader from '../../../shared/components/ui/CenterScreenLoader';
@@ -57,6 +58,8 @@ const RouteDetail = () => {
   const [drivers, setDrivers] = useState([]);
   const [buses, setBuses] = useState([]);
   const [loadingPage, setLoadingPage] = useState(true);
+  const [schedulePage, setSchedulePage] = useState(0);
+  const SCHED_PAGE_SIZE = 10;
 
   /* ─── modals ─── */
   const [addScheduleModal, setAddScheduleModal] = useState({ open: false, busId: '', departureTime: '', arrivalTime: '', frequency: 'DAILY' });
@@ -102,7 +105,9 @@ const RouteDetail = () => {
         setSegments(segs || []);
         const activeBuses = Array.isArray(busesData) ? busesData.filter(b => b?.active) : [];
         setBuses(activeBuses);
-        const normScheds = (scheds || []).map(s => normalizeSchedule(s, activeBuses));
+        const normScheds = (scheds || [])
+          .map(s => normalizeSchedule(s, activeBuses))
+          .sort((a, b) => new Date(b.departureTime) - new Date(a.departureTime));
         setSchedules(normScheds);
         setFares(Array.isArray(faresData) ? faresData : []);
         setDrivers(normalizeList(driversData));
@@ -136,13 +141,14 @@ const RouteDetail = () => {
   /* ─── schedule actions ─── */
   const submitAddSchedule = async () => {
     const { busId, departureTime, arrivalTime, frequency } = addScheduleModal;
+    if (segments.length === 0) { toast.error('Add at least one segment to this route before creating a schedule.'); return; }
     if (!busId||!departureTime||!arrivalTime) { toast.error('All fields required'); return; }
     const dep = new Date(departureTime), arr = new Date(arrivalTime);
     if (arr <= dep) { toast.error('Arrival must be after departure'); return; }
     await run('Creating schedule...', async () => {
       await createSchedule(routeId, { busId, departureTime: dep.toISOString(), arrivalTime: arr.toISOString(), frequency });
       const fresh = await getRouteSchedules(routeId);
-      setSchedules((fresh||[]).map(s => normalizeSchedule(s)));
+      setSchedules((fresh||[]).map(s => normalizeSchedule(s)).sort((a, b) => new Date(b.departureTime) - new Date(a.departureTime)));
       toast.success('Schedule created');
       setAddScheduleModal({ open: false, busId: '', departureTime: '', arrivalTime: '', frequency: 'DAILY' });
     });
@@ -180,6 +186,25 @@ const RouteDetail = () => {
       patchSchedule(id, { tripStatus: res?.tripStatus||'COMPLETED', actualArrivalTime: res?.actualArrivalTime||new Date().toISOString() });
       toast.success('Trip completed');
     });
+  };
+  const handleShareLocation = (scheduleId) => {
+    if (!navigator.geolocation) { toast.error('Geolocation not supported by your browser'); return; }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await apiPost(`/tracking/${scheduleId}`, {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            speedKmph: pos.coords.speed != null ? pos.coords.speed * 3.6 : 0,
+            heading: pos.coords.heading ?? 0,
+          });
+          toast.success('Location shared with passengers');
+        } catch {
+          toast.error('Failed to share location');
+        }
+      },
+      () => toast.error('Location access denied. Please allow location in browser settings.')
+    );
   };
   const submitDelay = async () => {
     const { id, minutes, reason } = delayModal;
@@ -483,18 +508,23 @@ const RouteDetail = () => {
             </div>
 
             {/* ── SCHEDULES TAB ── */}
-            {activeTab === 'schedules' && (
+            {activeTab === 'schedules' && (() => {
+              const totalSchedPages = Math.ceil(schedules.length / SCHED_PAGE_SIZE);
+              const pagedSchedules = schedules.slice(schedulePage * SCHED_PAGE_SIZE, (schedulePage + 1) * SCHED_PAGE_SIZE);
+              return (
               <div>
+                {/* Sticky action bar */}
                 {selectedScheduleIds.size > 0 && (() => {
                   const sel = schedules.filter(s => selectedScheduleIds.has(s.id));
                   const one = sel.length === 1 ? sel[0] : null;
                   const ts = one ? normalizeTripStatus(one) : null;
                   return (
-                    <div className="flex items-center gap-2 px-5 py-2.5 bg-[#002046]/[0.03] border-b border-slate-100 flex-wrap">
+                    <div className="sticky top-0 z-20 flex items-center gap-2 px-5 py-2.5 bg-white border-b border-slate-200 shadow-sm flex-wrap">
                       <span className="px-2.5 py-0.5 rounded-full bg-[#002046] text-white text-[10px] font-black">{selectedScheduleIds.size} selected</span>
                       {one && <button onClick={() => openAssignDriver(one)} className="flex items-center gap-1 px-3.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors border border-slate-200"><span className="material-symbols-outlined text-xs">badge</span>Assign Driver</button>}
                       {one && (ts==='SCHEDULED'||ts==='DELAYED') && <button onClick={() => handleStartTrip(one.id)} disabled={Boolean(blockingLoader)} className="flex items-center gap-1 px-3.5 py-1 rounded-full bg-blue-500 text-white text-xs font-semibold hover:bg-blue-600 disabled:opacity-60 transition-colors"><span className="material-symbols-outlined text-xs">play_arrow</span>Start Trip</button>}
                       {one && ts==='STARTED' && <button onClick={() => handleCompleteTrip(one.id)} disabled={Boolean(blockingLoader)} className="flex items-center gap-1 px-3.5 py-1 rounded-full bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 disabled:opacity-60 transition-colors"><span className="material-symbols-outlined text-xs">task_alt</span>Complete Trip</button>}
+                      {one && ts==='STARTED' && <button onClick={() => handleShareLocation(one.id)} className="flex items-center gap-1 px-3.5 py-1 rounded-full bg-sky-500 text-white text-xs font-semibold hover:bg-sky-600 transition-colors"><span className="material-symbols-outlined text-xs">my_location</span>Share Location</button>}
                       {one && ts!=='COMPLETED' && <button onClick={() => setDelayModal({ id: one.id, minutes: getDelayMinutes(one)?String(getDelayMinutes(one)):'', reason: one.delayReason||'' })} className="flex items-center gap-1 px-3.5 py-1 rounded-full bg-amber-500 text-white text-xs font-semibold hover:bg-amber-600 transition-colors"><span className="material-symbols-outlined text-xs">warning</span>Mark Delay</button>}
                       {one && <button onClick={() => setEditScheduleModal({ id: one.id, busId: String(one.bus?.id||''), departureTime: formatDTL(one.departureTime), arrivalTime: formatDTL(one.arrivalTime), frequency: one.frequency||'DAILY' })} className="flex items-center gap-1 px-3.5 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold hover:bg-slate-200 transition-colors border border-slate-200"><span className="material-symbols-outlined text-xs">edit</span>Edit</button>}
                       <button onClick={handleBulkDeleteSchedules} disabled={Boolean(blockingLoader)} className="flex items-center gap-1 px-3.5 py-1 rounded-full bg-rose-500 text-white text-xs font-semibold hover:bg-rose-600 disabled:opacity-60 transition-colors"><span className="material-symbols-outlined text-xs">delete</span>Delete</button>
@@ -517,7 +547,7 @@ const RouteDetail = () => {
                       <thead>
                         <tr className="border-b border-slate-100 bg-slate-50/80">
                           <th className="pl-5 pr-2 py-3.5 w-10">
-                            <input type="checkbox" checked={selectedScheduleIds.size === schedules.length && schedules.length > 0} onChange={() => setSelectedScheduleIds(selectedScheduleIds.size === schedules.length ? new Set() : new Set(schedules.map(s => s.id)))} className="w-4 h-4 rounded accent-[#002046] cursor-pointer" />
+                            <input type="checkbox" checked={selectedScheduleIds.size === pagedSchedules.length && pagedSchedules.length > 0} onChange={() => setSelectedScheduleIds(selectedScheduleIds.size === pagedSchedules.length ? new Set() : new Set(pagedSchedules.map(s => s.id)))} className="w-4 h-4 rounded accent-[#002046] cursor-pointer" />
                           </th>
                           <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Bus</th>
                           <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Departure</th>
@@ -529,7 +559,7 @@ const RouteDetail = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {schedules.map(schedule => {
+                        {pagedSchedules.map(schedule => {
                           const tripStatus = normalizeTripStatus(schedule);
                           const busInitials = (schedule.bus?.name||'BUS').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
                           const driverLabel = getDriverName(schedule.driver||schedule.assignedDriver||schedule.driverName||schedule.assignedDriverName);
@@ -589,6 +619,11 @@ const RouteDetail = () => {
                                       <span className="material-symbols-outlined text-sm">task_alt</span>
                                     </button>
                                   )}
+                                  {tripStatus==='STARTED' && (
+                                    <button onClick={() => handleShareLocation(schedule.id)} title="Share Location" className="w-8 h-8 rounded-lg bg-sky-50 border border-sky-200 text-sky-600 flex items-center justify-center hover:bg-sky-100 transition-colors">
+                                      <span className="material-symbols-outlined text-sm">my_location</span>
+                                    </button>
+                                  )}
                                   {tripStatus!=='COMPLETED' && (
                                     <button onClick={() => setDelayModal({ id: schedule.id, minutes: getDelayMinutes(schedule)?String(getDelayMinutes(schedule)):'', reason: schedule.delayReason||'' })} title="Mark Delay" className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center hover:bg-amber-100 transition-colors">
                                       <span className="material-symbols-outlined text-sm">warning</span>
@@ -609,8 +644,28 @@ const RouteDetail = () => {
                     </table>
                   )}
                 </div>
+                {/* Pagination */}
+                {schedules.length > SCHED_PAGE_SIZE && (
+                  <div className="border-t border-slate-100 px-5 py-3.5 flex items-center justify-between gap-4">
+                    <p className="text-sm text-slate-400">
+                      Showing {schedulePage * SCHED_PAGE_SIZE + 1}–{Math.min(schedules.length, (schedulePage + 1) * SCHED_PAGE_SIZE)} of {schedules.length}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setSchedulePage(p => Math.max(0, p - 1))} disabled={schedulePage === 0} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30 transition-colors">
+                        <span className="material-symbols-outlined text-sm">chevron_left</span>
+                      </button>
+                      {Array.from({ length: totalSchedPages }, (_, i) => (
+                        <button key={i} onClick={() => setSchedulePage(i)} className={`w-8 h-8 rounded-lg text-sm font-semibold transition-colors ${schedulePage === i ? 'bg-[#002046] text-white' : 'text-slate-500 hover:bg-slate-100'}`}>{i + 1}</button>
+                      ))}
+                      <button onClick={() => setSchedulePage(p => Math.min(totalSchedPages - 1, p + 1))} disabled={schedulePage >= totalSchedPages - 1} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30 transition-colors">
+                        <span className="material-symbols-outlined text-sm">chevron_right</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
+              );
+            })()}
 
             {/* ── SEGMENTS TAB ── */}
             {activeTab === 'segments' && (
@@ -1081,7 +1136,17 @@ const RouteDetail = () => {
               <h3 className="font-extrabold text-base">Add Schedule</h3>
             </div>
             <div className="px-6 py-4 space-y-3">
-              <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Bus *</label><select value={addScheduleModal.busId} onChange={e=>setAddScheduleModal(p=>({...p,busId:e.target.value}))} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white outline-none focus:ring-1 focus:ring-[#002046]"><option value="">Select bus</option>{buses.map(b=><option key={b.id} value={b.id}>{b.name} ({b.busCode}) · {b.busType?.replace(/_/g,' ')}</option>)}</select></div>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Bus *</label>
+                <select value={addScheduleModal.busId} onChange={e=>setAddScheduleModal(p=>({...p,busId:e.target.value}))} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white outline-none focus:ring-1 focus:ring-[#002046]">
+                  <option value="">Select bus</option>
+                  {buses.map(b=><option key={b.id} value={b.id}>{b.name} ({b.busCode}) · {b.busType?.replace(/_/g,' ')}</option>)}
+                </select>
+                {buses.length === 0
+                  ? <p className="text-xs text-amber-600 mt-1.5 flex items-center gap-1"><span className="material-symbols-outlined text-sm">warning</span>No approved buses yet. Add a bus and wait for admin approval first.</p>
+                  : <p className="text-xs text-slate-400 mt-1.5">Only admin-approved buses are shown.</p>
+                }
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Departure *</label><input type="datetime-local" value={addScheduleModal.departureTime} onChange={e=>setAddScheduleModal(p=>({...p,departureTime:e.target.value}))} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white outline-none focus:ring-1 focus:ring-[#002046]" /></div>
                 <div><label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Arrival *</label><input type="datetime-local" value={addScheduleModal.arrivalTime} onChange={e=>setAddScheduleModal(p=>({...p,arrivalTime:e.target.value}))} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white outline-none focus:ring-1 focus:ring-[#002046]" /></div>

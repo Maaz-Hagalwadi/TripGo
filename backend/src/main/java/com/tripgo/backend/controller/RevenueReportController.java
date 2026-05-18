@@ -14,6 +14,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.*;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -27,75 +28,99 @@ public class RevenueReportController {
     private final RouteRepository routeRepository;
     private final BusRepository busRepository;
 
-    // GET /operator/reports/revenue
     @GetMapping("/revenue")
-    public ResponseEntity<?> getRevenueReport(
-            @RequestParam(required = false) String period, // daily, monthly, all
-            @RequestParam(required = false) String date,   // YYYY-MM-DD for daily
-            @RequestParam(required = false) String month,  // YYYY-MM for monthly
-            Authentication auth) {
+    public ResponseEntity<?> getRevenueReport(Authentication auth) {
 
         Operator operator = getOperator(auth);
-        List<Booking> allBookings = bookingRepository.findByOperatorAndStatus(operator, BookingStatus.CONFIRMED);
+        List<Booking> confirmed  = bookingRepository.findByOperatorAndStatus(operator, BookingStatus.CONFIRMED);
+        List<Booking> cancelled  = bookingRepository.findByOperatorAndStatus(operator, BookingStatus.CANCELLED);
 
-        // Total Revenue
-        BigDecimal totalRevenue = allBookings.stream()
+        // ── Totals ──────────────────────────────────────────────────────────
+        BigDecimal totalRevenue = confirmed.stream()
                 .map(Booking::getPayableAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // Per Route Revenue
-        Map<String, BigDecimal> revenueByRoute = allBookings.stream()
+        int totalBookings  = confirmed.size();
+        int totalCancelled = cancelled.size();
+        int totalAll       = totalBookings + totalCancelled;
+        double cancellationRate = totalAll > 0
+                ? BigDecimal.valueOf(totalCancelled * 100.0 / totalAll)
+                             .setScale(1, RoundingMode.HALF_UP)
+                             .doubleValue()
+                : 0.0;
+
+        // ── Revenue by route & bus ───────────────────────────────────────────
+        Map<String, BigDecimal> revenueByRoute = confirmed.stream()
                 .collect(Collectors.groupingBy(
                         b -> b.getRouteSchedule().getRoute().getOrigin() + " → " +
                              b.getRouteSchedule().getRoute().getDestination(),
                         Collectors.reducing(BigDecimal.ZERO, Booking::getPayableAmount, BigDecimal::add)
                 ));
 
-        // Per Bus Revenue
-        Map<String, BigDecimal> revenueByBus = allBookings.stream()
+        Map<String, BigDecimal> revenueByBus = confirmed.stream()
                 .collect(Collectors.groupingBy(
                         b -> b.getRouteSchedule().getBus().getName(),
                         Collectors.reducing(BigDecimal.ZERO, Booking::getPayableAmount, BigDecimal::add)
                 ));
 
-        // Daily Revenue (last 7 days)
-        Map<String, BigDecimal> dailyRevenue = new LinkedHashMap<>();
-        for (int i = 6; i >= 0; i--) {
-            LocalDate day = LocalDate.now().minusDays(i);
-            Instant start = day.atStartOfDay(ZoneOffset.UTC).toInstant();
-            Instant end = day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        // ── Bookings per route (count) ───────────────────────────────────────
+        Map<String, Long> bookingsByRoute = confirmed.stream()
+                .collect(Collectors.groupingBy(
+                        b -> b.getRouteSchedule().getRoute().getOrigin() + " → " +
+                             b.getRouteSchedule().getRoute().getDestination(),
+                        Collectors.counting()
+                ));
 
-            BigDecimal dayRevenue = allBookings.stream()
-                    .filter(b -> b.getCreatedAt().isAfter(start) && b.getCreatedAt().isBefore(end))
+        // ── Daily revenue & booking count (last 30 days) ─────────────────────
+        Map<String, BigDecimal> dailyRevenue   = new LinkedHashMap<>();
+        Map<String, Long>       dailyBookings  = new LinkedHashMap<>();
+        for (int i = 29; i >= 0; i--) {
+            LocalDate day   = LocalDate.now().minusDays(i);
+            Instant   start = day.atStartOfDay(ZoneOffset.UTC).toInstant();
+            Instant   end   = day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+            String    key   = day.toString();
+
+            BigDecimal rev = confirmed.stream()
+                    .filter(b -> !b.getCreatedAt().isBefore(start) && b.getCreatedAt().isBefore(end))
                     .map(Booking::getPayableAmount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            dailyRevenue.put(day.toString(), dayRevenue);
+            long cnt = confirmed.stream()
+                    .filter(b -> !b.getCreatedAt().isBefore(start) && b.getCreatedAt().isBefore(end))
+                    .count();
+
+            dailyRevenue.put(key, rev);
+            dailyBookings.put(key, cnt);
         }
 
-        // Monthly Revenue (last 6 months)
+        // ── Monthly revenue (last 12 months) ────────────────────────────────
         Map<String, BigDecimal> monthlyRevenue = new LinkedHashMap<>();
-        for (int i = 5; i >= 0; i--) {
-            YearMonth ym = YearMonth.now().minusMonths(i);
-            Instant start = ym.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-            Instant end = ym.atEndOfMonth().plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        for (int i = 11; i >= 0; i--) {
+            YearMonth ym    = YearMonth.now().minusMonths(i);
+            Instant   start = ym.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+            Instant   end   = ym.atEndOfMonth().plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
 
-            BigDecimal monthRevenue = allBookings.stream()
-                    .filter(b -> b.getCreatedAt().isAfter(start) && b.getCreatedAt().isBefore(end))
+            BigDecimal rev = confirmed.stream()
+                    .filter(b -> !b.getCreatedAt().isBefore(start) && b.getCreatedAt().isBefore(end))
                     .map(Booking::getPayableAmount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            monthlyRevenue.put(ym.toString(), monthRevenue);
+            monthlyRevenue.put(ym.toString(), rev);
         }
 
-        return ResponseEntity.ok(Map.of(
-                "totalRevenue", totalRevenue,
-                "totalBookings", allBookings.size(),
-                "revenueByRoute", revenueByRoute,
-                "revenueByBus", revenueByBus,
-                "dailyRevenue", dailyRevenue,
-                "monthlyRevenue", monthlyRevenue
-        ));
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("totalRevenue",      totalRevenue);
+        result.put("totalBookings",     totalBookings);
+        result.put("totalCancelled",    totalCancelled);
+        result.put("cancellationRate",  cancellationRate);
+        result.put("revenueByRoute",    revenueByRoute);
+        result.put("revenueByBus",      revenueByBus);
+        result.put("bookingsByRoute",   bookingsByRoute);
+        result.put("dailyRevenue",      dailyRevenue);
+        result.put("monthlyRevenue",    monthlyRevenue);
+        result.put("dailyBookings",     dailyBookings);
+
+        return ResponseEntity.ok(result);
     }
 
     private Operator getOperator(Authentication auth) {

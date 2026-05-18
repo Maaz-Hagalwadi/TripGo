@@ -14,8 +14,11 @@ export const ROUTES = {
   ADMIN_OPERATORS: '/admin/operators',
   ADMIN_REVIEWS: '/admin/reviews',
   ADMIN_USERS: '/admin/users',
+  ADMIN_PROMOS: '/admin/promos',
   ADMIN_SETTINGS: '/admin/settings',
   ADMIN_SUPPORT: '/admin/support',
+  ADMIN_ANALYTICS: '/admin/analytics',
+  ADMIN_AUDIT_LOGS: '/admin/audit-logs',
 
   DASHBOARD: '/dashboard',
   USER_BOOKINGS: '/bookings',
@@ -41,6 +44,7 @@ export const ROUTES = {
   OPERATOR_EARNINGS: '/operator/earnings',
   OPERATOR_SETTINGS: '/operator/settings',
   OPERATOR_SUPPORT: '/operator/support',
+  OPERATOR_HOW_IT_WORKS: '/operator/how-it-works',
   PAYMENT: '/payment',
   PAYMENT_SUCCESS: '/booking/success',
 };

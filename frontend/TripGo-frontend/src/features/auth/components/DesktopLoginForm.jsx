@@ -174,7 +174,6 @@ const DesktopLoginForm = () => {
             <TripGoIcon className="w-7 h-7 text-[#0B1F3A] lg:hidden" />
             <span className="font-black text-xl lg:text-2xl tracking-tight">TripGo</span>
           </button>
-          <a href="#" className="text-sm font-semibold text-[#44474e] hover:text-[#0B1F3A] transition-colors">Support</a>
         </div>
 
         <div className="flex-grow flex items-center justify-center p-5 sm:p-8 lg:p-12">
@@ -217,107 +216,157 @@ const DesktopLoginForm = () => {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-5">
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-[#111827]">Email or Phone</label>
-                <div className="relative">
-                  <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">mail</span>
-                  <input
-                    className={inputCls(errors.emailOrPhone)}
-                    placeholder="name@example.com or mobile number"
-                    type="text"
-                    value={formData.emailOrPhone}
-                    onChange={(e) => {
-                      updateField('emailOrPhone', e.target.value);
-                      setOtpSent(false);
-                    }}
-                  />
-                </div>
-                {errors.emailOrPhone && <p className="text-[#B42318] text-xs">{errors.emailOrPhone}</p>}
-              </div>
 
-              {loginMode === 'password' ? (
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <label className="text-sm font-semibold text-[#111827]">Password</label>
-                    <button type="button" onClick={() => navigate('/forgot-password')} className="text-sm font-semibold text-[#0B1F3A] hover:underline">
-                      Forgot Password?
+              {/* ── PASSWORD MODE ── */}
+              {loginMode === 'password' && (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold text-[#111827]">Email or Phone</label>
+                    <div className="relative">
+                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">mail</span>
+                      <input
+                        className={inputCls(errors.emailOrPhone)}
+                        placeholder="Enter your mail or mobile number"
+                        type="text"
+                        value={formData.emailOrPhone}
+                        onChange={(e) => updateField('emailOrPhone', e.target.value)}
+                      />
+                    </div>
+                    {errors.emailOrPhone && <p className="text-[#B42318] text-xs">{errors.emailOrPhone}</p>}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center">
+                      <label className="text-sm font-semibold text-[#111827]">Password</label>
+                      <button type="button" onClick={() => navigate('/forgot-password')} className="text-sm font-semibold text-[#0B1F3A] hover:underline">
+                        Forgot Password?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">lock</span>
+                      <input
+                        className={`${inputCls(errors.password)} pr-12`}
+                        placeholder="Enter your password"
+                        type={showPassword ? 'text' : 'password'}
+                        value={formData.password}
+                        onChange={(e) => updateField('password', e.target.value)}
+                      />
+                      <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#98a2b3] hover:text-[#111827] transition-colors">
+                        <span className="material-symbols-outlined text-[20px]">{showPassword ? 'visibility_off' : 'visibility'}</span>
+                      </button>
+                    </div>
+                    {errors.password && <p className="text-[#B42318] text-xs">{errors.password}</p>}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-4 px-6 bg-[#0B1F3A] text-white text-sm font-bold rounded-xl hover:bg-[#102A4C] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 shadow-[0_14px_30px_rgba(11,31,58,0.22)]"
+                  >
+                    {isLoading ? (
+                      <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Signing In...</>
+                    ) : (
+                      <><span>Sign In</span><span className="material-symbols-outlined text-[20px]">arrow_forward</span></>
+                    )}
+                  </button>
+                </>
+              )}
+
+              {/* ── OTP MODE — STEP 1: enter email/phone ── */}
+              {loginMode === 'otp' && !otpSent && (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold text-[#111827]">Email or Phone</label>
+                    <div className="relative">
+                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">mail</span>
+                      <input
+                        className={inputCls(errors.emailOrPhone)}
+                        placeholder="Enter your mail or mobile number"
+                        type="text"
+                        value={formData.emailOrPhone}
+                        onChange={(e) => updateField('emailOrPhone', e.target.value)}
+                      />
+                    </div>
+                    {errors.emailOrPhone && <p className="text-[#B42318] text-xs">{errors.emailOrPhone}</p>}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleSendOtp}
+                    disabled={isOtpSending}
+                    className="w-full py-4 px-6 bg-[#0B1F3A] text-white text-sm font-bold rounded-xl hover:bg-[#102A4C] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 shadow-[0_14px_30px_rgba(11,31,58,0.22)]"
+                  >
+                    {isOtpSending ? (
+                      <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Sending OTP...</>
+                    ) : (
+                      <><span>Send OTP</span><span className="material-symbols-outlined text-[20px]">sms</span></>
+                    )}
+                  </button>
+                </>
+              )}
+
+              {/* ── OTP MODE — STEP 2: enter OTP ── */}
+              {loginMode === 'otp' && otpSent && (
+                <>
+                  {/* Locked email row */}
+                  <div className="flex items-center justify-between px-4 py-3 bg-[#f2f4f7] rounded-xl border border-[#e4e8f0]">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="material-symbols-outlined text-[#0B1F3A] text-[18px] shrink-0">mail</span>
+                      <span className="text-sm text-[#111827] font-medium truncate">{formData.emailOrPhone}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setOtpSent(false); updateField('otp', ''); }}
+                      className="text-xs font-bold text-[#0B1F3A] hover:underline shrink-0 ml-3"
+                    >
+                      Change
                     </button>
                   </div>
-                  <div className="relative">
-                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">lock</span>
-                    <input
-                      className={`${inputCls(errors.password)} pr-12`}
-                      placeholder="Enter your password"
-                      type={showPassword ? 'text' : 'password'}
-                      value={formData.password}
-                      onChange={(e) => updateField('password', e.target.value)}
-                    />
-                    <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#98a2b3] hover:text-[#111827] transition-colors">
-                      <span className="material-symbols-outlined text-[20px]">{showPassword ? 'visibility_off' : 'visibility'}</span>
-                    </button>
+
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold text-[#111827]">Enter OTP</label>
+                    <p className="text-xs text-[#667085]">We sent a 6-digit code to your registered email.</p>
+                    <div className="relative">
+                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">pin</span>
+                      <input
+                        className={inputCls(errors.otp)}
+                        placeholder="• • • • • •"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={formData.otp}
+                        onChange={(e) => updateField('otp', e.target.value.replace(/\D/g, ''))}
+                        autoFocus
+                      />
+                    </div>
+                    {errors.otp && <p className="text-[#B42318] text-xs">{errors.otp}</p>}
                   </div>
-                  {errors.password && <p className="text-[#B42318] text-xs">{errors.password}</p>}
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <label className="text-sm font-semibold text-[#111827]">One-Time Password</label>
+
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="w-full py-4 px-6 bg-[#0B1F3A] text-white text-sm font-bold rounded-xl hover:bg-[#102A4C] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 shadow-[0_14px_30px_rgba(11,31,58,0.22)]"
+                  >
+                    {isLoading ? (
+                      <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Verifying...</>
+                    ) : (
+                      <><span>Verify & Sign In</span><span className="material-symbols-outlined text-[20px]">arrow_forward</span></>
+                    )}
+                  </button>
+
+                  <p className="text-center text-xs text-[#667085]">
+                    Didn't receive it?{' '}
                     <button
                       type="button"
                       onClick={handleSendOtp}
                       disabled={isOtpSending}
-                      className="text-sm font-semibold text-[#0B1F3A] hover:underline disabled:opacity-60"
+                      className="font-bold text-[#0B1F3A] hover:underline disabled:opacity-60"
                     >
-                      {isOtpSending ? 'Sending...' : otpSent ? 'Resend OTP' : 'Send OTP'}
+                      {isOtpSending ? 'Sending...' : 'Resend OTP'}
                     </button>
-                  </div>
-                  <div className="relative">
-                    <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">pin</span>
-                    <input
-                      className={inputCls(errors.otp)}
-                      placeholder="Enter OTP"
-                      inputMode="numeric"
-                      value={formData.otp}
-                      onChange={(e) => updateField('otp', e.target.value)}
-                    />
-                  </div>
-                  {errors.otp && <p className="text-[#B42318] text-xs">{errors.otp}</p>}
-                  {otpSent && <p className="text-xs text-[#667085]">OTP sent to your registered email or mobile number.</p>}
-                </div>
+                  </p>
+                </>
               )}
 
-              {loginMode === 'otp' && !otpSent ? (
-                <button
-                  type="button"
-                  onClick={handleSendOtp}
-                  disabled={isOtpSending}
-                  className="w-full py-4 px-6 bg-[#0B1F3A] text-white text-sm font-bold rounded-xl hover:bg-[#102A4C] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 shadow-[0_14px_30px_rgba(11,31,58,0.22)]"
-                >
-                  {isOtpSending ? 'Sending OTP...' : 'Send OTP'}
-                  <span className="material-symbols-outlined text-[20px]">sms</span>
-                </button>
-              ) : (
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full py-4 px-6 bg-[#0B1F3A] text-white text-sm font-bold rounded-xl hover:bg-[#102A4C] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 shadow-[0_14px_30px_rgba(11,31,58,0.22)]"
-                >
-                  {isLoading ? (
-                    <>
-                      <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                      Signing In...
-                    </>
-                  ) : (
-                    <>
-                      <span>{loginMode === 'otp' ? 'Verify & Sign In' : 'Sign In'}</span>
-                      <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
-                    </>
-                  )}
-                </button>
-              )}
               {isLoading && <p className="text-center text-xs text-[#8a94a6]">First login may take up to 60 seconds...</p>}
             </form>
 

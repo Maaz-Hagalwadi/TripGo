@@ -3,11 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../../shared/constants/routes';
 
 const menuItems = [
-  { id: 'overview',  icon: 'dashboard',      label: 'Overview',  route: ROUTES.ADMIN_DASHBOARD },
-  { id: 'operators', icon: 'business',       label: 'Operators', route: `${ROUTES.ADMIN_DASHBOARD}?tab=operators` },
-  { id: 'buses',     icon: 'directions_bus', label: 'Buses',     route: `${ROUTES.ADMIN_DASHBOARD}?tab=buses` },
-  { id: 'users',     icon: 'group',          label: 'Users',     route: ROUTES.ADMIN_USERS },
-  { id: 'reviews',   icon: 'reviews',        label: 'Reviews',   route: ROUTES.ADMIN_REVIEWS },
+  { id: 'overview',    icon: 'dashboard',      label: 'Overview',   route: ROUTES.ADMIN_DASHBOARD },
+  { id: 'analytics',   icon: 'bar_chart',      label: 'Analytics',  route: ROUTES.ADMIN_ANALYTICS },
+  { id: 'operators',   icon: 'business',       label: 'Operators',  route: `${ROUTES.ADMIN_DASHBOARD}?tab=operators` },
+  { id: 'buses',       icon: 'directions_bus', label: 'Buses',      route: `${ROUTES.ADMIN_DASHBOARD}?tab=buses` },
+  { id: 'users',       icon: 'group',          label: 'Users',      route: ROUTES.ADMIN_USERS },
+  { id: 'reviews',     icon: 'reviews',        label: 'Reviews',    route: ROUTES.ADMIN_REVIEWS },
+  { id: 'promos',      icon: 'local_offer',    label: 'Promos',     route: ROUTES.ADMIN_PROMOS },
+  { id: 'audit-logs',  icon: 'history',        label: 'Audit Logs', route: ROUTES.ADMIN_AUDIT_LOGS },
 ];
 
 const bottomItems = [

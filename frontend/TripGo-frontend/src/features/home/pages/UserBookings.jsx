@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import UserLayout from '../../../shared/components/UserLayout';
 import { cancelMyBooking, getMyBookings, downloadTicketFromApi, viewTicketFromApi, getSchedulePolicies } from '../../../api/bookingService';
 import UserRescheduleModal from '../components/UserRescheduleModal';
+import BusTrackingMap from '../components/BusTrackingMap';
 import { getMyCompletedTrips, submitTripRating } from '../../../api/reviewService';
 import { ROUTES } from '../../../shared/constants/routes';
 import { formatUtcDateTime } from '../../../shared/utils/scheduleSearchUtils';
@@ -151,6 +152,54 @@ const getRefundStatusMeta = (refundStatus) => {
   if (upper === 'PROCESSED') return { label: 'Refund processed', className: 'bg-emerald-50 text-emerald-700' };
   if (upper === 'PENDING') return { label: 'Refund pending', className: 'bg-amber-50 text-amber-700' };
   return { label: 'No refund', className: 'bg-slate-100 text-slate-700' };
+};
+
+const RefundTimeline = ({ booking }) => {
+  const refundStatus = String(booking?.refundStatus || 'NA').toUpperCase();
+  const refundAmount = Number(booking?.refundAmount ?? 0);
+  if (refundAmount === 0 || refundStatus === 'NA') {
+    return (
+      <div className="flex items-center gap-1.5 mt-2 text-[11px] text-slate-400">
+        <span className="material-symbols-outlined text-[13px]">info</span>
+        No refund applicable for this cancellation
+      </div>
+    );
+  }
+  const steps = [
+    { label: 'Cancelled',        done: true,                        icon: 'cancel' },
+    { label: 'Refund Initiated', done: refundStatus !== 'NA',       icon: 'currency_rupee' },
+    { label: 'Refunded',         done: refundStatus === 'PROCESSED', icon: 'check_circle' },
+  ];
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-100">
+      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+        Refund ₹{refundAmount.toLocaleString()} · Status
+      </p>
+      <div className="flex items-center gap-0">
+        {steps.map((step, i) => (
+          <div key={step.label} className="flex items-center flex-1 last:flex-none">
+            <div className="flex flex-col items-center gap-1">
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${step.done ? (i === 2 ? 'bg-emerald-500' : 'bg-[#002046]') : 'bg-slate-200'}`}>
+                <span className={`material-symbols-outlined text-[12px] ${step.done ? 'text-white' : 'text-slate-400'}`}>{step.icon}</span>
+              </div>
+              <span className={`text-[9px] font-semibold text-center leading-tight w-16 ${step.done ? (i === 2 ? 'text-emerald-600' : 'text-[#002046]') : 'text-slate-400'}`}>
+                {step.label}
+              </span>
+            </div>
+            {i < steps.length - 1 && (
+              <div className={`flex-1 h-0.5 mb-4 mx-1 ${steps[i + 1].done ? 'bg-[#002046]' : 'bg-slate-200'}`} />
+            )}
+          </div>
+        ))}
+      </div>
+      {refundStatus === 'PENDING' && (
+        <p className="text-[10px] text-amber-600 mt-1.5 flex items-center gap-1">
+          <span className="material-symbols-outlined text-[12px]">schedule</span>
+          Refund typically takes 5–7 business days
+        </p>
+      )}
+    </div>
+  );
 };
 
 const getCancelledByLabel = (cancelledBy) => {
@@ -674,6 +723,9 @@ const UserBookings = () => {
   const [filterOpen, setFilterOpen] = useState(false);
   const [pendingFilters, setPendingFilters] = useState(EMPTY_FILTERS);
   const [activeFilters, setActiveFilters] = useState(EMPTY_FILTERS);
+  const [trackingScheduleId, setTrackingScheduleId] = useState(null);
+  const [trackingRouteFrom, setTrackingRouteFrom] = useState('');
+  const [trackingRouteTo, setTrackingRouteTo] = useState('');
   const pendingPayment = useMemo(() => getPendingPayment(), []);
 
   const fetchBookings = async () => {
@@ -927,7 +979,25 @@ const UserBookings = () => {
     });
   }, [latestBooking, reviewableByScheduleId]);
 
+  const isConfirmedAndToday = (booking) => {
+    const upper = String(booking?.status || '').toUpperCase();
+    if (!['CONFIRMED', 'PAYMENT_SUCCESSFUL'].includes(upper)) return false;
+    const travelDate = getTravelDateKey(booking);
+    if (!travelDate) return false;
+    const today = getTodayDateKey();
+    return travelDate >= today;
+  };
+
   return (
+    <>
+    {trackingScheduleId && (
+      <BusTrackingMap
+        scheduleId={trackingScheduleId}
+        routeFrom={trackingRouteFrom}
+        routeTo={trackingRouteTo}
+        onClose={() => setTrackingScheduleId(null)}
+      />
+    )}
     <UserLayout activeItem="bookings" title="My Bookings">
       <div className="space-y-5">
 
@@ -1122,6 +1192,9 @@ const UserBookings = () => {
                   const gridCanCancel = (tripTab === 'upcoming' || tripTab === 'all') && isConfirmedBooking(booking);
                   const { routeFrom: gFrom, routeTo: gTo } = getBookingRouteSegment(booking);
                   const isGridSelected = selectedBookings.has(bookingId);
+                  const isCancelledGrid = upper === 'CANCELLED';
+                  const canTrack = isConfirmedAndToday(booking);
+                  const gridScheduleId = getScheduleId(booking);
 
                   return (
                     <div key={`${bookingId}-${index}`} onClick={() => toggleSelect(bookingId)} className={`rounded-xl ring-1 p-4 hover:shadow-md transition-all cursor-pointer ${isGridSelected ? 'bg-slate-50 ring-[#002046]/40 shadow-sm' : 'bg-white ring-slate-200'}`}>
@@ -1129,6 +1202,7 @@ const UserBookings = () => {
                         <div className="min-w-0 flex-1">
                           <p className="font-bold text-slate-900 text-sm truncate">{routeFrom} → {routeTo}</p>
                           <p className="text-xs text-slate-400 mt-0.5 truncate">{busName || bookingId}</p>
+                          {isCancelledGrid && <RefundTimeline booking={booking} />}
                         </div>
                         <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold flex-shrink-0 ${statusBadgeClass}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />
@@ -1165,6 +1239,11 @@ const UserBookings = () => {
                           {upper === 'COMPLETED' && (
                             <button onClick={(e) => { e.stopPropagation(); navigate(ROUTES.SEARCH_RESULTS, { state: { from: gFrom, to: gTo, date: new Date(Date.now() + 86400000).toISOString().split('T')[0] } }); }} title="Book again" className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center hover:bg-emerald-100 transition-colors">
                               <span className="material-symbols-outlined text-sm">refresh</span>
+                            </button>
+                          )}
+                          {canTrack && gridScheduleId && (
+                            <button onClick={(e) => { e.stopPropagation(); setTrackingScheduleId(gridScheduleId); setTrackingRouteFrom(gFrom); setTrackingRouteTo(gTo); }} title="Track bus" className="w-8 h-8 rounded-lg bg-sky-50 border border-sky-200 text-sky-700 flex items-center justify-center hover:bg-sky-100 transition-colors">
+                              <span className="material-symbols-outlined text-sm">location_on</span>
                             </button>
                           )}
                         </div>
@@ -1301,7 +1380,7 @@ const UserBookings = () => {
                             <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[200px]">
                               {busName || '—'}{seats.length > 0 ? ` · Seat ${seats.join(', ')}` : ''}
                             </p>
-                            {isCancelled && <p className="text-[10px] text-slate-400 mt-0.5">Refund ₹{Number(booking?.refundAmount ?? 0)} · {getRefundStatusMeta(booking?.refundStatus).label}</p>}
+                            {isCancelled && <RefundTimeline booking={booking} />}
                           </td>
                           <td className="px-4 py-4 hidden md:table-cell">
                             <p className="text-sm text-slate-600 whitespace-nowrap max-w-[160px] truncate">{scheduleLabel !== '--' ? scheduleLabel : '—'}</p>
@@ -1339,6 +1418,11 @@ const UserBookings = () => {
                               {String(booking?.status || '').toUpperCase() === 'COMPLETED' && (
                                 <button onClick={() => navigate(ROUTES.SEARCH_RESULTS, { state: { from: routeFrom, to: routeTo, date: new Date(Date.now() + 86400000).toISOString().split('T')[0] } })} title="Book again" className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center hover:bg-emerald-100 transition-colors">
                                   <span className="material-symbols-outlined text-sm">refresh</span>
+                                </button>
+                              )}
+                              {isConfirmedAndToday(booking) && getScheduleId(booking) && (
+                                <button onClick={() => { const { routeFrom: rf, routeTo: rt } = getBookingRouteSegment(booking); setTrackingScheduleId(getScheduleId(booking)); setTrackingRouteFrom(rf); setTrackingRouteTo(rt); }} title="Track bus" className="w-8 h-8 rounded-lg bg-sky-50 border border-sky-200 text-sky-700 flex items-center justify-center hover:bg-sky-100 transition-colors">
+                                  <span className="material-symbols-outlined text-sm">location_on</span>
                                 </button>
                               )}
                             </div>
@@ -1449,6 +1533,7 @@ const UserBookings = () => {
         />
       )}
     </UserLayout>
+    </>
   );
 };
 

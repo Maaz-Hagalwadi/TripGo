@@ -47,12 +47,16 @@ const DummyPayment = lazy(() => import('./features/search/pages/DummyPayment'));
 const PaymentSuccess = lazy(() => import('./features/search/pages/PaymentSuccess'));
 
 const CompleteProfile = lazy(() => import('./features/auth/pages/CompleteProfile'));
+const OperatorHowItWorks = lazy(() => import('./pages/OperatorHowItWorks'));
 const AdminOperatorAction = lazy(() => import('./pages/AdminOperatorAction'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const AdminReviews = lazy(() => import('./pages/AdminReviews'));
 const AdminUsers = lazy(() => import('./pages/AdminUsers'));
+const AdminPromos = lazy(() => import('./pages/AdminPromos'));
 const AdminSettings = lazy(() => import('./pages/AdminSettings'));
 const AdminSupport = lazy(() => import('./pages/AdminSupport'));
+const AdminAnalytics = lazy(() => import('./pages/AdminAnalytics'));
+const AdminAuditLogs = lazy(() => import('./pages/AdminAuditLogs'));
 const Unauthorized = lazy(() => import('./pages/Unauthorized'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
@@ -77,6 +81,7 @@ function App() {
           <Route path={ROUTES.RESET_PASSWORD} element={<ResetPassword />} />
           <Route path={ROUTES.UNAUTHORIZED} element={<Unauthorized />} />
           <Route path={ROUTES.COMPLETE_PROFILE} element={<CompleteProfile />} />
+          <Route path={ROUTES.OPERATOR_HOW_IT_WORKS} element={<OperatorHowItWorks />} />
 
           {/* Admin route — protected, ADMIN role only */}
           <Route path={ROUTES.ADMIN_OPERATOR_ACTION} element={
@@ -91,11 +96,20 @@ function App() {
           <Route path={ROUTES.ADMIN_USERS} element={
             <ProtectedRoute allowedRoles={['ADMIN']}><AdminUsers /></ProtectedRoute>
           } />
+          <Route path={ROUTES.ADMIN_PROMOS} element={
+            <ProtectedRoute allowedRoles={['ADMIN']}><AdminPromos /></ProtectedRoute>
+          } />
           <Route path={ROUTES.ADMIN_SETTINGS} element={
             <ProtectedRoute allowedRoles={['ADMIN']}><AdminSettings /></ProtectedRoute>
           } />
           <Route path={ROUTES.ADMIN_SUPPORT} element={
             <ProtectedRoute allowedRoles={['ADMIN']}><AdminSupport /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.ADMIN_ANALYTICS} element={
+            <ProtectedRoute allowedRoles={['ADMIN']}><AdminAnalytics /></ProtectedRoute>
+          } />
+          <Route path={ROUTES.ADMIN_AUDIT_LOGS} element={
+            <ProtectedRoute allowedRoles={['ADMIN']}><AdminAuditLogs /></ProtectedRoute>
           } />
           <Route path={ROUTES.ADMIN_OPERATORS} element={
             <ProtectedRoute allowedRoles={['ADMIN']}>

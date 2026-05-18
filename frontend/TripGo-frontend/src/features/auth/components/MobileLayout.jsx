@@ -343,7 +343,7 @@ const MobileLayout = () => {
                 required
                 name="phone"
                 type="tel"
-                placeholder="9875934033"
+                placeholder="Enter phone number"
                 value={formData.phone}
                 onChange={handleInputChange}
                 error={!!errors.phone}
@@ -506,7 +506,7 @@ const MobileLayout = () => {
                 </svg>
               }
             >
-              <Typography variant="caption" sx={{ fontWeight: 700 }}>Sign in with Google</Typography>
+              <Typography variant="caption" sx={{ fontWeight: 700 }}>Continue with Google</Typography>
             </Button>
 
             <Typography variant="caption" sx={{ textAlign: 'center', mt: 5, color: '#64748b', display: 'block' }}>
