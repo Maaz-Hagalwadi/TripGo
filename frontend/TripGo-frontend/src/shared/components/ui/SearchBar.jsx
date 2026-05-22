@@ -33,6 +33,7 @@ const SearchBar = ({
   submitIcon = 'search',
   onSubmit = null,
   variant = 'dark',
+  compact = false,
 }) => {
   const navigate = useNavigate();
   const isLight = variant === 'light';
@@ -152,7 +153,7 @@ const SearchBar = ({
     swapBtn: 'mb-2 w-10 h-10 flex-shrink-0 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-full flex items-center justify-center text-[#002046] transition-all',
     quickPillActive: 'border-[#002046] bg-[#002046]/10 text-[#002046]',
     quickPillInactive: 'border-slate-200 bg-slate-50 text-slate-500 hover:border-[#002046]/40',
-    searchBtn: 'w-full bg-[#002046] hover:bg-[#001533] text-white h-[52px] md:h-[54px] rounded-xl font-extrabold text-sm flex items-center justify-center gap-2 transition-all',
+    searchBtn: `w-full bg-[#002046] hover:bg-[#001533] text-white ${compact ? 'h-[38px]' : 'h-[52px] md:h-[54px]'} rounded-xl font-extrabold text-sm flex items-center justify-center gap-2 transition-all`,
     // mobile
     mobileCard: 'rounded-xl border border-slate-200 bg-white shadow-sm',
     mobileInput: 'w-full pl-9 pr-4 py-2 bg-transparent border-0 text-sm text-slate-900 placeholder-slate-400 focus:outline-none',
@@ -160,7 +161,7 @@ const SearchBar = ({
     mobileSwap: 'absolute right-4 -top-5 w-10 h-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-[#002046] z-20 shadow-sm',
     mobileDropdown: 'absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto z-[9999]',
     mobileDropdownItem: 'px-4 py-3 text-slate-700 hover:bg-slate-50 cursor-pointer text-sm border-b border-slate-100 last:border-0',
-    mobileSearchBtn: 'w-full bg-[#002046] hover:bg-[#001533] text-white h-[52px] rounded-xl font-extrabold text-base flex items-center justify-center gap-2 transition-all mt-3',
+    mobileSearchBtn: 'w-auto self-end bg-[#002046] hover:bg-[#001533] text-white h-[36px] px-5 rounded-lg font-bold text-sm flex items-center justify-center gap-1.5 transition-all mt-3',
   } : {
     wrapper: 'bg-transparent md:bg-charcoal/90 border-0 md:border md:border-white/10 p-0 md:p-6 rounded-2xl md:shadow-2xl w-full mx-auto md:backdrop-blur-xl',
     label: 'text-xs font-bold text-slate-400 uppercase tracking-[0.1em] mb-2 ml-1',

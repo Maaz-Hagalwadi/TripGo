@@ -124,7 +124,7 @@ const TABS = [
 const UserSettings = () => {
   const navigate = useNavigate();
   const { user, loading, logout, updateUser } = useAuth();
-  const [activeTab, setActiveTab] = useState(null);
+  const [activeTab, setActiveTab] = useState('notifications');
 
   const [savedCards, setSavedCards] = useState(() => {
     try { return JSON.parse(localStorage.getItem(SAVED_CARDS_KEY) || '[]'); } catch { return []; }

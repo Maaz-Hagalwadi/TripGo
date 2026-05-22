@@ -345,7 +345,7 @@ const BusCard = ({ bus, searchParams }) => {
             <button
               disabled={soldOut}
               onClick={() => !soldOut && navigate(ROUTES.BOOKING, { state: { bus, selectedType, selectedFare, searchParams } })}
-              className={`w-full rounded-2xl px-6 py-3 text-sm font-bold transition-all ${
+              className={`rounded-2xl px-5 py-2.5 text-sm font-bold transition-all self-end ${
                 soldOut ? 'cursor-not-allowed bg-slate-200 text-slate-400'
                   : 'bg-slate-900 text-white hover:bg-primary hover:text-black'
               }`}>
@@ -943,6 +943,7 @@ const SearchResults = () => {
                 submitLabel="Modify"
                 submitIcon="edit"
                 variant="light"
+                compact
                 onSubmit={(nextSearch) => {
                   setSearchParams(nextSearch);
                   setAppliedSearch(nextSearch);

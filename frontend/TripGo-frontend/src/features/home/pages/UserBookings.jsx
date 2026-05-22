@@ -956,6 +956,19 @@ const UserBookings = () => {
     ? paginatedBookings.find((b, i) => selectedBookings.has(toDisplayBookingId(b) || String(i))) ?? null
     : null;
 
+  const listActionMeta = listActionBooking ? (() => {
+    const b = listActionBooking;
+    const scheduleId = getScheduleId(b);
+    const reviewableTrip = reviewableByScheduleId.get(scheduleId);
+    const displayStatus = b?.__displayStatus || getDisplayStatus(b, pendingPayment);
+    const upper = String(displayStatus).toUpperCase();
+    const { routeFrom, routeTo } = getBookingRouteSegment(b);
+    const canRateTrip = (tripTab === 'completed' || tripTab === 'all') && reviewableTrip && !reviewableTrip.alreadyRated;
+    const canCancelBooking = (tripTab === 'upcoming' || tripTab === 'all') && isConfirmedBooking(b);
+    const canChangDate = policyMap[scheduleId]?.dateChange?.allowed !== false;
+    return { b, scheduleId, reviewableTrip, upper, routeFrom, routeTo, canRateTrip, canCancelBooking, canChangDate };
+  })() : null;
+
   useEffect(() => {
     if (!latestBooking) return;
 
@@ -1275,11 +1288,12 @@ const UserBookings = () => {
           ) : (
             <>
               {selectedBookings.size > 0 && (
-                <div className="flex items-center gap-2 bg-white px-5 py-3 border-b border-slate-200 flex-wrap">
+                <div className="flex items-center gap-2 bg-[#f5f7fb] px-5 py-3 border-b border-slate-200 flex-wrap">
+                  <span className="text-xs font-semibold text-slate-500 mr-1">{selectedBookings.size} selected</span>
                   {listActionBooking && (
                     <button
                       onClick={() => viewTicket(listActionBooking)}
-                      className="flex items-center gap-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap"
+                      className="flex items-center gap-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap"
                     >
                       <span className="material-symbols-outlined text-sm">visibility</span>
                       View Ticket
@@ -1292,14 +1306,52 @@ const UserBookings = () => {
                         if (selectedBookings.has(id)) await downloadTicket(booking);
                       }
                     }}
-                    className="flex items-center gap-1.5 rounded-lg bg-[#002046] text-white px-3 py-1.5 text-xs font-bold hover:bg-[#003a80] transition-colors whitespace-nowrap"
+                    className="flex items-center gap-1.5 rounded-lg bg-[#0B1F3A] text-white px-3 py-1.5 text-xs font-bold hover:bg-[#102A4C] transition-colors whitespace-nowrap"
                   >
                     <span className="material-symbols-outlined text-sm">download</span>
-                    Download Tickets
+                    Download
                   </button>
+                  {listActionMeta?.canCancelBooking && listActionMeta.canChangDate && (
+                    <button
+                      onClick={() => setRescheduleModalBooking({ ...listActionMeta.b, from: listActionMeta.routeFrom, to: listActionMeta.routeTo, scheduleId: listActionMeta.scheduleId })}
+                      disabled={!canReschedule(listActionMeta.b)}
+                      title={!canReschedule(listActionMeta.b) ? 'Rescheduling window has closed.' : 'Reschedule'}
+                      className="flex items-center gap-1.5 rounded-lg bg-white border border-blue-200 text-blue-700 px-3 py-1.5 text-xs font-semibold hover:bg-blue-50 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <span className="material-symbols-outlined text-sm">edit_calendar</span>
+                      Reschedule
+                    </button>
+                  )}
+                  {listActionMeta?.canRateTrip && (
+                    <button
+                      onClick={() => setReviewModalBooking({ ...listActionMeta.b, scheduleId: listActionMeta.scheduleId, from: listActionMeta.routeFrom, to: listActionMeta.routeTo })}
+                      className="flex items-center gap-1.5 rounded-lg bg-white border border-amber-200 text-amber-600 px-3 py-1.5 text-xs font-semibold hover:bg-amber-50 transition-colors whitespace-nowrap"
+                    >
+                      <span className="material-symbols-outlined text-sm">star</span>
+                      Rate Trip
+                    </button>
+                  )}
+                  {listActionMeta && String(listActionMeta.b?.status || '').toUpperCase() === 'COMPLETED' && (
+                    <button
+                      onClick={() => navigate(ROUTES.SEARCH_RESULTS, { state: { from: listActionMeta.routeFrom, to: listActionMeta.routeTo, date: new Date(Date.now() + 86400000).toISOString().split('T')[0] } })}
+                      className="flex items-center gap-1.5 rounded-lg bg-white border border-emerald-200 text-emerald-700 px-3 py-1.5 text-xs font-semibold hover:bg-emerald-50 transition-colors whitespace-nowrap"
+                    >
+                      <span className="material-symbols-outlined text-sm">refresh</span>
+                      Book Again
+                    </button>
+                  )}
+                  {listActionMeta && isConfirmedAndToday(listActionMeta.b) && listActionMeta.scheduleId && (
+                    <button
+                      onClick={() => { setTrackingScheduleId(listActionMeta.scheduleId); setTrackingRouteFrom(listActionMeta.routeFrom); setTrackingRouteTo(listActionMeta.routeTo); }}
+                      className="flex items-center gap-1.5 rounded-lg bg-white border border-sky-200 text-sky-700 px-3 py-1.5 text-xs font-semibold hover:bg-sky-50 transition-colors whitespace-nowrap"
+                    >
+                      <span className="material-symbols-outlined text-sm">location_on</span>
+                      Track Bus
+                    </button>
+                  )}
                   <button
                     onClick={() => setSelectedBookings(new Set())}
-                    className="ml-auto flex items-center gap-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 px-3 py-1.5 text-xs font-semibold transition-colors"
+                    className="ml-auto flex items-center gap-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-500 px-3 py-1.5 text-xs font-semibold transition-colors"
                   >
                     <span className="material-symbols-outlined text-sm">close</span>
                   </button>
@@ -1308,8 +1360,8 @@ const UserBookings = () => {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/80">
-                      <th className="w-12 px-4 py-3.5 text-center">
+                    <tr className="bg-[#0B1F3A]">
+                      <th className="w-12 px-4 py-3.5 text-center border-r border-white/10">
                         <input
                           type="checkbox"
                           checked={selectedBookings.size === paginatedBookings.length && paginatedBookings.length > 0}
@@ -1320,19 +1372,19 @@ const UserBookings = () => {
                               setSelectedBookings(new Set(paginatedBookings.map((b, i) => toDisplayBookingId(b) || String(i))));
                             }
                           }}
-                          className="rounded border-slate-300 accent-[#002046] cursor-pointer"
+                          className="rounded border-white/30 accent-white cursor-pointer"
                         />
                       </th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Booking ID</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Trip</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">Date</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden lg:table-cell">Bus Type</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Fare</th>
-                      <th className="px-4 py-3.5 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10">Booking ID</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10">Status</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10">Trip</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10 hidden md:table-cell">Date</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10 hidden lg:table-cell">Bus Type</th>
+                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10">Fare</th>
+                      <th className="px-4 py-3.5 text-right text-[11px] font-semibold text-white/80 uppercase tracking-wider">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50">
+                  <tbody className="divide-y divide-slate-100">
                     {paginatedBookings.map((booking, index) => {
                       const bookingId = toDisplayBookingId(booking) || `TG-${index + 1}`;
                       const { routeFrom, routeTo } = getBookingRouteSegment(booking);
@@ -1354,19 +1406,21 @@ const UserBookings = () => {
                       const dotClass = ['CONFIRMED', 'PAYMENT_SUCCESSFUL'].includes(upper) ? 'bg-emerald-500'
                         : upper === 'COMPLETED' ? 'bg-sky-500'
                         : upper === 'CANCELLED' ? 'bg-rose-500' : 'bg-amber-500';
-                      const statusBadgeClass = ['CONFIRMED', 'PAYMENT_SUCCESSFUL'].includes(upper) ? 'bg-emerald-50 text-emerald-700'
-                        : upper === 'COMPLETED' ? 'bg-sky-50 text-sky-700'
-                        : upper === 'CANCELLED' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700';
+                      const statusBadgeClass = ['CONFIRMED', 'PAYMENT_SUCCESSFUL'].includes(upper)
+                        ? 'border border-emerald-400 text-emerald-700 bg-emerald-50'
+                        : upper === 'COMPLETED' ? 'border border-sky-400 text-sky-700 bg-sky-50'
+                        : upper === 'CANCELLED' ? 'border border-rose-400 text-rose-700 bg-rose-50'
+                        : 'border border-amber-400 text-amber-700 bg-amber-50';
                       const statusLabel = upper === 'PAYMENT_SUCCESSFUL' ? 'Paid'
                         : upper === 'PAYMENT_RECEIVED' ? 'Received' : toTitleCase(displayStatus);
 
                       return (
-                        <tr key={`${bookingId}-${index}`} className={`group transition-colors ${isSelected ? 'bg-blue-50/60' : 'hover:bg-slate-50/70'}`}>
+                        <tr key={`${bookingId}-${index}`} className={`group transition-colors ${isSelected ? 'bg-blue-50/60' : 'hover:bg-slate-50'}`}>
                           <td className="px-4 py-4 text-center">
                             <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(bookingId)} className="rounded border-slate-300 accent-[#002046] cursor-pointer" />
                           </td>
                           <td className="px-4 py-4">
-                            <span className="text-sm font-mono font-semibold text-slate-600">{bookingId}</span>
+                            <span className="text-sm font-mono font-semibold text-[#0B1F3A]">{bookingId}</span>
                           </td>
                           <td className="px-4 py-4">
                             <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadgeClass}`}>
@@ -1397,34 +1451,9 @@ const UserBookings = () => {
                               <button onClick={() => viewTicket(booking)} title="View Ticket" className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200 transition-colors">
                                 <span className="material-symbols-outlined text-sm">visibility</span>
                               </button>
-                              <button onClick={() => downloadTicket(booking)} title="Download Ticket" className="w-8 h-8 rounded-lg bg-[#002046] text-white flex items-center justify-center hover:bg-[#001533] transition-colors">
+                              <button onClick={() => downloadTicket(booking)} title="Download Ticket" className="w-8 h-8 rounded-lg bg-[#0B1F3A] text-white flex items-center justify-center hover:bg-[#102A4C] transition-colors">
                                 <span className="material-symbols-outlined text-sm">download</span>
                               </button>
-                              {canCancelBooking && policyMap[getScheduleId(booking)]?.dateChange?.allowed !== false && (
-                                <button
-                                  onClick={() => { const { routeFrom: rf, routeTo: rt } = getBookingRouteSegment(booking); setRescheduleModalBooking({ ...booking, from: rf, to: rt, scheduleId: getScheduleId(booking) }); }}
-                                  disabled={!canReschedule(booking)}
-                                  title={!canReschedule(booking) ? 'Rescheduling window has closed. Must reschedule at least 12 hours before departure.' : 'Reschedule'}
-                                  className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-50"
-                                >
-                                  <span className="material-symbols-outlined text-sm">edit_calendar</span>
-                                </button>
-                              )}
-                              {canRateTrip && (
-                                <button onClick={() => setReviewModalBooking({ ...booking, scheduleId, from: routeFrom, to: routeTo })} title="Rate this trip" className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 text-amber-600 flex items-center justify-center hover:bg-amber-100 transition-colors">
-                                  <span className="material-symbols-outlined text-sm">star</span>
-                                </button>
-                              )}
-                              {String(booking?.status || '').toUpperCase() === 'COMPLETED' && (
-                                <button onClick={() => navigate(ROUTES.SEARCH_RESULTS, { state: { from: routeFrom, to: routeTo, date: new Date(Date.now() + 86400000).toISOString().split('T')[0] } })} title="Book again" className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center hover:bg-emerald-100 transition-colors">
-                                  <span className="material-symbols-outlined text-sm">refresh</span>
-                                </button>
-                              )}
-                              {isConfirmedAndToday(booking) && getScheduleId(booking) && (
-                                <button onClick={() => { const { routeFrom: rf, routeTo: rt } = getBookingRouteSegment(booking); setTrackingScheduleId(getScheduleId(booking)); setTrackingRouteFrom(rf); setTrackingRouteTo(rt); }} title="Track bus" className="w-8 h-8 rounded-lg bg-sky-50 border border-sky-200 text-sky-700 flex items-center justify-center hover:bg-sky-100 transition-colors">
-                                  <span className="material-symbols-outlined text-sm">location_on</span>
-                                </button>
-                              )}
                             </div>
                           </td>
                         </tr>
