@@ -24,8 +24,8 @@ const formatDate = (value) => {
 const FIELD_CLASS = 'w-full rounded-xl bg-slate-50 px-4 py-2.5 text-sm text-slate-900 ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-[#002046]/40 transition-all';
 
 const StatusBadge = ({ hidden }) => hidden
-  ? <span className="inline-flex rounded-lg px-2 py-1 text-xs font-bold bg-rose-50 text-rose-700 ring-1 ring-rose-200">Hidden</span>
-  : <span className="inline-flex rounded-lg px-2 py-1 text-xs font-bold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">Visible</span>;
+  ? <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold border border-rose-400 bg-rose-50 text-rose-700">Hidden</span>
+  : <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold border border-emerald-400 bg-emerald-50 text-emerald-700">Visible</span>;
 
 const ViewToggle = ({ viewMode, onChange }) => (
   <div className="hidden sm:flex items-center gap-1 rounded-2xl bg-white p-1.5 ring-1 ring-slate-200 shadow-sm">
@@ -316,13 +316,13 @@ const AdminReviews = () => {
               <div className="overflow-x-auto">
                 <table className="min-w-full">
                   <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/80">
-                      <th className="pl-5 pr-2 py-3.5 w-10" />
-                      <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Review</th>
-                      <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">Route</th>
-                      <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider hidden lg:table-cell">Rating</th>
-                      <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
-                      <th className="px-5 py-3.5 text-left text-xs font-semibold text-slate-400 uppercase tracking-wider hidden xl:table-cell">Date</th>
+                    <tr className="bg-[#0B1F3A]">
+                      <th className="pl-5 pr-2 py-3.5 w-10 border-r border-white/10" />
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10">Review</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10 hidden md:table-cell">Route</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10 hidden lg:table-cell">Rating</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10">Status</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider hidden xl:table-cell">Date</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -332,7 +332,7 @@ const AdminReviews = () => {
                         <tr
                           key={review.id}
                           onClick={() => setSelectedId(isSel ? null : String(review.id))}
-                          className={`cursor-pointer transition-colors ${isSel ? 'bg-slate-50' : 'hover:bg-slate-50/70'}`}
+                          className={`cursor-pointer transition-colors ${isSel ? 'bg-blue-50/60' : 'hover:bg-slate-50'}`}
                         >
                           <td className="pl-5 pr-2 py-4">
                             <div

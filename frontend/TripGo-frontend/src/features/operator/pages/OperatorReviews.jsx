@@ -25,9 +25,9 @@ const formatDate = (value) => {
 const RATING_LABELS = { 1: 'Poor', 2: 'Fair', 3: 'Good', 4: 'Very Good', 5: 'Excellent' };
 
 const getRatingBadge = (rating) => {
-  if (rating >= 4) return { badge: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' };
-  if (rating >= 3) return { badge: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500' };
-  return { badge: 'bg-rose-50 text-rose-700', dot: 'bg-rose-500' };
+  if (rating >= 4) return { badge: 'border border-emerald-400 bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' };
+  if (rating >= 3) return { badge: 'border border-amber-400 bg-amber-50 text-amber-700', dot: 'bg-amber-500' };
+  return { badge: 'border border-rose-400 bg-rose-50 text-rose-700', dot: 'bg-rose-500' };
 };
 
 const OperatorReviews = () => {
@@ -310,24 +310,24 @@ const OperatorReviews = () => {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/80">
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Passenger</th>
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Booking</th>
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">Route</th>
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden lg:table-cell">Bus</th>
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Rating</th>
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden xl:table-cell">Comment</th>
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Date</th>
+                    <tr className="bg-[#0B1F3A]">
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10">Passenger</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10 hidden sm:table-cell">Booking</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10 hidden md:table-cell">Route</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10 hidden lg:table-cell">Bus</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10">Rating</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10 hidden xl:table-cell">Comment</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider hidden sm:table-cell">Date</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50">
+                  <tbody className="divide-y divide-slate-100">
                     {paginatedReviews.map((review, index) => {
                       const rating = Number(review.rating || 0);
                       const { badge, dot } = getRatingBadge(rating);
                       const ratingLabel = RATING_LABELS[rating] || '--';
 
                       return (
-                        <tr key={review.id || index} className="group hover:bg-slate-50/70 transition-colors">
+                        <tr key={review.id || index} className="group hover:bg-slate-50 transition-colors">
                           <td className="px-5 py-4 min-w-[140px]">
                             <p className="text-sm font-bold text-slate-900">{review.userName || 'Traveler'}</p>
                           </td>

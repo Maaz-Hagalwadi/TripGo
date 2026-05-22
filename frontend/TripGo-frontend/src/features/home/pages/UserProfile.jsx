@@ -400,7 +400,7 @@ const UserProfile = () => {
                   const pending = canRateTrip(trip);
                   const currentDraft = ratingDrafts[scheduleId] || {};
                   const travelDate = formatTripDate(getTripDate(trip));
-                  const badgeClass = rated ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700';
+                  const badgeClass = rated ? 'border border-emerald-400 bg-emerald-50 text-emerald-700' : 'border border-amber-400 bg-amber-50 text-amber-700';
                   const dotClass = rated ? 'bg-emerald-500' : 'bg-amber-500';
                   const isGridSelected = selectedTripId === scheduleId;
 
@@ -453,16 +453,16 @@ const UserProfile = () => {
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-100 bg-slate-50/80">
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Trip</th>
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">Bus</th>
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider hidden sm:table-cell">Date</th>
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Status</th>
-                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Rating</th>
-                      <th className="px-5 py-3.5 text-right text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Action</th>
+                    <tr className="bg-[#0B1F3A]">
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10">Trip</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10 hidden md:table-cell">Bus</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10 hidden sm:table-cell">Date</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10">Status</th>
+                      <th className="px-5 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10">Rating</th>
+                      <th className="px-5 py-3.5 text-right text-[11px] font-semibold text-white/80 uppercase tracking-wider">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-50">
+                  <tbody className="divide-y divide-slate-100">
                     {paginatedTrips.map((trip, index) => {
                       const scheduleId = getTripScheduleId(trip) || `trip-${index}`;
                       const rated = Boolean(trip?.alreadyRated || trip?.ratingSubmitted);
@@ -470,11 +470,15 @@ const UserProfile = () => {
                       const currentDraft = ratingDrafts[scheduleId] || {};
                       const travelDate = formatTripDate(getTripDate(trip));
                       const dotClass = rated ? 'bg-emerald-500' : pending ? 'bg-amber-500' : 'bg-slate-400';
-                      const badgeClass = rated ? 'bg-emerald-50 text-emerald-700' : pending ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500';
+                      const badgeClass = rated
+                        ? 'border border-emerald-400 bg-emerald-50 text-emerald-700'
+                        : pending
+                          ? 'border border-amber-400 bg-amber-50 text-amber-700'
+                          : 'border border-slate-300 bg-slate-50 text-slate-500';
                       const badgeLabel = rated ? 'Rated' : pending ? 'Pending' : 'No review';
 
                       return (
-                        <tr key={scheduleId} className="group hover:bg-slate-50/70 transition-colors">
+                        <tr key={scheduleId} className="group hover:bg-slate-50 transition-colors">
                           <td className="px-5 py-4 min-w-[160px]">
                             <p className="text-sm font-bold text-slate-900">{getTripRoute(trip)}</p>
                             <p className="text-xs text-slate-400 mt-0.5">{toDisplayBookingId(trip)}</p>

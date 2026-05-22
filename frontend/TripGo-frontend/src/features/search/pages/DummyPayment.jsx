@@ -331,7 +331,7 @@ const CheckoutForm = ({ booking, paymentMeta, payableAmount, lockSecondsLeft, sa
           <button
             type="submit"
             disabled={!stripe || !elements || !paymentElementReady || submitting || lockSecondsLeft <= 0}
-            className="w-full rounded-xl bg-[#002046] px-6 py-3.5 text-base font-black text-white hover:bg-[#003a80] transition-colors disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-2"
+            className="w-auto min-w-[200px] mx-auto rounded-xl bg-[#002046] px-6 py-3 text-sm font-black text-white hover:bg-[#003a80] transition-colors disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-2"
           >
             <span className="material-symbols-outlined text-lg">payments</span>
             {submitting ? 'Processing payment...' : `Pay ₹${payableAmount}`}
@@ -347,7 +347,7 @@ const CheckoutForm = ({ booking, paymentMeta, payableAmount, lockSecondsLeft, sa
             type="button"
             onClick={handleSavedCardPayment}
             disabled={submitting || lockSecondsLeft <= 0}
-            className="w-full rounded-xl bg-[#002046] px-6 py-3.5 text-base font-black text-white hover:bg-[#003a80] transition-colors disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-2"
+            className="w-auto min-w-[200px] mx-auto rounded-xl bg-[#002046] px-6 py-3 text-sm font-black text-white hover:bg-[#003a80] transition-colors disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-2"
           >
             <span className="material-symbols-outlined text-lg">credit_card</span>
             {submitting ? 'Processing payment...' : `Pay ₹${payableAmount}`}
