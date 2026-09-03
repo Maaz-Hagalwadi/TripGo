@@ -103,6 +103,7 @@ const PaymentSuccess = () => {
     }
   }, []);
   const paymentSucceeded = redirectStatus === 'succeeded' || Boolean(paymentIntentId);
+  const isGuest = !localStorage.getItem('accessToken');
 
   useEffect(() => {
     if (redirectStatus && redirectStatus !== 'succeeded') {
@@ -124,6 +125,20 @@ const PaymentSuccess = () => {
           } catch {
             // ignore — webhook may have already confirmed it
           }
+        }
+
+        // Guest users have no "My Bookings" — show fallback from stored payment state
+        if (isGuest) {
+          if (cancelled) return;
+          const fallbackBooking = buildLatestBookingFallback(pendingPayment, paymentIntentId);
+          setBooking(fallbackBooking || null);
+          setStatusMessage('Payment received. Your ticket will be sent to your email shortly.');
+          localStorage.removeItem(PAYMENT_STORAGE_KEY);
+          sessionStorage.removeItem(PAYMENT_INTENT_CACHE_KEY);
+          sessionStorage.removeItem(PAYMENT_FLOW_STORAGE_KEY);
+          localStorage.removeItem(CURRENT_BOOKING_STORAGE_KEY);
+          setLoading(false);
+          return;
         }
 
         for (let attempt = 0; attempt < 6; attempt += 1) {
@@ -272,7 +287,9 @@ const PaymentSuccess = () => {
               </p>
               <p className="mt-1 text-sm text-slate-600">
                 {visualState === 'confirmed'
-                  ? 'You can now open My Bookings to view your ticket details and trip info.'
+                  ? isGuest
+                    ? 'Your ticket has been emailed to you. Create an account to track your bookings anytime.'
+                    : 'You can now open My Bookings to view your ticket details and trip info.'
                   : 'We are finishing your booking confirmation. This usually takes only a few seconds.'}
               </p>
             </div>
@@ -281,12 +298,31 @@ const PaymentSuccess = () => {
 
         {/* Action buttons */}
         <div className="flex flex-wrap gap-3 justify-center">
-          <button
-            onClick={() => navigate(ROUTES.USER_BOOKINGS, { replace: true, state: booking ? { latestBooking: booking } : undefined })}
-            className="rounded-xl bg-[#002046] px-6 py-3 text-sm font-bold text-white hover:bg-[#003a80] transition-colors"
-          >
-            Go to My Bookings
-          </button>
+          {isGuest ? (
+            <>
+              <div className="w-full text-center rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-5 py-4">
+                <span className="material-symbols-outlined text-2xl text-emerald-600 mb-2 block">mark_email_read</span>
+                <p className="font-bold text-slate-900">Check your email</p>
+                <p className="mt-1 text-sm text-slate-600">
+                  Your ticket and booking details have been sent to{' '}
+                  <span className="font-semibold">{pendingPayment?.bookingState?.contact?.email || 'your email address'}</span>.
+                </p>
+              </div>
+              <button
+                onClick={() => navigate(ROUTES.LOGIN, { replace: true })}
+                className="rounded-xl bg-[#002046] px-6 py-3 text-sm font-bold text-white hover:bg-[#003a80] transition-colors"
+              >
+                Create account to track bookings
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => navigate(ROUTES.USER_BOOKINGS, { replace: true, state: booking ? { latestBooking: booking } : undefined })}
+              className="rounded-xl bg-[#002046] px-6 py-3 text-sm font-bold text-white hover:bg-[#003a80] transition-colors"
+            >
+              Go to My Bookings
+            </button>
+          )}
           <button
             onClick={() => navigate(ROUTES.SEARCH_RESULTS)}
             className="rounded-xl bg-slate-100 px-6 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-colors"

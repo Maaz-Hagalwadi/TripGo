@@ -533,19 +533,21 @@ const SearchResults = () => {
 
   useEffect(() => {
     if (loading) return;
-    if (!user) { navigate(ROUTES.HOME); return; }
-    if (user.role && user.role !== 'USER') { navigate(ROUTES.HOME); return; }
+    // Block OPERATOR/ADMIN — guests (user=null) and USERs are allowed
+    if (user && user.role && user.role !== 'USER') { navigate(ROUTES.HOME); return; }
   }, [user, loading, navigate]);
 
   useEffect(() => {
+    // Saved routes are only available for authenticated users
     if (!user || user.role !== 'USER') return;
     getSavedRoutes().then(data => setSavedRoutes(Array.isArray(data) ? data : [])).catch(() => {});
   }, [user]);
 
   useEffect(() => {
-    if (!user || user.role !== 'USER') return;
+    if (loading) return;
+    if (user && user.role !== 'USER') return;
     if (appliedSearch.from && appliedSearch.to && appliedSearch.date) fetchBuses(appliedSearch);
-  }, [appliedSearch, user]);
+  }, [appliedSearch, loading]);
 
   const currentSaved = savedRoutes.find(
     r => r.fromCity?.toLowerCase() === appliedSearch.from?.toLowerCase() &&
@@ -985,6 +987,30 @@ const SearchResults = () => {
                 </div>
               </div>
             </div>
+
+            {!user && !loading && (
+              <div className="flex items-center justify-between rounded-2xl bg-[#002046]/[0.06] px-5 py-3.5 ring-1 ring-[#002046]/15">
+                <div className="flex items-center gap-2.5">
+                  <span className="material-symbols-outlined text-base text-[#002046]">person</span>
+                  <p className="text-sm text-slate-700">
+                    <span className="font-semibold">Booking as guest</span> — or{' '}
+                    <button
+                      onClick={() => navigate(ROUTES.LOGIN, { state: { from: location.pathname, ...location.state } })}
+                      className="font-bold text-[#002046] underline-offset-2 hover:underline"
+                    >
+                      sign in
+                    </button>
+                    {' '}to save routes, access bookings anytime, and use saved travelers.
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigate(ROUTES.LOGIN, { state: { from: location.pathname, ...location.state } })}
+                  className="ml-4 flex-shrink-0 rounded-xl border border-[#002046]/20 bg-white px-4 py-2 text-xs font-bold text-[#002046] hover:bg-[#002046]/[0.04] transition-colors"
+                >
+                  Sign in
+                </button>
+              </div>
+            )}
 
             {loadingBuses && (
               <div className="flex items-center justify-center py-20">
