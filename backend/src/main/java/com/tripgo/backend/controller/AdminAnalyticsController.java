@@ -1,18 +1,17 @@
 package com.tripgo.backend.controller;
 
-import com.tripgo.backend.model.entities.Booking;
 import com.tripgo.backend.model.enums.BookingStatus;
 import com.tripgo.backend.model.enums.OperatorStatus;
 import com.tripgo.backend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 import java.time.*;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/admin/analytics")
@@ -26,70 +25,58 @@ public class AdminAnalyticsController {
     private final BusRepository       busRepository;
 
     @GetMapping
+    @Transactional(readOnly = true)
     public ResponseEntity<?> getAnalytics() {
-
-        List<Booking> allBookings = bookingRepository.findAll();
-        List<Booking> confirmed  = allBookings.stream().filter(b -> b.getStatus() == BookingStatus.CONFIRMED).toList();
-        List<Booking> cancelled  = allBookings.stream().filter(b -> b.getStatus() == BookingStatus.CANCELLED).toList();
-
-        BigDecimal totalRevenue = confirmed.stream()
-                .map(Booking::getPayableAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         long totalUsers      = userRepository.count();
         long totalOperators  = operatorRepository.count();
-        long activeOperators = operatorRepository.findByStatus(OperatorStatus.APPROVED).size();
-        long activeBuses     = busRepository.findAll().stream().filter(b -> b.isActive()).count();
+        long activeOperators = operatorRepository.countByStatus(OperatorStatus.APPROVED);
+        long activeBuses     = busRepository.countByActive(true);
+        long totalBookings   = bookingRepository.countByStatus(BookingStatus.CONFIRMED);
+        long totalCancelled  = bookingRepository.countByStatus(BookingStatus.CANCELLED);
+        BigDecimal totalRevenue = bookingRepository.sumPayableAmountByStatus(BookingStatus.CONFIRMED);
 
-        // ── Daily stats (last 30 days) ───────────────────────────────────────
+        // ── Daily stats (last 30 days) — one DB query, one Java pass ────────
         Map<String, Long>       dailyBookings = new LinkedHashMap<>();
         Map<String, BigDecimal> dailyRevenue  = new LinkedHashMap<>();
         for (int i = 29; i >= 0; i--) {
-            LocalDate day   = LocalDate.now().minusDays(i);
-            Instant   start = day.atStartOfDay(ZoneOffset.UTC).toInstant();
-            Instant   end   = day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-            String    key   = day.toString();
-
-            long cnt = confirmed.stream()
-                    .filter(b -> !b.getCreatedAt().isBefore(start) && b.getCreatedAt().isBefore(end))
-                    .count();
-            BigDecimal rev = confirmed.stream()
-                    .filter(b -> !b.getCreatedAt().isBefore(start) && b.getCreatedAt().isBefore(end))
-                    .map(Booking::getPayableAmount)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-            dailyBookings.put(key, cnt);
-            dailyRevenue.put(key, rev);
+            String key = LocalDate.now().minusDays(i).toString();
+            dailyBookings.put(key, 0L);
+            dailyRevenue.put(key, BigDecimal.ZERO);
+        }
+        Instant since = LocalDate.now().minusDays(29).atStartOfDay(ZoneOffset.UTC).toInstant();
+        for (Object[] row : bookingRepository.findConfirmedStatsForPeriod(since)) {
+            String day = ((Instant) row[0]).atZone(ZoneOffset.UTC).toLocalDate().toString();
+            if (dailyBookings.containsKey(day)) {
+                dailyBookings.merge(day, 1L, Long::sum);
+                dailyRevenue.merge(day, (BigDecimal) row[1], BigDecimal::add);
+            }
         }
 
-        // ── Top operators ────────────────────────────────────────────────────
-        Map<String, BigDecimal> revenueByOperator = confirmed.stream()
-                .collect(Collectors.groupingBy(
-                        b -> b.getRouteSchedule().getBus().getOperator().getName(),
-                        Collectors.reducing(BigDecimal.ZERO, Booking::getPayableAmount, BigDecimal::add)
-                ));
+        // ── Top operators — SQL GROUP BY, no entity loading ──────────────────
+        Map<String, BigDecimal> revenueByOperator = new LinkedHashMap<>();
+        for (Object[] row : bookingRepository.getRevenueGroupedByOperator()) {
+            revenueByOperator.put((String) row[0], (BigDecimal) row[1]);
+        }
 
-        Map<String, Long> bookingsByOperator = confirmed.stream()
-                .collect(Collectors.groupingBy(
-                        b -> b.getRouteSchedule().getBus().getOperator().getName(),
-                        Collectors.counting()
-                ));
+        Map<String, Long> bookingsByOperator = new LinkedHashMap<>();
+        for (Object[] row : bookingRepository.getBookingsCountGroupedByOperator()) {
+            bookingsByOperator.put((String) row[0], (Long) row[1]);
+        }
 
-        // ── Top routes ───────────────────────────────────────────────────────
-        Map<String, Long> topRoutes = confirmed.stream()
-                .collect(Collectors.groupingBy(
-                        b -> b.getRouteSchedule().getRoute().getOrigin() + " → " +
-                             b.getRouteSchedule().getRoute().getDestination(),
-                        Collectors.counting()
-                ));
+        // ── Top routes — SQL GROUP BY ────────────────────────────────────────
+        Map<String, Long> topRoutes = new LinkedHashMap<>();
+        for (Object[] row : bookingRepository.getTopRoutesByBookingCount()) {
+            topRoutes.put(row[0] + " → " + row[1], (Long) row[2]);
+        }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("totalUsers",          totalUsers);
         result.put("totalOperators",      totalOperators);
         result.put("activeOperators",     activeOperators);
         result.put("activeBuses",         activeBuses);
-        result.put("totalBookings",       confirmed.size());
-        result.put("totalCancelled",      cancelled.size());
+        result.put("totalBookings",       totalBookings);
+        result.put("totalCancelled",      totalCancelled);
         result.put("totalRevenue",        totalRevenue);
         result.put("dailyBookings",       dailyBookings);
         result.put("dailyRevenue",        dailyRevenue);

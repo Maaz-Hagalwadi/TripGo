@@ -59,7 +59,9 @@ Backend also has a `./run.sh` script. Requires a `.env` file — see `backend/SE
 - Parses JWT payload via `atob()` to schedule proactive refresh
 - Base URL set via `VITE_API_BASE_URL` (defaults to `http://localhost:8080`)
 
-**UI stack:** Tailwind CSS 3 + MUI 7 + Emotion. Toast notifications via Sonner. Forms via React Hook Form + Zod (schemas in `src/shared/schemas/`).
+**UI stack:** Tailwind CSS 3 + MUI 7 + Emotion. Toast notifications via Sonner. Forms via React Hook Form + Zod (schemas in `src/shared/schemas/`). Maps via `react-leaflet` v5. Charts via `recharts` v3.
+
+**Env validation:** `src/config/env.js` validates required env vars at startup and throws if `VITE_API_BASE_URL` is missing.
 
 **Payments:** Stripe (`@stripe/react-stripe-js`). Key via `VITE_STRIPE_PUBLISHABLE_KEY`.
 
@@ -76,13 +78,13 @@ Backend also has a `./run.sh` script. Requires a `.env` file — see `backend/SE
 
 **Package layout (`com.tripgo.backend`):**
 - `controller/` — REST endpoints (34 controllers)
-- `service/impl/` — 17 primary business logic implementations
-- `service2/` — secondary/supporting services (e.g. PDF, QR, S3 upload)
+- `service/impl/` — 17 services (business logic + supporting: `EmailService`, `TicketPdfService`, `S3Service`, etc.)
 - `repository/` — 34 `JpaRepository<Entity, UUID>` interfaces
 - `model/entities/` — 34 JPA entities (all UUIDs as PKs, Lombok)
 - `model/enums/` — `RoleType`, `BookingStatus`, `SeatType`, etc.
 - `dto/` — `request/` and `response/` DTOs
-- `security/` — JWT filter chain, OAuth2 handler, rate limiter; includes `security/service/` with `CustomUserDetailsService`, `EmailVerificationService`, `RefreshTokenService`
+- `security/` — JWT filter chain, OAuth2 handler, rate limiter; includes `security/service/` with `CustomUserDetailsService`, `EmailVerificationService`, `RefreshTokenService`; `security/aspect/AuditLoggingAspect` auto-logs all POST/PUT/PATCH/DELETE mutations (actor, role, IP, action, entity type) to `audit_logs`
+- `mapper/` — entity-to-DTO mapping classes
 - `exception/handler/GlobalExceptionHandler.java` — `@RestControllerAdvice` returns `ApiError` (timestamp, status, message, path)
 
 **Security filter chain:**
@@ -115,7 +117,7 @@ Backend also has a `./run.sh` script. Requires a `.env` file — see `backend/SE
 - **AWS S3 SDK v2 (2.25.16)** — stores generated ticket PDFs; download URL saved in `Ticket` entity
 - **Resend API** — transactional emails (OTP, verification, cancellation, payment-failed); key via `RESEND_API_KEY` env var
 - **Spring Mail** + Thymeleaf templates — additional email notifications
-- **Spring WebSocket** (`/ws/**`) — real-time admin/operator notifications (in-memory broker; not suitable for multi-instance deployments); also persisted in `Notification` table. JWT passed as STOMP `Authorization: Bearer` header on CONNECT.
+- **Spring WebSocket** (`/ws/**`) — real-time admin/operator notifications (in-memory broker; not suitable for multi-instance deployments); also persisted in `Notification` table. Uses SockJS fallback; JWT passed as STOMP `Authorization: Bearer` header on CONNECT; user-specific destination prefix `/user`.
 
 **Background jobs (`LockScheduler`):**
 - Seat lock cleanup: every 60 s — releases expired `seat_locks` rows
@@ -133,6 +135,7 @@ Backend also has a `./run.sh` script. Requires a `.env` file — see `backend/SE
 - `/operator/**` — operator dashboard (buses, routes, schedules, drivers)
 - `/admin/**` — admin operations (operator approval, bus moderation, user management, audit logs, promo codes)
 - `/buses/*/rating-summary`, `/amenities/**` — public data
+- Swagger UI available at `/swagger-ui.html`; OpenAPI JSON at `/api-docs`
 
 **Known configuration note:** `backend/src/main/resources/application.yml` currently has Google OAuth2 credentials hardcoded instead of reading from env vars. New OAuth-related config should be added via env vars and `application.properties` instead.
 

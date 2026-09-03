@@ -38,10 +38,10 @@ public class OperatorDashboardController {
 
         long totalBookings = bookingRepository.getTotalBookingsByOperator(operator);
         BigDecimal totalRevenue = bookingRepository.getTotalRevenueByOperator(operator);
-        long confirmedBookings = bookingRepository.findByOperatorAndStatus(operator, BookingStatus.CONFIRMED).size();
-        long cancelledBookings = bookingRepository.findByOperatorAndStatus(operator, BookingStatus.CANCELLED).size();
-        long totalBuses = busRepository.findByOperator(operator).size();
-        long totalRoutes = routeRepository.findByOperator(operator).size();
+        long confirmedBookings = bookingRepository.countByOperatorAndStatus(operator, BookingStatus.CONFIRMED);
+        long cancelledBookings = bookingRepository.countByOperatorAndStatus(operator, BookingStatus.CANCELLED);
+        long totalBuses = busRepository.countByOperator(operator);
+        long totalRoutes = routeRepository.countByOperator(operator);
 
         return ResponseEntity.ok(Map.of(
                 "totalBookings", totalBookings,

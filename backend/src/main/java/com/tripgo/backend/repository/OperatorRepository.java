@@ -9,4 +9,5 @@ import java.util.UUID;
 
 public interface OperatorRepository extends JpaRepository<Operator, UUID> {
     List<Operator> findByStatus(OperatorStatus status);
+    long countByStatus(OperatorStatus status);
 }

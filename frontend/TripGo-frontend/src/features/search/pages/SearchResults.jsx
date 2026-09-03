@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { searchBuses } from '../../../api/busService';
-import { getScheduleFeatures, getScheduleSeats } from '../../../api/bookingService';
+import { getScheduleFeatures } from '../../../api/bookingService';
 import { getSavedRoutes, saveRoute, unsaveRoute } from '../../../api/savedRoutesService';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ROUTES } from '../../../shared/constants/routes';
@@ -99,10 +99,6 @@ const normalizeSearchBus = (item) => {
   };
 };
 
-const hasNumericSeatCount = (bus) => (
-  Number.isFinite(Number(bus?.availableSeatCount)) ||
-  Number.isFinite(Number(bus?.availableSeats))
-);
 
 const getTripStatusMeta = (tripStatus, delayMinutes) => {
   const status = String(tripStatus || '').toUpperCase();
@@ -583,40 +579,19 @@ const SearchResults = () => {
           const scheduleId = bus?.scheduleId || bus?.id;
           if (!scheduleId) return bus;
 
-          const [featuresRes, seatsRes] = await Promise.allSettled([
-            getScheduleFeatures(scheduleId),
-            hasNumericSeatCount(bus) ? Promise.resolve(null) : getScheduleSeats(scheduleId, params.date, params.from, params.to),
-          ]);
+          const featuresRes = await Promise.allSettled([getScheduleFeatures(scheduleId)]);
 
-          const featurePayload = featuresRes.status === 'fulfilled' ? featuresRes.value : null;
-          const seatsPayload = seatsRes.status === 'fulfilled' ? seatsRes.value : null;
+          const featurePayload = featuresRes[0].status === 'fulfilled' ? featuresRes[0].value : null;
           const busStatus = getTripStatusValue(bus);
           const featureStatus = getTripStatusValue(featurePayload);
           const busDelayMinutes = getDelayMinutes(bus);
           const featureDelayMinutes = getDelayMinutes(featurePayload);
-          const fallbackSeatAvailability = Array.isArray(seatsPayload?.seatAvailability)
-            ? seatsPayload.seatAvailability
-            : Array.isArray(seatsPayload?.seats)
-              ? seatsPayload.seats
-              : Array.isArray(seatsPayload?.upperDeck) || Array.isArray(seatsPayload?.lowerDeck)
-                ? [...(seatsPayload?.lowerDeck || []), ...(seatsPayload?.upperDeck || [])]
-                : [];
-          const fallbackAvailableCount = fallbackSeatAvailability.length
-            ? fallbackSeatAvailability.filter(isSeatAvailableForBooking).length
-            : null;
 
           return {
             ...bus,
             scheduleId,
-            seatAvailability: Array.isArray(bus?.seatAvailability) && bus.seatAvailability.length
-              ? bus.seatAvailability
-              : fallbackSeatAvailability,
-            availableSeatCount: hasNumericSeatCount(bus)
-              ? getAvailableSeatCount(bus)
-              : fallbackAvailableCount,
-            availableSeats: hasNumericSeatCount(bus)
-              ? getAvailableSeatCount(bus)
-              : fallbackAvailableCount,
+            availableSeatCount: getAvailableSeatCount(bus),
+            availableSeats: getAvailableSeatCount(bus),
             tripStatus: mergeTripStatus(busStatus, featureStatus, busDelayMinutes, featureDelayMinutes),
             delayMinutes: Math.max(busDelayMinutes, featureDelayMinutes),
             delayReason: featurePayload?.delayReason || bus?.delayReason,
