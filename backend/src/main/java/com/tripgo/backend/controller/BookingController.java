@@ -125,7 +125,9 @@ public class BookingController {
             @RequestBody List<String> seatNumbers,
             Authentication auth) {
 
-        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+        User user = (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof CustomUserDetails)
+                ? ((CustomUserDetails) auth.getPrincipal()).getUser()
+                : null;
         RouteSchedule schedule = scheduleRepo.findById(scheduleId)
                 .orElseThrow(() -> new RuntimeException("Schedule not found"));
 

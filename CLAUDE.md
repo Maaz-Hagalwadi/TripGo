@@ -93,12 +93,14 @@ Backend also has a `./run.sh` script. Requires a `.env` file — see `backend/SE
 5. Role enforcement via `@PreAuthorize` on controllers
 6. Google OAuth2 at `/login/oauth2/code/google` with custom `OAuth2SuccessHandler`
 7. CORS origins read from `CORS_ALLOWED_ORIGINS` env var
+8. Bucket4j rate limits per IP: `/auth/login` & `/auth/register` = 5 req/min; `/auth/forgot-password` = 3 req/min; global default = 100 req/min. Trusted proxy IPs set via `TRUSTED_PROXIES` env var (default: `127.0.0.1,::1`) — must be configured on Render to avoid IP spoofing.
 
 **Database:**
 - PostgreSQL 13 via HikariCP (max 10 connections, min-idle 5, connection-timeout 10 s)
-- **50 Flyway migrations** (V1–V50) manage the full schema — never edit the DB directly, always add a new migration
+- **52 Flyway migrations** (V1–V52) manage the full schema — never edit the DB directly, always add a new migration
+- Migration naming: `V##__descriptive_snake_case.sql`; V50–V52 seed demo accounts and bookings for testing (demo.operator@tripgo.com / TripGo@2026)
 - Key domain tables: `users`, `operators`, `buses`, `routes`, `route_schedules`, `bookings`, `booking_seats`, `payments`, `tickets`, `ratings`
-- Additional tables added in recent migrations: `user_saved_routes` (V47), `audit_logs` (V48); `users` table has `profile_picture_url` (V42), `premium` (V43), `suspended` (V44) columns
+- Additional tables: `user_saved_routes` (V47), `audit_logs` (V48), `promo_codes` (V46); `users` table has `profile_picture_url` (V42), `premium` (V43), `suspended` (V44) columns
 - Seat availability is tracked per date and route segment
 - `seat_locks` table prevents double-booking: seats are locked with an expiry during checkout and released on payment confirmation or timeout
 
@@ -108,12 +110,20 @@ Backend also has a `./run.sh` script. Requires a `.env` file — see `backend/SE
 
 **Key integrations:**
 - **Stripe** (Java SDK 24) — payment intents + webhook processing
-- **iText7 (7.2.5)** — PDF ticket generation (async via `@Async`)
+- **iText7 (7.2.5)** — PDF ticket generation (runs `@Async` via a thread pool: 2 core threads, 5 max, queue 100)
 - **Zxing** — QR code embedding in tickets
 - **AWS S3 SDK v2 (2.25.16)** — stores generated ticket PDFs; download URL saved in `Ticket` entity
 - **Resend API** — transactional emails (OTP, verification, cancellation, payment-failed); key via `RESEND_API_KEY` env var
 - **Spring Mail** + Thymeleaf templates — additional email notifications
-- **Spring WebSocket** (`/ws/**`) — real-time admin/operator notifications; also persisted in `Notification` table
+- **Spring WebSocket** (`/ws/**`) — real-time admin/operator notifications (in-memory broker; not suitable for multi-instance deployments); also persisted in `Notification` table. JWT passed as STOMP `Authorization: Bearer` header on CONNECT.
+
+**Background jobs (`LockScheduler`):**
+- Seat lock cleanup: every 60 s — releases expired `seat_locks` rows
+- Auto-complete schedules: every 60 s — marks past `route_schedules` as `COMPLETED` and creates the next daily schedule
+
+**DTO conventions:**
+- Response DTOs are Java **records** (immutable): `public record BusResponse(UUID id, String name, ...)`
+- Request DTOs use **Lombok** (`@Getter @Setter`) + Jakarta validation annotations (`@NotBlank`, `@Valid`)
 
 **Backend API shape:**
 - `/auth/**` — register, login, refresh, OTP, OAuth, email verification, password reset
@@ -149,6 +159,7 @@ aws.s3.region / aws.s3.bucket
 CORS_ALLOWED_ORIGINS     # Comma-separated (defaults to http://localhost:5173)
 FRONTEND_URL / BACKEND_URL
 PORT                     # Defaults to 8080; overridden by hosting platforms (e.g. Render)
+TRUSTED_PROXIES          # Comma-separated IPs/CIDRs for rate-limit IP resolution (default: 127.0.0.1,::1)
 ```
 
 See `backend/SETUP.md` for setup instructions.

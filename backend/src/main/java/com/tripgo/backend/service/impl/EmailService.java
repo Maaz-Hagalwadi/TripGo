@@ -205,6 +205,28 @@ public class EmailService {
     }
 
     @Async
+    public void sendGuestBookingConfirmation(String toEmail, String bookingCode, Map<String, Object> bookingDetails) {
+        Map<String, Object> templateData = new HashMap<>(bookingDetails);
+        templateData.put("subject", "Booking Confirmed - " + bookingCode + " | TripGo");
+        templateData.putIfAbsent("firstName", "Traveler");
+        templateData.put("frontendUrl", frontendUrl);
+        sendResendTemplate(toEmail, "booking-confirmation", templateData);
+    }
+
+    @Async
+    public void sendGuestPaymentFailed(String toEmail, String from, String to, String busName, BigDecimal amount) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("subject", "Payment Failed for Your TripGo Booking");
+        data.put("firstName", "Traveler");
+        data.put("from", from);
+        data.put("to", to);
+        data.put("busName", busName);
+        data.put("amount", amount);
+        data.put("frontendUrl", frontendUrl);
+        sendResendTemplate(toEmail, "payment-failed", data);
+    }
+
+    @Async
     public void sendSupportTicket(User user, String subject, String category, String message) {
         Map<String, Object> model = new HashMap<>();
         model.put("firstName", user.getFirstName());

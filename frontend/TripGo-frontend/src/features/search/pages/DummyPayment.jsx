@@ -130,6 +130,7 @@ const buildPaymentPayload = (booking, totalAmount, gstAmount, payableAmount) => 
     totalAmount,
     gstAmount,
     payableAmount,
+    guestEmail: booking?.contact?.email || '',
     passengers: seatNumbers.map((seatNumber, index) => {
       const passenger = passengerEntries.find((item) => item?.seatNumber === seatNumber) || passengerEntries[index] || {};
       const { firstName, lastName } = splitPassengerName(passenger?.name);

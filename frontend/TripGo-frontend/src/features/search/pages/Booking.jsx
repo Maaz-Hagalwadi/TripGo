@@ -472,6 +472,7 @@ const Booking = () => {
   }, [scheduleId, bus?.id]);
 
   useEffect(() => {
+    if (!localStorage.getItem('accessToken')) return;
     getSavedPassengerProfiles().then(setSavedProfilesList).catch(() => {});
   }, []);
 
@@ -1129,17 +1130,19 @@ const Booking = () => {
                         ]),
                         localStorage
                       );
-                      passengers.forEach((passenger) => {
-                        if (!savePassengerFlags[passenger.seatNumber]) return;
-                        const nameParts = (passenger.name || '').trim().split(' ');
-                        createSavedPassengerProfile({
-                          firstName: nameParts[0] || '',
-                          lastName: nameParts.slice(1).join(' ') || '',
-                          age: passenger.age ? Number(passenger.age) : null,
-                          gender: passenger.gender || '',
-                          phone: passenger.phone || '',
-                        }).catch(() => {});
-                      });
+                      if (localStorage.getItem('accessToken')) {
+                        passengers.forEach((passenger) => {
+                          if (!savePassengerFlags[passenger.seatNumber]) return;
+                          const nameParts = (passenger.name || '').trim().split(' ');
+                          createSavedPassengerProfile({
+                            firstName: nameParts[0] || '',
+                            lastName: nameParts.slice(1).join(' ') || '',
+                            age: passenger.age ? Number(passenger.age) : null,
+                            gender: passenger.gender || '',
+                            phone: passenger.phone || '',
+                          }).catch(() => {});
+                        });
+                      }
                       navigate(ROUTES.PAYMENT, { state: { bus, scheduleId, selectedSeats, selectedFare, selectedType, searchParams, travelDate: searchParams?.date || '', contact, passengers, selection, lockSecondsLeft, lockExpiresAt, lockToken: lockInfo?.lockToken || '', lockInfo, promoResult } });
                     }}
                     className="flex-1 rounded-xl bg-[#002046] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#003a80] transition-colors"

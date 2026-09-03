@@ -74,6 +74,12 @@ public class Booking {
     @Column(name = "refund_status")
     private String refundStatus; // PENDING, PROCESSED, NA
 
+    @Column(name = "guest_email")
+    private String guestEmail;
+
+    @Column(name = "guest_phone")
+    private String guestPhone;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

@@ -59,6 +59,11 @@ public class SecurityConfig {
                                 "/booking/schedules/*/route-stops",
                                 "/booking/schedules/*/policies",
                                 "/booking/schedules/*/features",
+                                "/booking/schedules/*/seats",
+                                "/booking/schedules/*/points",
+                                "/booking/lock",
+                                "/payments/create-intent",
+                                "/payments/confirm-booking/*",
                                 "/payments/webhook",
                                 "/discounts/active",
                                 "/ws/**")

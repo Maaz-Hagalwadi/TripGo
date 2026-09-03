@@ -124,18 +124,10 @@ function App() {
           <Route path={ROUTES.USER_BOOKINGS} element={
             <ProtectedRoute allowedRoles={['USER']}><UserBookings /></ProtectedRoute>
           } />
-          <Route path={ROUTES.SEARCH_RESULTS} element={
-            <ProtectedRoute allowedRoles={['USER']}><SearchResults /></ProtectedRoute>
-          } />
-          <Route path={ROUTES.BOOKING} element={
-            <ProtectedRoute allowedRoles={['USER']}><Booking /></ProtectedRoute>
-          } />
-          <Route path={ROUTES.PAYMENT} element={
-            <ProtectedRoute allowedRoles={['USER']}><DummyPayment /></ProtectedRoute>
-          } />
-          <Route path={ROUTES.PAYMENT_SUCCESS} element={
-            <ProtectedRoute allowedRoles={['USER']}><PaymentSuccess /></ProtectedRoute>
-          } />
+          <Route path={ROUTES.SEARCH_RESULTS} element={<SearchResults />} />
+          <Route path={ROUTES.BOOKING} element={<Booking />} />
+          <Route path={ROUTES.PAYMENT} element={<DummyPayment />} />
+          <Route path={ROUTES.PAYMENT_SUCCESS} element={<PaymentSuccess />} />
           <Route path={ROUTES.USER_PROFILE} element={
             <ProtectedRoute allowedRoles={['USER']}><UserProfile /></ProtectedRoute>
           } />
