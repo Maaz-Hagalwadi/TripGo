@@ -11,6 +11,7 @@ import java.util.UUID;
 
 public interface RouteRepository extends JpaRepository<Route, UUID> {
     List<Route> findByOperator(Operator operator);
+    long countByOperator(Operator operator);
     Optional<Route> findByOperatorAndOriginAndDestination(Operator operator, String origin, String destination);
 
     @Query(value = """

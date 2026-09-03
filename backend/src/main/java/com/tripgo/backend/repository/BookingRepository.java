@@ -39,4 +39,25 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
     @Query("SELECT COUNT(b) FROM Booking b WHERE b.operator = :operator AND b.status = 'CONFIRMED'")
     long getTotalBookingsByOperator(@Param("operator") Operator operator);
+
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.status = :status")
+    long countByStatus(@Param("status") BookingStatus status);
+
+    @Query("SELECT COALESCE(SUM(b.payableAmount), 0) FROM Booking b WHERE b.status = :status")
+    BigDecimal sumPayableAmountByStatus(@Param("status") BookingStatus status);
+
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.operator = :operator AND b.status = :status")
+    long countByOperatorAndStatus(@Param("operator") Operator operator, @Param("status") BookingStatus status);
+
+    @Query("SELECT b.createdAt, b.payableAmount FROM Booking b WHERE b.status = 'CONFIRMED' AND b.createdAt >= :since")
+    List<Object[]> findConfirmedStatsForPeriod(@Param("since") java.time.Instant since);
+
+    @Query("SELECT b.operator.name, COALESCE(SUM(b.payableAmount), 0) FROM Booking b WHERE b.status = 'CONFIRMED' GROUP BY b.operator.name ORDER BY SUM(b.payableAmount) DESC")
+    List<Object[]> getRevenueGroupedByOperator();
+
+    @Query("SELECT b.operator.name, COUNT(b) FROM Booking b WHERE b.status = 'CONFIRMED' GROUP BY b.operator.name ORDER BY COUNT(b) DESC")
+    List<Object[]> getBookingsCountGroupedByOperator();
+
+    @Query("SELECT b.routeSchedule.route.origin, b.routeSchedule.route.destination, COUNT(b) FROM Booking b WHERE b.status = 'CONFIRMED' GROUP BY b.routeSchedule.route.origin, b.routeSchedule.route.destination ORDER BY COUNT(b) DESC")
+    List<Object[]> getTopRoutesByBookingCount();
 }

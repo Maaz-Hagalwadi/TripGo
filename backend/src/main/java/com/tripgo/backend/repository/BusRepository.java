@@ -9,8 +9,10 @@ import java.util.UUID;
 
 public interface BusRepository extends JpaRepository<Bus, UUID> {
     List<Bus> findByOperator(Operator operator);
+    List<Bus> findByActive(boolean active);
+    long countByOperator(Operator operator);
+    long countByActive(boolean active);
 
     List<Bus> findByOperatorAndActiveTrue(Operator operator);
-    
     List<Bus> findByOperatorAndActiveFalse(Operator operator);
 }

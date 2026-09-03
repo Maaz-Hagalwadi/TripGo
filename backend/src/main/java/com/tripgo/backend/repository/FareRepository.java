@@ -30,4 +30,7 @@ public interface FareRepository extends JpaRepository<Fare, UUID> {
     // Legacy - kept for backward compat (returns route-level fare)
     @Query("SELECT f FROM Fare f WHERE f.routeSegment.id = :segmentId AND f.seatType = :seatType AND f.bus IS NULL")
     Optional<Fare> findByRouteSegmentIdAndSeatType(@Param("segmentId") UUID segmentId, @Param("seatType") String seatType);
+
+    @Query("SELECT f FROM Fare f WHERE f.routeSegment.id IN :segmentIds")
+    List<Fare> findByRouteSegmentIdIn(@Param("segmentIds") List<UUID> segmentIds);
 }

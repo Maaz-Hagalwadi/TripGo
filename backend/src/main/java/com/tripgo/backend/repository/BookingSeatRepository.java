@@ -14,6 +14,12 @@ public interface BookingSeatRepository extends JpaRepository<BookingSeat, UUID> 
     @Query("SELECT bs FROM BookingSeat bs WHERE bs.booking.routeSchedule = :schedule")
     List<BookingSeat> findByRouteSchedule(@Param("schedule") RouteSchedule schedule);
 
+    @Query("SELECT bs FROM BookingSeat bs WHERE bs.booking.routeSchedule = :schedule AND bs.booking.status = com.tripgo.backend.model.enums.BookingStatus.CONFIRMED")
+    List<BookingSeat> findConfirmedByRouteSchedule(@Param("schedule") RouteSchedule schedule);
+
+    @Query("SELECT bs FROM BookingSeat bs WHERE bs.booking.routeSchedule.id = :scheduleId AND bs.booking.status = com.tripgo.backend.model.enums.BookingStatus.CONFIRMED AND bs.booking.travelDate = :travelDate")
+    List<BookingSeat> findConfirmedByScheduleIdAndTravelDate(@Param("scheduleId") UUID scheduleId, @Param("travelDate") java.time.LocalDate travelDate);
+
     List<BookingSeat> findByBookingId(UUID bookingId);
 
     @Query("SELECT COUNT(bs) > 0 FROM BookingSeat bs WHERE bs.booking.routeSchedule.id = :scheduleId AND bs.seatNumber = :seatNumber AND bs.booking.status = 'CONFIRMED' AND bs.booking.travelDate = :travelDate")

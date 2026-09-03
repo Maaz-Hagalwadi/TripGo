@@ -66,11 +66,7 @@ public class SeatLockService {
 
     @Transactional
     public void release(UUID token) {
-        seatLockRepo.deleteAll(
-                seatLockRepo.findAll().stream()
-                        .filter(l -> l.getLockToken().equals(token))
-                        .toList()
-        );
+        seatLockRepo.deleteByLockToken(token);
     }
 
     @Transactional

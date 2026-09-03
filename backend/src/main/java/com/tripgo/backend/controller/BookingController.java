@@ -56,10 +56,7 @@ public class BookingController {
         List<SeatLock> activeLocks = lockRepo.findByRouteScheduleIdAndTravelDate(scheduleId, resolvedDate).stream()
                 .filter(lock -> lock.getExpiresAt().isAfter(Instant.now()))
                 .toList();
-        List<BookingSeat> confirmedSeats = bookingSeatRepository.findByRouteSchedule(schedule).stream()
-                .filter(bs -> bs.getBooking().getStatus() == com.tripgo.backend.model.enums.BookingStatus.CONFIRMED)
-                .filter(bs -> resolvedDate.equals(bs.getBooking().getTravelDate()))
-                .toList();
+        List<BookingSeat> confirmedSeats = bookingSeatRepository.findConfirmedByScheduleIdAndTravelDate(scheduleId, resolvedDate);
 
         List<Seat> seats = seatRepository.findByBus(schedule.getBus());
 

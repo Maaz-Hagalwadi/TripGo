@@ -16,6 +16,10 @@ public interface SeatLockRepository extends JpaRepository<SeatLock, UUID> {
     List<SeatLock> findByRouteScheduleIdAndTravelDate(UUID scheduleId, LocalDate travelDate);
 
     @Modifying
+    @Query("DELETE FROM SeatLock sl WHERE sl.lockToken = :token")
+    void deleteByLockToken(UUID token);
+
+    @Modifying
     @Query("DELETE FROM SeatLock sl WHERE sl.expiresAt < CURRENT_TIMESTAMP")
     void deleteExpired();
 }

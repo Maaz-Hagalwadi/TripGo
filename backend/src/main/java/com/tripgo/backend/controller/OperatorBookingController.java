@@ -102,10 +102,9 @@ public class OperatorBookingController {
     }
 
     private Map<String, Object> toBookingResponse(Booking booking) {
-        List<BookingSeat> seats = bookingSeatRepository.findByRouteSchedule(booking.getRouteSchedule());
+        List<BookingSeat> seats = bookingSeatRepository.findByBookingId(booking.getId());
 
         List<Map<String, Object>> seatDetails = seats.stream()
-                .filter(s -> s.getBooking().getId().equals(booking.getId()))
                 .map(seat -> {
                     Map<String, Object> seatMap = new LinkedHashMap<>();
                     seatMap.put("seatNumber", seat.getSeatNumber());
