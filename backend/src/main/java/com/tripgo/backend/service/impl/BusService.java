@@ -62,13 +62,13 @@ public class BusService {
     }
 
     public List<BusResponse> list(User user) {
-        List<Bus> buses = busRepository.findByOperatorAndActiveTrue(user.getOperator());
-        return buses.stream().map(this::toResponse).toList();
+        return busRepository.findByOperatorAndActiveWithAmenities(user.getOperator(), true)
+                .stream().map(this::toResponse).toList();
     }
 
     public List<BusResponse> listPending(User user) {
-        List<Bus> buses = busRepository.findByOperatorAndActiveFalse(user.getOperator());
-        return buses.stream().map(this::toResponse).toList();
+        return busRepository.findByOperatorAndActiveWithAmenities(user.getOperator(), false)
+                .stream().map(this::toResponse).toList();
     }
 
     private BusResponse toResponse(Bus bus) {

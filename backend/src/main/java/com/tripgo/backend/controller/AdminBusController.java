@@ -27,7 +27,7 @@ public class AdminBusController {
 
     @GetMapping
     public List<BusResponse> listBuses(@RequestParam(required = false) Boolean active) {
-        List<Bus> buses = active != null ? busRepository.findByActive(active) : busRepository.findAll();
+        List<Bus> buses = active != null ? busRepository.findByActiveWithAmenities(active) : busRepository.findAllWithAmenities();
         return buses.stream().map(this::toResponse).toList();
     }
 

@@ -150,18 +150,19 @@ const AdminDashboard = () => {
     const fetchTabData = async () => {
       setDataLoading(true); setError(null);
       try {
-        if (activeItem === 'operators' || activeItem === 'overview') {
-          const data = await getOperators(operatorFilter === 'ALL' ? null : operatorFilter);
-          setOperators(Array.isArray(data) ? data : []);
-        }
-        if (activeItem === 'buses' || activeItem === 'overview') {
-          const data = await getBuses(busFilter === 'ALL' ? null : busFilter === 'ACTIVE');
-          setBuses(Array.isArray(data) ? data : []);
-        }
-        if (activeItem === 'users' || activeItem === 'overview') {
-          const data = await getUsers();
-          setUsers(Array.isArray(data) ? data : []);
-        }
+        const needsOperators = activeItem === 'operators' || activeItem === 'overview';
+        const needsBuses     = activeItem === 'buses'     || activeItem === 'overview';
+        const needsUsers     = activeItem === 'users'     || activeItem === 'overview';
+
+        const [operatorsData, busesData, usersData] = await Promise.all([
+          needsOperators ? getOperators(operatorFilter === 'ALL' ? null : operatorFilter) : Promise.resolve(null),
+          needsBuses     ? getBuses(busFilter === 'ALL' ? null : busFilter === 'ACTIVE')  : Promise.resolve(null),
+          needsUsers     ? getUsers()                                                      : Promise.resolve(null),
+        ]);
+
+        if (operatorsData !== null) setOperators(Array.isArray(operatorsData) ? operatorsData : []);
+        if (busesData     !== null) setBuses(Array.isArray(busesData)         ? busesData     : []);
+        if (usersData     !== null) setUsers(Array.isArray(usersData)         ? usersData     : []);
       } catch (err) { setError(err.message); }
       finally { setDataLoading(false); }
     };
