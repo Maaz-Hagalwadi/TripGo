@@ -9,59 +9,59 @@ const routes = [
   { from: 'Kolkata', to: 'Bhubaneswar', duration: '7h', buses: '45+ buses' },
 ];
 
-const RouteCard = ({ from, to, duration, buses, onBook }) => (
+const ACCENTS = ['#0B1F3A', '#1a3a6b', '#0f4c75', '#1b262c', '#162447', '#0a3d62'];
+
+const RouteCard = ({ from, to, duration, buses, accent, onBook }) => (
   <button
     onClick={onBook}
-    className="group flex items-center justify-between bg-white border border-slate-100 rounded-xl px-5 py-4 shadow-sm hover:shadow-md hover:border-primary/30 hover:-translate-y-0.5 transition-all duration-200 text-left w-full"
+    className="group bg-white border border-slate-100 rounded-xl overflow-hidden shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-200 text-left w-full flex"
   >
-    <div className="flex items-center gap-3">
-      <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
-        <span className="material-symbols-outlined text-slate-600 !text-xl">directions_bus</span>
-      </div>
+    <div className="w-1 flex-shrink-0" style={{ background: accent }} />
+    <div className="flex items-center justify-between flex-1 px-4 py-4 gap-3">
       <div>
-        <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-          <span>{from}</span>
-          <span className="material-symbols-outlined !text-base text-slate-400">arrow_forward</span>
-          <span>{to}</span>
+        <div className="flex items-center gap-1.5 text-slate-900 font-black text-sm">
+          {from}
+          <span className="text-slate-400 font-normal text-base">→</span>
+          {to}
         </div>
-        <div className="text-xs text-slate-400 mt-0.5">{buses} &middot; {duration}</div>
+        <div className="text-xs text-slate-400 mt-0.5">{buses} · {duration}</div>
       </div>
+      <span className="material-symbols-outlined text-slate-300 group-hover:text-primary !text-xl transition-colors flex-shrink-0">
+        arrow_forward
+      </span>
     </div>
-    <span className="material-symbols-outlined text-slate-300 group-hover:text-primary transition-colors !text-xl">chevron_right</span>
   </button>
 );
 
 const ExploreSection = () => {
   const navigate = useNavigate();
-
   const today = new Date().toISOString().split('T')[0];
-
-  const handleBook = (from, to) => {
+  const handleBook = (from, to) =>
     navigate('/search-results', { state: { from, to, date: today } });
-  };
 
   return (
-    <section className="py-16 md:py-20 bg-slate-50">
+    <section className="py-12 md:py-14 bg-white border-t border-slate-100">
       <div className="max-w-screen-xl mx-auto px-4 sm:px-6">
 
         <div className="flex items-end justify-between mb-8">
           <div>
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Quick Access</span>
-            <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 mt-1">Popular Routes</h2>
+            <h2 className="text-2xl md:text-3xl font-black text-slate-900">Where are you headed?</h2>
+            <p className="text-slate-500 text-sm mt-1">Popular routes, ready to book</p>
           </div>
           <button
             onClick={() => navigate('/search-results')}
-            className="text-sm font-semibold text-slate-500 hover:text-slate-800 hover:underline hidden md:block"
+            className="text-sm font-semibold text-primary hover:underline hidden md:block"
           >
-            View all routes →
+            See all routes →
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {routes.map((r) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {routes.map((r, i) => (
             <RouteCard
               key={`${r.from}-${r.to}`}
               {...r}
+              accent={ACCENTS[i]}
               onBook={() => handleBook(r.from.toLowerCase(), r.to.toLowerCase())}
             />
           ))}

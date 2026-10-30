@@ -2,21 +2,13 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
 import { API_BASE_URL } from '../../../api/apiClient';
 
-const CARD_STYLES = [
-  { badge: 'New User',     badgeColor: 'bg-emerald-100 text-emerald-700', accent: '#0B1F3A' },
-  { badge: 'Weekend Deal', badgeColor: 'bg-blue-100 text-blue-700',       accent: '#1a3a6b' },
-  { badge: 'Exclusive',    badgeColor: 'bg-violet-100 text-violet-700',   accent: '#3730a3' },
-  { badge: 'Early Bird',   badgeColor: 'bg-amber-100 text-amber-700',     accent: '#92400e' },
-  { badge: 'Group Deal',   badgeColor: 'bg-teal-100 text-teal-700',       accent: '#0f766e' },
-  { badge: 'Special Offer',badgeColor: 'bg-rose-100 text-rose-700',       accent: '#9f1239' },
-];
+const ACCENTS = ['#0B1F3A', '#1a3a6b', '#0f4c75', '#1b262c', '#162447', '#9f1239'];
 
 const mapPromoToOffer = (promo, index) => {
-  const style = CARD_STYLES[index % CARD_STYLES.length];
   const discountLabel = promo.type === 'PERCENT' ? `${promo.value}% OFF` : `₹${promo.value} OFF`;
   const subtitle = promo.minOrderAmount
     ? `Min. order ₹${promo.minOrderAmount}`
-    : 'All bookings';
+    : 'No minimum order';
   const expiry = promo.validTo
     ? `Valid till ${new Date(promo.validTo + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}`
     : 'No expiry';
@@ -24,10 +16,8 @@ const mapPromoToOffer = (promo, index) => {
     code: promo.code,
     title: discountLabel,
     subtitle,
-    description: promo.description || `Use code ${promo.code} and save ${discountLabel} on your next booking.`,
-    badge: style.badge,
-    badgeColor: style.badgeColor,
-    accent: style.accent,
+    description: promo.description || `Use ${promo.code} to save ${discountLabel} on your booking.`,
+    accent: ACCENTS[index % ACCENTS.length],
     expiry,
   };
 };
@@ -35,13 +25,11 @@ const mapPromoToOffer = (promo, index) => {
 const CLONE_COUNT = 3;
 
 const SkeletonCard = () => (
-  <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden animate-pulse h-56">
-    <div className="h-1.5 w-full bg-slate-200" />
+  <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden animate-pulse h-52">
+    <div className="h-1 w-full bg-slate-200" />
     <div className="p-5 space-y-3">
-      <div className="flex justify-between">
-        <div className="h-5 w-20 bg-slate-100 rounded-full" />
-        <div className="h-8 w-24 bg-slate-100 rounded-lg" />
-      </div>
+      <div className="h-8 w-28 bg-slate-100 rounded" />
+      <div className="h-3 w-20 bg-slate-100 rounded" />
       <div className="h-4 w-full bg-slate-100 rounded" />
       <div className="h-4 w-3/4 bg-slate-100 rounded" />
       <div className="h-10 w-full bg-slate-100 rounded-xl mt-2" />
@@ -61,49 +49,41 @@ const CouponCard = ({ offer }) => {
   };
 
   return (
-    <div className="relative bg-white rounded-2xl shadow-[0_4px_24px_rgba(11,31,58,0.08)] border border-slate-100 overflow-hidden flex flex-col h-full">
-      <div className="h-1.5 w-full" style={{ background: offer.accent }} />
-      <div className="p-4 sm:p-5 flex flex-col gap-3 flex-1">
-        <div className="flex items-start justify-between gap-2">
-          <span className={`text-[11px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full ${offer.badgeColor}`}>
-            {offer.badge}
-          </span>
-          <div className="text-right">
-            <div className="text-2xl sm:text-3xl font-black leading-none" style={{ color: offer.accent }}>
-              {offer.title}
-            </div>
-            <div className="text-xs font-semibold text-slate-500 mt-0.5">{offer.subtitle}</div>
-          </div>
+    <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden flex flex-col h-full shadow-sm hover:shadow-md transition-shadow">
+      <div className="h-1 w-full" style={{ background: offer.accent }} />
+      <div className="p-5 flex flex-col gap-3 flex-1">
+
+        <div>
+          <div className="text-3xl font-black" style={{ color: offer.accent }}>{offer.title}</div>
+          <div className="text-xs text-slate-500 mt-0.5">{offer.subtitle}</div>
         </div>
 
         <p className="text-sm text-slate-600 leading-relaxed flex-1 line-clamp-2">{offer.description}</p>
 
-        <div className="relative flex items-center -mx-4 sm:-mx-5 my-1">
-          <div className="w-4 h-4 rounded-full bg-slate-100 -ml-2 shrink-0" />
+        {/* Perforated divider */}
+        <div className="relative flex items-center -mx-5 my-0">
+          <div className="w-4 h-4 rounded-full bg-slate-50 border border-slate-100 -ml-2 flex-shrink-0" />
           <div className="flex-1 border-t-2 border-dashed border-slate-200" />
-          <div className="w-4 h-4 rounded-full bg-slate-100 -mr-2 shrink-0" />
+          <div className="w-4 h-4 rounded-full bg-slate-50 border border-slate-100 -mr-2 flex-shrink-0" />
         </div>
 
         <div className="flex items-center gap-2">
           <div
-            className="flex-1 font-mono font-extrabold text-sm tracking-[0.18em] text-center py-2 rounded-xl border-2 border-dashed select-all"
-            style={{ borderColor: offer.accent, color: offer.accent, background: `${offer.accent}08` }}
+            className="flex-1 font-mono font-black text-sm tracking-[0.15em] text-center py-2.5 rounded-xl border-2 border-dashed select-all"
+            style={{ borderColor: offer.accent, color: offer.accent, background: `${offer.accent}0d` }}
           >
             {offer.code}
           </div>
           <button
             onClick={handleCopy}
-            className="shrink-0 px-3 py-2 rounded-xl text-sm font-bold text-white transition-all active:scale-95"
+            className="flex-shrink-0 px-4 py-2.5 rounded-xl text-sm font-black text-white transition-all active:scale-95"
             style={{ background: copied ? '#16a34a' : offer.accent }}
           >
-            {copied ? 'Copied!' : 'Copy'}
+            {copied ? '✓ Done' : 'Copy'}
           </button>
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs text-slate-400">
-          <span className="material-symbols-outlined text-[13px]">schedule</span>
-          {offer.expiry}
-        </div>
+        <div className="text-xs text-slate-400">{offer.expiry}</div>
       </div>
     </div>
   );
@@ -132,7 +112,6 @@ const OffersSection = () => {
       .finally(() => setLoading(false));
   }, []);
 
-  // For ≤3 offers there are no "hidden" slides, so disable cloning
   const useClones = offers.length > 3;
   const cloneCount = useClones ? CLONE_COUNT : 0;
 
@@ -187,48 +166,26 @@ const OffersSection = () => {
     ? ((pos - cloneCount) % offers.length + offers.length) % offers.length
     : 0;
 
-  // Visible cards count
   const visibleCount = typeof window !== 'undefined'
     ? (window.innerWidth < 640 ? 1 : window.innerWidth < 1024 ? 2 : 3)
     : 3;
 
-  // Max position before we hit cloned tail
   const maxPos = cloneCount + offers.length - visibleCount;
 
-  const handlePrev = () => {
-    if (!useClones && pos <= cloneCount) return;
-    prev();
-  };
-
-  const handleNext = () => {
-    if (!useClones && pos >= maxPos) return;
-    next();
-  };
+  const handlePrev = () => { if (!useClones && pos <= cloneCount) return; prev(); };
+  const handleNext = () => { if (!useClones && pos >= maxPos) return; next(); };
 
   return (
     <section
-      className="bg-slate-50 py-10 sm:py-16 px-4 sm:px-6"
+      className="bg-slate-50 py-10 sm:py-12 px-4 sm:px-6"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
       <div className="max-w-screen-xl mx-auto">
-        {/* Header */}
-        <div className="flex items-end justify-between gap-4 mb-8">
-          <div>
-            <div className="inline-flex items-center gap-2 bg-[#0B1F3A]/8 rounded-full px-3 py-1 mb-3">
-              <span className="material-symbols-outlined text-[#0B1F3A] text-[16px]">local_offer</span>
-              <span className="text-[#0B1F3A] text-xs font-bold uppercase tracking-widest">Exclusive Deals</span>
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
-              Save More on Every Trip
-            </h2>
-            <p className="text-slate-500 text-sm mt-1">
-              Apply these codes at checkout — no catch, no fine print.
-            </p>
-          </div>
-          <span className="material-symbols-outlined text-5xl text-slate-200 hidden sm:block select-none">
-            confirmation_number
-          </span>
+
+        <div className="mb-8">
+          <h2 className="text-2xl sm:text-3xl font-black text-slate-900">Current Offers</h2>
+          <p className="text-slate-500 text-sm mt-1">Copy a code and apply it at checkout.</p>
         </div>
 
         {loading ? (
@@ -237,11 +194,10 @@ const OffersSection = () => {
           </div>
         ) : offers.length === 0 ? null : (
           <>
-            {/* Carousel */}
             <div className="relative">
               <button
                 onClick={handlePrev}
-                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 sm:-translate-x-5 z-10 w-9 h-9 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-[#0B1F3A] hover:text-white hover:border-[#0B1F3A] transition-all"
+                className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-3 sm:-translate-x-5 z-10 w-9 h-9 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-primary hover:text-white hover:border-primary transition-all"
                 aria-label="Previous"
               >
                 <span className="material-symbols-outlined text-[18px]">chevron_left</span>
@@ -271,14 +227,13 @@ const OffersSection = () => {
 
               <button
                 onClick={handleNext}
-                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 sm:translate-x-5 z-10 w-9 h-9 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-[#0B1F3A] hover:text-white hover:border-[#0B1F3A] transition-all"
+                className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-3 sm:translate-x-5 z-10 w-9 h-9 rounded-full bg-white shadow-md border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-primary hover:text-white hover:border-primary transition-all"
                 aria-label="Next"
               >
                 <span className="material-symbols-outlined text-[18px]">chevron_right</span>
               </button>
             </div>
 
-            {/* Dot indicators */}
             <div className="flex items-center justify-center gap-2 mt-6">
               {offers.map((_, i) => (
                 <button
@@ -286,7 +241,7 @@ const OffersSection = () => {
                   onClick={() => moveTo(i + cloneCount)}
                   aria-label={`Go to offer ${i + 1}`}
                   className={`rounded-full h-2 transition-all duration-300 ${
-                    i === realIndex ? 'w-6 bg-[#0B1F3A]' : 'w-2 bg-slate-300 hover:bg-slate-400'
+                    i === realIndex ? 'w-6 bg-primary' : 'w-2 bg-slate-300 hover:bg-slate-400'
                   }`}
                 />
               ))}
@@ -296,7 +251,7 @@ const OffersSection = () => {
 
         {!loading && offers.length > 0 && (
           <p className="text-center text-xs text-slate-400 mt-6">
-            Codes apply at the payment step &middot; One code per booking &middot; Subject to availability
+            One code per booking &middot; Applied at the payment step &middot; Subject to availability
           </p>
         )}
       </div>
