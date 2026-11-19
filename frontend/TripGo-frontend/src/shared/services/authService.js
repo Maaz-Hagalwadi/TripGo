@@ -24,6 +24,9 @@ export const fetchCurrentUser = async (token) => {
   return { user: { ...data, role: primaryRole }, role: primaryRole };
 };
 
+// Backend RateLimitFilter answers 429 once the per-IP limit is hit (e.g. 5 logins/min)
+const RATE_LIMITED = { error: 'Too many attempts. Please wait a minute and try again.', rateLimited: true };
+
 /**
  * Logs in with email/phone and password.
  * @param {{ emailOrPhone: string, password: string }} credentials
@@ -42,6 +45,7 @@ export const loginRequest = async (credentials) => {
     });
 
     clearTimeout(timeoutId);
+    if (response.status === 429) return RATE_LIMITED;
     const data = await response.json();
 
     if (response.ok && data.accessToken && data.refreshToken) {
@@ -64,6 +68,7 @@ export const sendOtpRequest = async ({ emailOrPhone }) => {
     });
 
     if (response.ok) return { success: true };
+    if (response.status === 429) return RATE_LIMITED;
 
     const data = await response.json().catch(() => ({}));
     return { error: data.message || data.error || 'Failed to send OTP' };
@@ -80,6 +85,7 @@ export const verifyOtpRequest = async ({ emailOrPhone, otp }) => {
       body: JSON.stringify({ emailOrPhone, otp }),
     });
 
+    if (response.status === 429) return RATE_LIMITED;
     const data = await response.json().catch(() => ({}));
 
     if (response.ok && data.accessToken && data.refreshToken) {

@@ -1,5 +1,7 @@
 package com.tripgo.backend.controller;
 
+import jakarta.validation.Valid;
+
 import com.tripgo.backend.dto.request.OperatorRegistrationRequest;
 import com.tripgo.backend.dto.response.OperatorResponse;
 import com.tripgo.backend.model.entities.Operator;
@@ -23,7 +25,7 @@ public class OperatorController {
     private final OperatorRepository operatorRepository;
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody OperatorRegistrationRequest request) throws Exception {
+    public ResponseEntity<?> register(@Valid @RequestBody OperatorRegistrationRequest request) throws Exception {
         return ResponseEntity.ok(operatorService.register(request));
     }
 

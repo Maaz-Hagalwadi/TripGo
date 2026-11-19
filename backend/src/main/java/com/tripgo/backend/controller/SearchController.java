@@ -1,5 +1,6 @@
 package com.tripgo.backend.controller;
 
+import com.tripgo.backend.dto.response.PopularRouteResponse;
 import com.tripgo.backend.dto.response.SearchResponse;
 import com.tripgo.backend.dto.response.SeatAvailability;
 import com.tripgo.backend.model.entities.RouteSchedule;
@@ -7,6 +8,7 @@ import com.tripgo.backend.repository.RouteRepository;
 import com.tripgo.backend.repository.RouteScheduleRepository;
 import com.tripgo.backend.repository.RouteSegmentRepository;
 import com.tripgo.backend.service.impl.AvailabilityService;
+import com.tripgo.backend.service.impl.PopularRouteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,6 +30,7 @@ public class SearchController {
     private final AvailabilityService availabilityService;
     private final RouteSegmentRepository segmentRepo;
     private final RouteRepository routeRepository;
+    private final PopularRouteService popularRouteService;
 
     @GetMapping("/cities")
     public List<String> getCities() {
@@ -45,6 +48,12 @@ public class SearchController {
                 })
                 .toList();
     }
+
+    @GetMapping("/popular-routes")
+    public List<PopularRouteResponse> getPopularRoutes(@RequestParam(defaultValue = "6") int limit) {
+        return popularRouteService.getPopularRoutes(Math.max(1, Math.min(limit, 12)));
+    }
+
     @GetMapping
     public List<SearchResponse> search(
             @RequestParam String from,

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getCities } from '../../../api/routeService';
+import { localDateString } from '../../utils/date';
+import { addRecentSearch } from '../../utils/recentSearches';
 
 const SEARCH_DRAFT_STORAGE_KEY = 'tripgo_search_draft';
 const toCityKey = (value) => String(value || '').trim().toLowerCase();
@@ -36,9 +38,10 @@ const SearchBar = ({
   compact = false,
 }) => {
   const navigate = useNavigate();
-  const isLight = variant === 'light';
-  const today = new Date().toISOString().split('T')[0];
-  const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const isHero = variant === 'hero';
+  const isLight = variant === 'light' || isHero;
+  const today = localDateString();
+  const tomorrow = localDateString(1);
 
   const storedDraft = (() => {
     if (!persistDraft) return null;
@@ -61,6 +64,7 @@ const SearchBar = ({
   const [toSearch, setToSearch] = useState(resolvedInitialValues.to ? toDisplayCityName(resolvedInitialValues.to) : '');
   const fromRef = useRef(null);
   const toRef = useRef(null);
+  const heroDateRef = useRef(null);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -135,12 +139,13 @@ const SearchBar = ({
   const handleSearch = () => {
     if (!validateForm()) return;
     const payload = { from: getCanonicalCity(formData.from), to: getCanonicalCity(formData.to), date: formData.date };
+    addRecentSearch(payload);
     if (onSubmit) { onSubmit(payload); return; }
     navigate('/search-results', { state: payload });
   };
 
   /* ── Style tokens ── */
-  const S = isLight ? {
+  const lightTokens = {
     wrapper: 'bg-transparent p-0 md:bg-white md:border md:border-slate-200 md:p-5 rounded-2xl md:shadow-sm w-full mx-auto',
     label: 'text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 ml-1',
     input: 'w-full pl-10 pr-4 py-3.5 bg-slate-50 border rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:ring-2 focus:ring-[#002046]/20 focus:border-[#002046] focus:bg-white transition-all outline-none',
@@ -162,7 +167,22 @@ const SearchBar = ({
     mobileDropdown: 'absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl max-h-48 overflow-y-auto z-[9999]',
     mobileDropdownItem: 'px-4 py-3 text-slate-700 hover:bg-slate-50 cursor-pointer text-sm border-b border-slate-100 last:border-0',
     mobileSearchBtn: 'w-auto self-end bg-[#002046] hover:bg-[#001533] text-white h-[36px] px-5 rounded-lg font-bold text-sm flex items-center justify-center gap-1.5 transition-all mt-3',
-  } : {
+  };
+
+  // Landing hero: solid white card on the navy hero, CTA matches the peach → coral headline
+  const heroCta = 'bg-gradient-to-r from-[#FDBA74] to-[#FF8A65] hover:brightness-105 text-[#002046] shadow-[0_8px_20px_rgba(255,138,101,0.35)]';
+  const heroTokens = {
+    ...lightTokens,
+    wrapper: 'bg-white p-4 md:p-6 rounded-2xl w-full mx-auto',
+    swapBtn: 'mb-2 w-10 h-10 flex-shrink-0 bg-white hover:bg-[#002046] hover:text-white border border-slate-200 rounded-full flex items-center justify-center text-[#002046] shadow-sm transition-all',
+    quickPillActive: 'border-[#002046] bg-[#002046] text-white',
+    searchBtn: `w-full ${heroCta} h-[52px] md:h-[54px] rounded-xl font-extrabold text-sm flex items-center justify-center gap-2 transition-all`,
+    mobileCard: 'rounded-xl border border-slate-200 bg-slate-50',
+    mobileSwap: 'absolute right-4 -top-5 w-10 h-10 bg-white border border-slate-200 rounded-full flex items-center justify-center text-[#002046] z-20 shadow-sm',
+    mobileSearchBtn: `w-full ${heroCta} h-[48px] rounded-xl font-extrabold text-sm flex items-center justify-center gap-2 transition-all mt-3`,
+  };
+
+  const S = isHero ? heroTokens : isLight ? lightTokens : {
     wrapper: 'bg-transparent md:bg-charcoal/90 border-0 md:border md:border-white/10 p-0 md:p-6 rounded-2xl md:shadow-2xl w-full mx-auto md:backdrop-blur-xl',
     label: 'text-xs font-bold text-slate-400 uppercase tracking-[0.1em] mb-2 ml-1',
     input: 'w-full pl-10 pr-4 py-4 bg-input-gray border rounded-xl text-base text-white placeholder-silver-text focus:ring-2 focus:ring-white/30 focus:border-transparent transition-all outline-none',
@@ -185,6 +205,112 @@ const SearchBar = ({
     mobileDropdownItem: 'px-4 py-3 hover:bg-primary/10 cursor-pointer text-white text-sm border-b border-white/5 last:border-0',
     mobileSearchBtn: 'w-full bg-slate-900 hover:bg-slate-700 text-white h-[52px] rounded-xl font-extrabold text-base flex items-center justify-center gap-2 transition-all',
   };
+
+  /* ── Hero desktop: single segmented bar (From | To | Date | Search) ── */
+  if (isHero && !isMobile) {
+    const segment = 'relative flex-1 min-w-0 flex items-center gap-3 px-6 cursor-text hover:bg-slate-50 transition-colors';
+    const segLabel = (err) => `block text-[11px] font-bold uppercase tracking-wider ${err ? 'text-red-500' : 'text-slate-400'}`;
+    const cityInput = 'w-full bg-transparent border-0 p-0 text-lg font-bold text-[#002046] placeholder-slate-300 placeholder:font-semibold focus:ring-0 focus:outline-none truncate';
+    const formattedDate = formData.date
+      ? new Date(`${formData.date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
+      : 'Select date';
+
+    const renderCityDropdown = (list, search, onSelect) => (
+      <div className="absolute top-full left-0 mt-2 w-full min-w-[280px] bg-white border border-slate-200 rounded-xl shadow-xl max-h-72 overflow-y-auto z-50">
+        {list.length > 0
+          ? list.map(city => (
+              <div key={city.value.toLowerCase()} onClick={() => onSelect(city)}
+                className="flex items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer border-b border-slate-100 last:border-0">
+                <span className="material-symbols-outlined text-lg text-slate-400">location_city</span>{city.label}
+              </div>
+            ))
+          : search.length > 0
+            ? <div className="px-4 py-3 text-slate-400 text-sm">No matching cities — you can still search</div>
+            : null}
+      </div>
+    );
+
+    return (
+      <div className="flex items-stretch h-[84px] bg-white rounded-2xl">
+
+        {/* From */}
+        <div className={`${segment} rounded-l-2xl`} ref={fromRef} onClick={() => fromRef.current?.querySelector('input')?.focus()}>
+          <span className="material-symbols-outlined text-2xl text-slate-400">trip_origin</span>
+          <div className="min-w-0 flex-1">
+            <span className={segLabel(errors.from)}>{errors.from || 'From'}</span>
+            <input
+              value={fromSearch}
+              onChange={e => { setFromSearch(e.target.value); setFormData(p => ({ ...p, from: e.target.value })); setShowFromDropdown(true); setErrors(p => ({ ...p, from: '' })); }}
+              onFocus={() => setShowFromDropdown(true)}
+              className={cityInput}
+              placeholder="Leaving from" type="text"
+            />
+          </div>
+          {showFromDropdown && renderCityDropdown(filteredFromCities, fromSearch, handleFromSelect)}
+        </div>
+
+        {/* Divider + swap */}
+        <div className="relative w-px bg-slate-200 my-4">
+          <button onClick={handleSwap} title="Swap cities"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-10 h-10 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-[#002046] hover:bg-[#002046] hover:text-white hover:rotate-180 transition-all duration-300">
+            <span className="material-symbols-outlined text-xl">swap_horiz</span>
+          </button>
+        </div>
+
+        {/* To */}
+        <div className={`${segment} pl-8`} ref={toRef} onClick={() => toRef.current?.querySelector('input')?.focus()}>
+          <span className="material-symbols-outlined text-2xl text-slate-400">location_on</span>
+          <div className="min-w-0 flex-1">
+            <span className={segLabel(errors.to)}>{errors.to || 'To'}</span>
+            <input
+              value={toSearch}
+              onChange={e => { setToSearch(e.target.value); setFormData(p => ({ ...p, to: e.target.value })); setShowToDropdown(true); setErrors(p => ({ ...p, to: '' })); }}
+              onFocus={() => setShowToDropdown(true)}
+              className={cityInput}
+              placeholder="Going to" type="text"
+            />
+          </div>
+          {showToDropdown && renderCityDropdown(filteredToCities, toSearch, handleToSelect)}
+        </div>
+
+        <div className="w-px bg-slate-200 my-4" />
+
+        {/* Date */}
+        <div className={`${segment} cursor-pointer`} onClick={() => heroDateRef.current?.showPicker?.()}>
+          <span className="material-symbols-outlined text-2xl text-slate-400">calendar_month</span>
+          <div className="min-w-0 flex-1">
+            <span className={segLabel(errors.date)}>{errors.date || 'Date of journey'}</span>
+            <span className="block text-lg font-bold text-[#002046] truncate">{formattedDate}</span>
+          </div>
+          {showQuickDates && (
+            <div className="flex gap-1.5 flex-shrink-0">
+              {[{ label: 'Today', value: today }, { label: 'Tomorrow', value: tomorrow }].map(item => (
+                <button key={item.value} type="button"
+                  onClick={e => { e.stopPropagation(); setFormData(p => ({ ...p, date: item.value })); setErrors(p => ({ ...p, date: '' })); }}
+                  className={`rounded-full border px-3 py-1 text-xs font-bold transition ${formData.date === item.value ? S.quickPillActive : S.quickPillInactive}`}>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          )}
+          <input
+            ref={heroDateRef}
+            value={formData.date}
+            onChange={e => { setFormData(p => ({ ...p, date: e.target.value })); setErrors(p => ({ ...p, date: '' })); }}
+            className="absolute bottom-0 left-6 w-0 h-0 opacity-0 pointer-events-none"
+            type="date" min={today} tabIndex={-1} aria-label="Date of journey"
+          />
+        </div>
+
+        {/* Search */}
+        <button onClick={handleSearch}
+          className="flex-shrink-0 flex items-center gap-2 px-8 rounded-r-2xl bg-gradient-to-r from-[#FDBA74] to-[#FF8A65] hover:brightness-105 text-[#002046] font-extrabold text-base uppercase tracking-wide transition-all">
+          <span className="material-symbols-outlined text-[22px]">{submitIcon}</span>
+          {submitLabel}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className={S.wrapper}>

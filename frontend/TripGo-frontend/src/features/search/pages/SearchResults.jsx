@@ -7,6 +7,7 @@ import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ROUTES } from '../../../shared/constants/routes';
 import UserLayout from '../../../shared/components/UserLayout';
 import SearchBar from '../../../shared/components/ui/SearchBar';
+import { localDateString } from '../../../shared/utils/date';
 import PaginationControls from '../../../shared/components/ui/PaginationControls';
 import {
   formatUtcTime,
@@ -509,7 +510,7 @@ const SearchResults = () => {
   const initialSearch = {
     from: normalizeCityLabel(location.state?.from || storedSearchDraft?.from || ''),
     to: normalizeCityLabel(location.state?.to || storedSearchDraft?.to || ''),
-    date: location.state?.date || storedSearchDraft?.date || new Date().toISOString().split('T')[0],
+    date: location.state?.date || storedSearchDraft?.date || localDateString(),
   };
   const [searchParams, setSearchParams] = useState(initialSearch);
   const [appliedSearch, setAppliedSearch] = useState(initialSearch);
@@ -970,7 +971,7 @@ const SearchResults = () => {
                   <p className="text-sm text-slate-700">
                     <span className="font-semibold">Booking as guest</span> — or{' '}
                     <button
-                      onClick={() => navigate(ROUTES.LOGIN, { state: { from: location.pathname, ...location.state } })}
+                      onClick={() => navigate(ROUTES.LOGIN, { state: { returnTo: { pathname: location.pathname, state: appliedSearch } } })}
                       className="font-bold text-[#002046] underline-offset-2 hover:underline"
                     >
                       sign in
@@ -979,7 +980,7 @@ const SearchResults = () => {
                   </p>
                 </div>
                 <button
-                  onClick={() => navigate(ROUTES.LOGIN, { state: { from: location.pathname, ...location.state } })}
+                  onClick={() => navigate(ROUTES.LOGIN, { state: { returnTo: { pathname: location.pathname, state: appliedSearch } } })}
                   className="ml-4 flex-shrink-0 rounded-xl border border-[#002046]/20 bg-white px-4 py-2 text-xs font-bold text-[#002046] hover:bg-[#002046]/[0.04] transition-colors"
                 >
                   Sign in

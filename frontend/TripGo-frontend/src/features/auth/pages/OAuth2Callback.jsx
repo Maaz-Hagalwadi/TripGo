@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { getCurrentUser } from '../../../api/userService';
 import { ROUTES } from '../../../shared/constants/routes';
+import { takeReturnToFromOAuth } from '../../../shared/utils/returnTo';
 
 const OAuth2Callback = () => {
   const navigate = useNavigate();
@@ -31,6 +32,11 @@ const OAuth2Callback = () => {
       const userData = await getCurrentUser().catch(() => null);
       if (!userData || !userData.phone) {
         navigate(ROUTES.COMPLETE_PROFILE, { replace: true });
+        return;
+      }
+      const returnTo = takeReturnToFromOAuth();
+      if (returnTo) {
+        navigate(returnTo.pathname, { replace: true, state: returnTo.state });
       } else if (role === 'OPERATOR') {
         navigate(ROUTES.OPERATOR_DASHBOARD, { replace: true });
       } else if (role === 'ADMIN') {

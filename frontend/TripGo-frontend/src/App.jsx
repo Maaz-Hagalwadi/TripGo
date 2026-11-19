@@ -48,6 +48,7 @@ const PaymentSuccess = lazy(() => import('./features/search/pages/PaymentSuccess
 
 const CompleteProfile = lazy(() => import('./features/auth/pages/CompleteProfile'));
 const OperatorHowItWorks = lazy(() => import('./pages/OperatorHowItWorks'));
+const LegalPage = lazy(() => import('./pages/LegalPage'));
 const AdminOperatorAction = lazy(() => import('./pages/AdminOperatorAction'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const AdminReviews = lazy(() => import('./pages/AdminReviews'));
@@ -82,6 +83,9 @@ function App() {
           <Route path={ROUTES.UNAUTHORIZED} element={<Unauthorized />} />
           <Route path={ROUTES.COMPLETE_PROFILE} element={<CompleteProfile />} />
           <Route path={ROUTES.OPERATOR_HOW_IT_WORKS} element={<OperatorHowItWorks />} />
+          <Route path={ROUTES.TERMS} element={<LegalPage type="terms" />} />
+          <Route path={ROUTES.PRIVACY} element={<LegalPage type="privacy" />} />
+          <Route path={ROUTES.REFUND_POLICY} element={<LegalPage type="refund" />} />
 
           {/* Admin route — protected, ADMIN role only */}
           <Route path={ROUTES.ADMIN_OPERATOR_ACTION} element={

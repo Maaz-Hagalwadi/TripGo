@@ -11,6 +11,7 @@ export default {
     extend: {
       colors: {
         "primary": "#0B1F3A",
+        "brand": { DEFAULT: "#002046", dark: "#001533" },
         "accent": "#ffd700",
         "deep-black": "#050505",
         "charcoal": "#1a1a1a",

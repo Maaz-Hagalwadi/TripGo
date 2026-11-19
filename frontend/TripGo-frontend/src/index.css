@@ -19,6 +19,7 @@ html, body, #root {
 
 html {
   font-size: 14px;
+  scroll-padding-top: 4rem; /* keep anchored sections clear of the sticky header */
 }
 
 @media (min-width: 768px) {
@@ -77,4 +78,50 @@ body {
 input::placeholder {
   color: var(--text-secondary) !important;
   opacity: 1;
+}
+
+/* ── Landing page motion ── */
+.fade-up {
+  animation: fade-up 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Scroll-triggered: <Reveal> adds .is-visible when the element enters the viewport */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1), transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+.gradient-shift {
+  background-size: 200% auto;
+  animation: gradient-shift 5s ease-in-out infinite alternate;
+}
+
+@keyframes gradient-shift {
+  from { background-position: 0% 50%; }
+  to   { background-position: 100% 50%; }
+}
+
+.seat-pulse {
+  animation: seat-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes seat-pulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.18); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .fade-up, .gradient-shift, .seat-pulse { animation: none; }
 }

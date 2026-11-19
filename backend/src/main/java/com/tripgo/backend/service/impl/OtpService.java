@@ -25,17 +25,16 @@ public class OtpService {
     private final UserRepository userRepository;
     private final EmailService emailService;
 
+    /**
+     * Sends a login OTP to the account's email. Returns silently (no email) when there is no eligible
+     * account — unknown identifier, unverified email or suspended — so the response never reveals
+     * whether an account exists for the identifier.
+     */
     @Transactional
     public void generateAndSend(String identifier) {
-        User user = userRepository.findByEmailOrPhone(identifier, identifier)
-                .orElseThrow(() -> new BadRequestException("No account found with this email or phone"));
-
-        if (!user.isEmailVerified()) {
-            throw new BadRequestException("Please verify your email before using OTP login");
-        }
-
-        if (user.isSuspended()) {
-            throw new BadRequestException("Your account has been suspended. Please contact support@tripgo.com.");
+        User user = userRepository.findByEmailOrPhone(identifier, identifier).orElse(null);
+        if (user == null || !user.isEmailVerified() || user.isSuspended()) {
+            return;
         }
 
         // Delete any existing OTP for this identifier before issuing a new one

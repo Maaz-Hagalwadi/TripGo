@@ -47,4 +47,7 @@ export const ROUTES = {
   OPERATOR_HOW_IT_WORKS: '/operator/how-it-works',
   PAYMENT: '/payment',
   PAYMENT_SUCCESS: '/booking/success',
+  TERMS: '/terms',
+  PRIVACY: '/privacy',
+  REFUND_POLICY: '/refund-policy',
 };

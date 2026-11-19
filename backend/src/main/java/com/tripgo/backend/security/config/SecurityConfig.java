@@ -56,6 +56,7 @@ public class SecurityConfig {
                                 "/search/**",
                                 "/amenities/**",
                                 "/buses/*/rating-summary",
+                                "/reviews/recent",
                                 "/booking/schedules/*/route-stops",
                                 "/booking/schedules/*/policies",
                                 "/booking/schedules/*/features",

@@ -43,6 +43,21 @@ export const getSearchRoutes = async () => {
 };
 
 /**
+ * Most-served bookable routes with bus count, duration and lowest fare.
+ * Falls back to plain route pairs (no stats) if the endpoint is unavailable.
+ * @returns {Promise<Array<{from: string, to: string, buses?: number, durationMinutes?: number, startingFare?: number}>>}
+ */
+export const getPopularRoutes = async (limit = 6) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/search/popular-routes?limit=${limit}`);
+    if (response.ok) return await response.json();
+  } catch {
+    // fall through to the route-pair list
+  }
+  return (await getSearchRoutes()).slice(0, limit);
+};
+
+/**
  * Create a new route.
  * @param {{name: string, origin: string, destination: string}} routeData
  * @returns {Promise<{id: number, name: string, origin: string, destination: string}>}
