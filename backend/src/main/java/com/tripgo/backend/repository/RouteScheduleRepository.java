@@ -15,6 +15,20 @@ public interface RouteScheduleRepository extends JpaRepository<RouteSchedule, UU
 
     List<RouteSchedule> findByRoute(Route route);
 
+    // Same bookability rules as findByFromAndToAndDate, without the stop/date filter
+    @Query("""
+        SELECT rs FROM RouteSchedule rs
+        JOIN FETCH rs.route
+        LEFT JOIN FETCH rs.bus
+        WHERE rs.active = true
+        AND rs.tripStatus NOT IN ('STARTED', 'COMPLETED', 'CANCELLED')
+        AND (
+            (rs.frequency IS NOT NULL AND rs.frequency != 'ONCE')
+            OR rs.departureTime >= :now
+        )
+        """)
+    List<RouteSchedule> findBookableSchedules(@Param("now") Instant now);
+
     @Query("""
         SELECT DISTINCT rs FROM RouteSchedule rs
         JOIN rs.route r

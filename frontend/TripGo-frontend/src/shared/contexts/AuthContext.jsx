@@ -126,7 +126,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials) => {
     const result = await loginRequest(credentials);
-    if (result.error) return { success: false, error: result.error };
+    if (result.error) return { success: false, error: result.error, rateLimited: result.rateLimited };
     localStorage.setItem('accessToken', result.accessToken);
     localStorage.setItem('refreshToken', result.refreshToken);
     scheduleProactiveRefresh(result.accessToken);
@@ -136,13 +136,13 @@ export const AuthProvider = ({ children }) => {
 
   const sendLoginOtp = async (payload) => {
     const result = await sendOtpRequest(payload);
-    if (result.error) return { success: false, error: result.error };
+    if (result.error) return { success: false, error: result.error, rateLimited: result.rateLimited };
     return { success: true };
   };
 
   const loginWithOtp = async (payload) => {
     const result = await verifyOtpRequest(payload);
-    if (result.error) return { success: false, error: result.error };
+    if (result.error) return { success: false, error: result.error, rateLimited: result.rateLimited };
     localStorage.setItem('accessToken', result.accessToken);
     localStorage.setItem('refreshToken', result.refreshToken);
     scheduleProactiveRefresh(result.accessToken);

@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ROUTES } from '../../../shared/constants/routes';
 import Header from '../../../shared/components/layout/Header';
+import Footer from '../../../shared/components/layout/Footer';
 import HeroSection from './HeroSection';
 import OffersSection from './OffersSection';
 import WhyChooseUs from './WhyChooseUs';
 import ExploreSection from './ExploreSection';
+import ReviewsSection from './ReviewsSection';
+import FAQSection from './FAQSection';
 
 const Home = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { checkAuth, user, loading } = useAuth();
   const [isProcessingOAuth, setIsProcessingOAuth] = useState(false);
@@ -30,6 +34,14 @@ const Home = () => {
 
     handleOAuthCallback();
   }, [searchParams, checkAuth]);
+
+  // Arriving from another page via a header/footer section link
+  useEffect(() => {
+    const id = location.state?.scrollTo;
+    if (!id) return;
+    const timer = setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }), 100);
+    return () => clearTimeout(timer);
+  }, [location.state]);
 
   useEffect(() => {
     if (user?.role) {
@@ -63,6 +75,9 @@ const Home = () => {
       <OffersSection />
       <WhyChooseUs />
       <ExploreSection />
+      <ReviewsSection />
+      <FAQSection />
+      <Footer />
     </div>
   );
 };

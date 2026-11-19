@@ -1,4 +1,5 @@
 package com.tripgo.backend.service.impl;
+import com.tripgo.backend.exception.BadRequestException;
 import com.tripgo.backend.model.entities.PasswordResetToken;
 import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.repository.PasswordResetTokenRepository;
@@ -37,10 +38,10 @@ public class PasswordResetService {
 
         PasswordResetToken token = tokenRepository
                 .findByTokenAndUsedFalse(tokenValue)
-                .orElseThrow(() -> new RuntimeException("Invalid reset token"));
+                .orElseThrow(() -> new BadRequestException("Invalid reset token"));
 
         if (token.getExpiryDate().isBefore(Instant.now())) {
-            throw new RuntimeException("Reset token expired");
+            throw new BadRequestException("Reset token expired");
         }
 
         return token;

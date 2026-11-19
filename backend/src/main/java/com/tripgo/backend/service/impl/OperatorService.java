@@ -1,6 +1,7 @@
 package com.tripgo.backend.service.impl;
 
 import com.tripgo.backend.dto.request.OperatorRegistrationRequest;
+import com.tripgo.backend.exception.BadRequestException;
 import com.tripgo.backend.dto.response.OperatorRegistrationResponse;
 import com.tripgo.backend.model.entities.EmailVerificationToken;
 import com.tripgo.backend.model.entities.Operator;
@@ -37,10 +38,15 @@ public class OperatorService {
     @Value("${app.backend.url}")
     private String backendUrl;
 
+    // Transactional so a failure saving the user doesn't leave an orphaned PENDING operator behind
+    @Transactional
     public OperatorRegistrationResponse register(OperatorRegistrationRequest req) {
 
         if (userRepository.existsByEmail(req.email())) {
-            throw new RuntimeException("Email already used");
+            throw new BadRequestException("Email already in use");
+        }
+        if (userRepository.existsByPhone(req.phone())) {
+            throw new BadRequestException("Phone already in use");
         }
 
         Role operatorRole = roleRepository.findByName(RoleType.ROLE_OPERATOR)
@@ -53,7 +59,7 @@ public class OperatorService {
                         .address(req.address())
                         .status(OperatorStatus.PENDING)
                         .shortName(req.shortName())
-                        .contactEmail(req.email())
+                        .contactEmail(req.contactEmail() != null && !req.contactEmail().isBlank() ? req.contactEmail().trim() : req.email())
                         .build()
         );
 

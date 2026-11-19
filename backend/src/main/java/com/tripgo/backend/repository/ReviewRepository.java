@@ -17,6 +17,26 @@ public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
     boolean existsByUserIdAndRouteScheduleIdAndTravelDate(UUID userId, UUID scheduleId, java.time.LocalDate travelDate);
 
+    // Public landing page: visible, approved reviews that have a written comment
+    @Query("""
+        SELECT r FROM Review r
+        LEFT JOIN FETCH r.user
+        LEFT JOIN FETCH r.route
+        WHERE (r.hidden = false OR r.hidden IS NULL)
+        AND (r.moderationStatus = 'APPROVED' OR r.moderationStatus IS NULL)
+        AND r.comment IS NOT NULL AND TRIM(r.comment) <> ''
+        ORDER BY r.createdAt DESC
+        """)
+    List<Review> findRecentPublicReviews(Pageable pageable);
+
+    // [average rating, review count] across all visible, approved reviews
+    @Query("""
+        SELECT AVG(r.rating), COUNT(r) FROM Review r
+        WHERE (r.hidden = false OR r.hidden IS NULL)
+        AND (r.moderationStatus = 'APPROVED' OR r.moderationStatus IS NULL)
+        """)
+    List<Object[]> getPublicRatingStats();
+
     // Operator queries
     Page<Review> findByOperatorId(UUID operatorId, Pageable pageable);
     Page<Review> findByOperatorIdAndRatingGreaterThanEqual(UUID operatorId, int minRating, Pageable pageable);

@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost } from './apiClient';
+import { apiGet, apiPatch, apiPost, API_BASE_URL } from './apiClient';
 
 const toQuery = (params = {}) => {
   const search = new URLSearchParams();
@@ -41,4 +41,19 @@ export const hideAdminReview = async (reviewId, reason) => {
 
 export const unhideAdminReview = async (reviewId) => {
   return apiPatch(`/admin/reviews/${encodeURIComponent(reviewId)}/unhide`);
+};
+
+/**
+ * Public: recent approved reviews with a comment, plus overall average and count.
+ * Resolves to an empty result if the endpoint is unavailable.
+ * @returns {Promise<{averageRating: number|null, totalReviews: number, reviews: Array}>}
+ */
+export const getRecentReviews = async (limit = 6) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/reviews/recent?limit=${limit}`);
+    if (response.ok) return await response.json();
+  } catch {
+    // fall through to empty result
+  }
+  return { averageRating: null, totalReviews: 0, reviews: [] };
 };

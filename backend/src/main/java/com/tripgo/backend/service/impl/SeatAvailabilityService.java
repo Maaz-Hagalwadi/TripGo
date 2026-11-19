@@ -41,47 +41,7 @@ public class SeatAvailabilityService {
         List<RouteSegment> travelSegments = segments.subList(startIdx, endIdx);
         UUID busId = schedule.getBus() != null ? schedule.getBus().getId() : null;
 
-        // Load all fares for all travel segments in one query, then group in memory
-        List<UUID> segmentIds = travelSegments.stream().map(RouteSegment::getId).toList();
-        Map<UUID, List<Fare>> faresBySegmentId = fareRepo.findByRouteSegmentIdIn(segmentIds)
-                .stream()
-                .collect(Collectors.groupingBy(f -> f.getRouteSegment().getId()));
-
-        // Collect seat types from the pre-loaded fares (bus-specific first, then route-level)
-        Set<String> seatTypes = new java.util.LinkedHashSet<>();
-        for (RouteSegment seg : travelSegments) {
-            List<Fare> segFares = faresBySegmentId.getOrDefault(seg.getId(), List.of());
-            segFares.stream()
-                    .map(Fare::getSeatType)
-                    .filter(t -> t != null && !t.isBlank())
-                    .forEach(seatTypes::add);
-        }
-
-        // Build fare map: seatType -> FareResult (priority: bus-specific > route-level > any)
-        Map<String, FareResult> faresByType = new java.util.LinkedHashMap<>();
-        for (String type : seatTypes) {
-            BigDecimal base = BigDecimal.ZERO;
-            BigDecimal gst = BigDecimal.ZERO;
-            boolean complete = true;
-            for (RouteSegment seg : travelSegments) {
-                List<Fare> segFares = faresBySegmentId.getOrDefault(seg.getId(), List.of());
-                Optional<Fare> fare = busId != null
-                        ? segFares.stream().filter(f -> type.equals(f.getSeatType()) && f.getBus() != null && busId.equals(f.getBus().getId())).findFirst()
-                        : Optional.empty();
-                if (fare.isEmpty()) {
-                    fare = segFares.stream().filter(f -> type.equals(f.getSeatType()) && f.getBus() == null).findFirst();
-                }
-                if (fare.isEmpty()) {
-                    fare = segFares.stream().filter(f -> type.equals(f.getSeatType())).findFirst();
-                }
-                if (fare.isEmpty()) { complete = false; break; }
-                base = base.add(fare.get().getBaseFare());
-                gst = gst.add(fare.get().getBaseFare()
-                        .multiply(fare.get().getGstPercent())
-                        .divide(BigDecimal.valueOf(100)));
-            }
-            if (complete) faresByType.put(type, new FareResult(base, gst, base.add(gst)));
-        }
+        Map<String, FareResult> faresByType = computeFaresByType(travelSegments, busId, loadFaresBySegment(travelSegments));
 
         if (faresByType.isEmpty()) {
             throw new RuntimeException("No fares defined for route: " + from + " -> " + to);
@@ -133,6 +93,59 @@ public class SeatAvailabilityService {
         if (bookedStart == -1 || bookedEnd == -1 || reqStart == -1 || reqEnd == -1) return false;
         // Overlap exists if one range starts before the other ends
         return bookedStart < reqEnd && bookedEnd > reqStart;
+    }
+
+    /** Load all fares for the given segments in one query, grouped by segment id. */
+    public Map<UUID, List<Fare>> loadFaresBySegment(List<RouteSegment> travelSegments) {
+        List<UUID> segmentIds = travelSegments.stream().map(RouteSegment::getId).toList();
+        return fareRepo.findByRouteSegmentIdIn(segmentIds)
+                .stream()
+                .collect(Collectors.groupingBy(f -> f.getRouteSegment().getId()));
+    }
+
+    /**
+     * Total fare per seat type across the travel segments.
+     * Per segment, priority is bus-specific > route-level > any fare of that seat type;
+     * a seat type is dropped if any segment has no fare for it.
+     */
+    public Map<String, FareResult> computeFaresByType(List<RouteSegment> travelSegments, UUID busId,
+                                                      Map<UUID, List<Fare>> faresBySegmentId) {
+        // Collect seat types from the pre-loaded fares (bus-specific first, then route-level)
+        Set<String> seatTypes = new java.util.LinkedHashSet<>();
+        for (RouteSegment seg : travelSegments) {
+            List<Fare> segFares = faresBySegmentId.getOrDefault(seg.getId(), List.of());
+            segFares.stream()
+                    .map(Fare::getSeatType)
+                    .filter(t -> t != null && !t.isBlank())
+                    .forEach(seatTypes::add);
+        }
+
+        // Build fare map: seatType -> FareResult (priority: bus-specific > route-level > any)
+        Map<String, FareResult> faresByType = new java.util.LinkedHashMap<>();
+        for (String type : seatTypes) {
+            BigDecimal base = BigDecimal.ZERO;
+            BigDecimal gst = BigDecimal.ZERO;
+            boolean complete = true;
+            for (RouteSegment seg : travelSegments) {
+                List<Fare> segFares = faresBySegmentId.getOrDefault(seg.getId(), List.of());
+                Optional<Fare> fare = busId != null
+                        ? segFares.stream().filter(f -> type.equals(f.getSeatType()) && f.getBus() != null && busId.equals(f.getBus().getId())).findFirst()
+                        : Optional.empty();
+                if (fare.isEmpty()) {
+                    fare = segFares.stream().filter(f -> type.equals(f.getSeatType()) && f.getBus() == null).findFirst();
+                }
+                if (fare.isEmpty()) {
+                    fare = segFares.stream().filter(f -> type.equals(f.getSeatType())).findFirst();
+                }
+                if (fare.isEmpty()) { complete = false; break; }
+                base = base.add(fare.get().getBaseFare());
+                gst = gst.add(fare.get().getBaseFare()
+                        .multiply(fare.get().getGstPercent())
+                        .divide(BigDecimal.valueOf(100)));
+            }
+            if (complete) faresByType.put(type, new FareResult(base, gst, base.add(gst)));
+        }
+        return faresByType;
     }
 
     private int indexOf(List<RouteSegment> segs, String stop) {

@@ -1,19 +1,36 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import TripGoIcon from '../../../assets/icons/TripGoIcon';
+import loginBusImg from '../../../assets/images/login-bus.jpg';
 import { API_BASE_URL } from '../../../config/env';
+import { sanitizeReturnTo, saveReturnToForOAuth } from '../../../shared/utils/returnTo';
+import { ROUTES } from '../../../shared/constants/routes';
 
-const BUS_IMG = 'https://lh3.googleusercontent.com/aida-public/AB6AXuBn8Xu6YxgTm5MyWzn7d6Rl_cxu8YTmtjqgy0nYJP5Vh2kEeVlUNjVps6hzkLOTjgVOKBP4GDXQpbxUUvUkrqOwENA_tYK7J8Skr9kxzSSGwX-CUzXUXwjOS3XFejwT18N285GQidhRXHAQ7sWjw_I8-slj3CJDnoWDDgf8gmOchEhN7NqncJYuVZwWl8iXr63k-nmF3uAm0prUmXBg0fIKzG_IwSq0gf3scYz5nXofG_ywlfMF8A8O44VsvjWbW3fv9jgpHFEGZ1WD';
+const OTP_RESEND_SECONDS = 30;
+const RATE_LIMIT_WAIT_SECONDS = 60; // backend login bucket refills over one minute
 
 const inputCls = (err) =>
-  `w-full pl-12 pr-4 py-3.5 bg-[#fbfcfe] border rounded-lg text-sm text-[#111827] placeholder:text-[#8a94a6] focus:ring-4 focus:ring-[#0B1F3A]/10 focus:border-[#0B1F3A] transition-all outline-none ${
-    err ? 'border-[#B42318]' : 'border-[#d8dde8]'
+  `w-full pl-12 pr-4 py-3.5 bg-slate-50 border rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:ring-4 focus:ring-[#FDBA74]/25 focus:border-[#FF8A65] transition-all outline-none ${
+    err ? 'border-red-500' : 'border-slate-200'
   }`;
+
+const primaryBtnCls =
+  'w-full py-4 px-6 bg-[#0B1F3A] text-white text-sm font-bold rounded-xl hover:bg-[#102A4C] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 shadow-[0_14px_30px_rgba(11,31,58,0.22)]';
+
+const linkCls = 'font-bold text-primary hover:text-[#FF8A65] transition-colors';
+
+const Spinner = () => (
+  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+  </svg>
+);
 
 const DesktopLoginForm = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, sendLoginOtp, loginWithOtp, user } = useAuth();
   const [formData, setFormData] = useState({ emailOrPhone: '', password: '', otp: '' });
   const [loginMode, setLoginMode] = useState('password');
@@ -21,24 +38,53 @@ const DesktopLoginForm = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isOtpSending, setIsOtpSending] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+  const [formError, setFormError] = useState('');
+  const [lockedFor, setLockedFor] = useState(0);
   const [loginSuccess, setLoginSuccess] = useState(false);
   const [suspended, setSuspended] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Page the user was on before being asked to sign in (search results, a protected page, …)
+  const returnTo = useMemo(() => sanitizeReturnTo(location.state?.returnTo), [location.state]);
+
   useEffect(() => {
     if (loginSuccess && user?.role) {
       const t = setTimeout(() => {
-        if (user.role === 'OPERATOR') navigate('/operator/dashboard');
+        if (returnTo) navigate(returnTo.pathname, { replace: true, state: returnTo.state });
+        else if (user.role === 'OPERATOR') navigate('/operator/dashboard');
         else if (user.role === 'ADMIN') navigate('/admin/dashboard');
         else navigate('/dashboard');
       }, 100);
       return () => clearTimeout(t);
     }
-  }, [user, loginSuccess, navigate]);
+  }, [user, loginSuccess, navigate, returnTo]);
+
+  useEffect(() => {
+    if (lockedFor <= 0) return;
+    const t = setTimeout(() => {
+      setLockedFor((s) => s - 1);
+      if (lockedFor === 1) setFormError('');
+    }, 1000);
+    return () => clearTimeout(t);
+  }, [lockedFor]);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
 
   const updateField = (name, value) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
     setErrors((prev) => ({ ...prev, [name]: '' }));
+    if (!lockedFor) setFormError('');
+  };
+
+  // Failed attempts show a persistent message on the form (toasts disappear too quickly)
+  const showFailure = (result) => {
+    if (result.rateLimited) setLockedFor(RATE_LIMIT_WAIT_SECONDS);
+    setFormError(result.error || 'Something went wrong. Please try again.');
   };
 
   const validateBase = () => {
@@ -51,19 +97,21 @@ const DesktopLoginForm = () => {
 
   const handleSendOtp = async () => {
     setErrors({});
-    if (!validateBase()) return;
+    if (!validateBase() || resendIn > 0 || lockedFor > 0) return;
+    setFormError('');
 
     setIsOtpSending(true);
     try {
       const result = await sendLoginOtp({ emailOrPhone: formData.emailOrPhone.trim() });
       if (result.success) {
         setOtpSent(true);
-        toast.success('OTP sent successfully.');
+        setResendIn(OTP_RESEND_SECONDS);
+        toast.success('Check your email for a 6-digit code.');
       } else {
-        toast.error(result.error || 'Failed to send OTP');
+        showFailure(result);
       }
     } catch {
-      toast.error('Network error. Please try again.');
+      showFailure({ error: 'Network error. Please try again.' });
     } finally {
       setIsOtpSending(false);
     }
@@ -72,7 +120,8 @@ const DesktopLoginForm = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrors({});
-    if (!validateBase()) return;
+    if (!validateBase() || lockedFor > 0) return;
+    setFormError('');
 
     if (loginMode === 'password' && !formData.password.trim()) {
       setErrors({ password: 'Password is required' });
@@ -80,7 +129,7 @@ const DesktopLoginForm = () => {
     }
 
     if (loginMode === 'otp' && !formData.otp.trim()) {
-      setErrors({ otp: 'OTP is required' });
+      setErrors({ otp: 'Code is required' });
       return;
     }
 
@@ -102,104 +151,139 @@ const DesktopLoginForm = () => {
       } else if (result.error?.toLowerCase().includes('suspend')) {
         setSuspended(true);
       } else {
-        toast.error(result.error);
+        showFailure(result);
       }
     } catch {
-      toast.error('Network error. Please try again.');
+      showFailure({ error: 'Network error. Please try again.' });
     } finally {
       setIsLoading(false);
     }
   };
 
-  return (
-    <div className="min-h-screen flex bg-[#f5f7fb] text-[#111827]" style={{ fontFamily: 'Inter, sans-serif' }}>
-      <div className="hidden lg:flex lg:w-[46%] relative bg-[#121826] items-center overflow-hidden">
-        <img src={BUS_IMG} className="absolute inset-0 h-full w-full object-cover opacity-45" alt="" />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(18,24,38,0.98)_0%,rgba(18,24,38,0.86)_44%,rgba(18,24,38,0.42)_100%)]" />
-        <div
-          className="absolute inset-0 opacity-25 pointer-events-none"
-          style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.32) 1px, transparent 0)', backgroundSize: '34px 34px' }}
+  const handleGoogle = () => {
+    // OAuth leaves the app, so keep the return page in sessionStorage for OAuth2Callback
+    saveReturnToForOAuth(location.state?.returnTo);
+    window.location.href = `${API_BASE_URL}/oauth2/authorization/google`;
+  };
+
+  const emailField = (
+    <div className="space-y-1.5">
+      <label htmlFor="login-identifier" className="text-sm font-semibold text-slate-900">Email or phone</label>
+      <div className="relative">
+        <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-[20px] pointer-events-none">mail</span>
+        <input
+          id="login-identifier"
+          name="username"
+          autoComplete="username"
+          className={inputCls(errors.emailOrPhone)}
+          placeholder="you@example.com or mobile number"
+          type="text"
+          value={formData.emailOrPhone}
+          onChange={(e) => updateField('emailOrPhone', e.target.value)}
         />
-        <div className="absolute left-0 top-0 h-full w-1.5 bg-[#0B1F3A]" />
+      </div>
+      {errors.emailOrPhone && <p className="text-red-600 text-xs">{errors.emailOrPhone}</p>}
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen flex bg-slate-50 text-slate-900">
+
+      {/* ── Left panel ── */}
+      <div className="hidden lg:flex lg:w-[46%] relative bg-primary items-center overflow-hidden">
+        <img src={loginBusImg} className="absolute inset-0 h-full w-full object-cover object-[70%_center] opacity-50" alt="" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(11,31,58,0.97)_0%,rgba(11,31,58,0.85)_48%,rgba(11,31,58,0.35)_100%)]" />
+        <div className="absolute -bottom-24 -right-16 w-80 h-80 rounded-full bg-[#FF8A65]/15 blur-3xl" aria-hidden="true" />
+
+        <button onClick={() => navigate('/')} className="absolute top-8 left-14 xl:left-16 z-20 flex items-center gap-3">
+          <span className="h-11 w-11 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center">
+            <TripGoIcon className="w-7 h-6 text-white" />
+          </span>
+          <span className="font-black text-2xl tracking-tight text-white">TripGo</span>
+        </button>
 
         <div className="relative z-10 p-14 xl:p-16 max-w-xl text-white">
-          <button onClick={() => navigate('/')} className="flex items-center gap-3 mb-12">
-            <span className="h-11 w-11 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center">
-              <TripGoIcon className="w-7 h-7 text-white" />
-            </span>
-            <span className="font-black text-2xl tracking-tight text-white">TripGo</span>
-          </button>
-          <p className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white/80 mb-6">
-            <span className="material-symbols-outlined text-[16px] text-[#D6E8FF]">verified</span>
-            One secure login for every TripGo account
-          </p>
-          <h1 className="text-5xl font-bold leading-tight mb-5 text-white">
-            Manage every bus journey from one professional workspace.
+
+          <h1 className="text-5xl font-black leading-[1.1] tracking-tight mb-5 text-white">
+            Your next trip<br />
+            <span className="bg-gradient-to-r from-[#FDBA74] to-[#FF8A65] bg-clip-text text-transparent">starts here.</span>
           </h1>
-          <p className="text-white/72 text-lg leading-relaxed mb-9">
-            Travellers and operators sign in from the same page, then TripGo takes each user to the right dashboard.
+          <p className="text-slate-300 text-lg leading-relaxed mb-9">
+            Sign in to see your tickets, manage your bookings, and book your next seat in seconds.
           </p>
+
           <div className="grid gap-3">
             {[
-              { icon: 'event_seat', title: 'Passenger Bookings', sub: 'View tickets, seats, boarding points, and trip history.' },
-              { icon: 'directions_bus', title: 'Operator Access', sub: 'Approved partners continue straight to fleet tools.' },
+              { icon: 'confirmation_number', title: 'Your tickets in one place', sub: 'Download QR tickets, check boarding points, and manage cancellations.' },
+              { icon: 'directions_bus', title: 'Operators sign in here too', sub: 'We’ll take you straight to your fleet dashboard.' },
             ].map(({ icon, title, sub }) => (
-              <div key={title} className="flex items-center gap-4 p-4 rounded-xl border border-white/10 bg-white/[0.07] backdrop-blur-sm">
-                <span className="material-symbols-outlined text-[#D6E8FF]">{icon}</span>
+              <div key={title} className="flex items-center gap-4 p-4 rounded-xl border border-white/10 bg-white/[0.06] backdrop-blur-sm">
+                <span className="w-10 h-10 flex-shrink-0 rounded-lg bg-[#FDBA74]/15 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[#FDBA74]">{icon}</span>
+                </span>
                 <div>
-                  <p className="text-sm font-semibold text-white">{title}</p>
-                  <p className="text-xs text-white/58 mt-0.5">{sub}</p>
+                  <p className="text-sm font-bold text-white">{title}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">{sub}</p>
                 </div>
               </div>
             ))}
           </div>
+
           <div className="mt-10 grid grid-cols-3 gap-4 border-t border-white/10 pt-6">
             {[
-              ['500+', 'routes'],
-              ['24/7', 'support'],
-              ['Instant', 'tickets'],
+              ['No', 'booking fees'],
+              ['15 min', 'seat hold at checkout'],
+              ['QR', 'e-tickets'],
             ].map(([value, label]) => (
               <div key={label}>
-                <p className="text-xl font-black text-white">{value}</p>
-                <p className="text-xs text-white/52 mt-1">{label}</p>
+                <p className="text-xl font-black text-[#FDBA74]">{value}</p>
+                <p className="text-xs text-slate-400 mt-1">{label}</p>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      <div className="w-full lg:w-[54%] flex flex-col bg-[#f5f7fb]">
-        <div className="p-8 lg:px-12 flex justify-between items-center">
-          <button onClick={() => navigate('/')} className="flex items-center gap-2 text-[#111827]">
-            <TripGoIcon className="w-7 h-7 text-[#0B1F3A] lg:hidden" />
-            <span className="font-black text-xl lg:text-2xl tracking-tight">TripGo</span>
+      {/* ── Right: form ── */}
+      <div className="w-full lg:w-[54%] flex flex-col bg-slate-50">
+        <div className="p-8 lg:px-12 flex justify-between items-center lg:invisible">
+          <button onClick={() => navigate('/')} className="flex items-center gap-2 text-slate-900">
+            <span className="lg:hidden w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
+              <TripGoIcon className="w-6 h-5 text-white" />
+            </span>
+            <span className="font-black text-xl lg:text-2xl tracking-tight text-primary">TripGo</span>
           </button>
         </div>
 
         <div className="flex-grow flex items-center justify-center p-5 sm:p-8 lg:p-12">
-          <div className="w-full max-w-[430px] bg-white border border-[#e4e8f0] rounded-2xl shadow-[0_24px_70px_rgba(17,24,39,0.10)] p-6 sm:p-8">
+          <div className="w-full max-w-[430px] bg-white border border-slate-200/70 rounded-2xl shadow-[0_24px_70px_rgba(11,31,58,0.10)] p-6 sm:p-8">
             <div className="mb-8">
-              <h2 className="text-3xl font-bold text-[#111827] mb-2">Welcome back</h2>
-              <p className="text-sm text-[#667085]">Use one login for traveller, operator, and admin access.</p>
+              <h2 className="text-3xl font-black text-slate-900 mb-2">Welcome back</h2>
+              <p className="text-sm text-slate-500">
+                {returnTo ? 'Sign in to continue where you left off.' : 'Travellers and operators use the same login.'}
+              </p>
             </div>
 
-            <div className="flex p-1 bg-[#f2f4f7] rounded-xl mb-8 gap-1">
+            <div className="flex p-1 bg-slate-100 rounded-xl mb-8 gap-1" role="tablist">
               {[
                 ['password', 'Password', 'lock'],
-                ['otp', 'Login with OTP', 'sms'],
+                ['otp', 'Email code', 'mark_email_read'],
               ].map(([mode, label, icon]) => (
                 <button
                   key={mode}
                   type="button"
+                  role="tab"
+                  aria-selected={loginMode === mode}
                   onClick={() => {
                     setLoginMode(mode);
                     setErrors({});
+                    if (!lockedFor) setFormError('');
                   }}
-                  className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-                    loginMode === mode ? 'bg-white text-[#0B1F3A] shadow-sm' : 'text-[#667085] hover:bg-white'
+                  className={`flex-1 py-2.5 px-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                    loginMode === mode ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-primary'
                   }`}
                 >
-                  <span className="material-symbols-outlined text-[18px]">{icon}</span>
+                  <span className={`material-symbols-outlined text-[18px] ${loginMode === mode ? 'text-[#FF8A65]' : ''}`}>{icon}</span>
                   <span>{label}</span>
                 </button>
               ))}
@@ -215,56 +299,59 @@ const DesktopLoginForm = () => {
               </div>
             )}
 
+            {formError && (
+              <div role="alert" className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3">
+                <span className="material-symbols-outlined text-red-500 text-[20px] mt-0.5">{lockedFor > 0 ? 'timer' : 'error'}</span>
+                <div className="text-sm text-red-700">
+                  <p className="font-semibold">{formError}</p>
+                  {lockedFor > 0 && <p className="mt-0.5 text-red-600">You can try again in {lockedFor}s.</p>}
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-5">
 
               {/* ── PASSWORD MODE ── */}
               {loginMode === 'password' && (
                 <>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-semibold text-[#111827]">Email or Phone</label>
-                    <div className="relative">
-                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">mail</span>
-                      <input
-                        className={inputCls(errors.emailOrPhone)}
-                        placeholder="Enter your mail or mobile number"
-                        type="text"
-                        value={formData.emailOrPhone}
-                        onChange={(e) => updateField('emailOrPhone', e.target.value)}
-                      />
-                    </div>
-                    {errors.emailOrPhone && <p className="text-[#B42318] text-xs">{errors.emailOrPhone}</p>}
-                  </div>
+                  {emailField}
 
                   <div className="space-y-1.5">
                     <div className="flex justify-between items-center">
-                      <label className="text-sm font-semibold text-[#111827]">Password</label>
-                      <button type="button" onClick={() => navigate('/forgot-password')} className="text-sm font-semibold text-[#0B1F3A] hover:underline">
-                        Forgot Password?
+                      <label htmlFor="login-password" className="text-sm font-semibold text-slate-900">Password</label>
+                      <button type="button" onClick={() => navigate('/forgot-password')} className={`text-sm ${linkCls}`}>
+                        Forgot password?
                       </button>
                     </div>
                     <div className="relative">
-                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">lock</span>
+                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-[20px] pointer-events-none">lock</span>
                       <input
+                        id="login-password"
+                        name="password"
+                        autoComplete="current-password"
                         className={`${inputCls(errors.password)} pr-12`}
                         placeholder="Enter your password"
                         type={showPassword ? 'text' : 'password'}
                         value={formData.password}
                         onChange={(e) => updateField('password', e.target.value)}
                       />
-                      <button type="button" onClick={() => setShowPassword((v) => !v)} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#98a2b3] hover:text-[#111827] transition-colors">
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900 transition-colors"
+                      >
                         <span className="material-symbols-outlined text-[20px]">{showPassword ? 'visibility_off' : 'visibility'}</span>
                       </button>
                     </div>
-                    {errors.password && <p className="text-[#B42318] text-xs">{errors.password}</p>}
+                    {errors.password && <p className="text-red-600 text-xs">{errors.password}</p>}
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full py-4 px-6 bg-[#0B1F3A] text-white text-sm font-bold rounded-xl hover:bg-[#102A4C] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 shadow-[0_14px_30px_rgba(11,31,58,0.22)]"
-                  >
-                    {isLoading ? (
-                      <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Signing In...</>
+                  <button type="submit" disabled={isLoading || lockedFor > 0} className={primaryBtnCls}>
+                    {lockedFor > 0 ? (
+                      <span>Try again in {lockedFor}s</span>
+                    ) : isLoading ? (
+                      <><Spinner />Signing in...</>
                     ) : (
                       <><span>Sign In</span><span className="material-symbols-outlined text-[20px]">arrow_forward</span></>
                     )}
@@ -272,64 +359,58 @@ const DesktopLoginForm = () => {
                 </>
               )}
 
-              {/* ── OTP MODE — STEP 1: enter email/phone ── */}
+              {/* ── EMAIL CODE MODE — STEP 1: enter email/phone ── */}
               {loginMode === 'otp' && !otpSent && (
                 <>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-semibold text-[#111827]">Email or Phone</label>
-                    <div className="relative">
-                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">mail</span>
-                      <input
-                        className={inputCls(errors.emailOrPhone)}
-                        placeholder="Enter your mail or mobile number"
-                        type="text"
-                        value={formData.emailOrPhone}
-                        onChange={(e) => updateField('emailOrPhone', e.target.value)}
-                      />
-                    </div>
-                    {errors.emailOrPhone && <p className="text-[#B42318] text-xs">{errors.emailOrPhone}</p>}
-                  </div>
+                  {emailField}
+                  <p className="-mt-2 flex items-start gap-1.5 text-xs text-slate-500">
+                    <span className="material-symbols-outlined text-sm text-[#FF8A65]">info</span>
+                    We’ll email a 6-digit code to the email address on your account — even if you enter your phone number.
+                  </p>
 
-                  <button
-                    type="button"
-                    onClick={handleSendOtp}
-                    disabled={isOtpSending}
-                    className="w-full py-4 px-6 bg-[#0B1F3A] text-white text-sm font-bold rounded-xl hover:bg-[#102A4C] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 shadow-[0_14px_30px_rgba(11,31,58,0.22)]"
-                  >
-                    {isOtpSending ? (
-                      <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Sending OTP...</>
+                  <button type="button" onClick={handleSendOtp} disabled={isOtpSending || resendIn > 0 || lockedFor > 0} className={primaryBtnCls}>
+                    {lockedFor > 0 ? (
+                      <span>Try again in {lockedFor}s</span>
+                    ) : isOtpSending ? (
+                      <><Spinner />Sending code...</>
+                    ) : resendIn > 0 ? (
+                      <span>Send again in {resendIn}s</span>
                     ) : (
-                      <><span>Send OTP</span><span className="material-symbols-outlined text-[20px]">sms</span></>
+                      <><span>Email me a code</span><span className="material-symbols-outlined text-[20px]">send</span></>
                     )}
                   </button>
                 </>
               )}
 
-              {/* ── OTP MODE — STEP 2: enter OTP ── */}
+              {/* ── EMAIL CODE MODE — STEP 2: enter code ── */}
               {loginMode === 'otp' && otpSent && (
                 <>
-                  {/* Locked email row */}
-                  <div className="flex items-center justify-between px-4 py-3 bg-[#f2f4f7] rounded-xl border border-[#e4e8f0]">
+                  <div className="flex items-center justify-between px-4 py-3 bg-slate-50 rounded-xl border border-slate-200">
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="material-symbols-outlined text-[#0B1F3A] text-[18px] shrink-0">mail</span>
-                      <span className="text-sm text-[#111827] font-medium truncate">{formData.emailOrPhone}</span>
+                      <span className="material-symbols-outlined text-primary text-[18px] shrink-0">mail</span>
+                      <span className="text-sm text-slate-900 font-medium truncate">{formData.emailOrPhone}</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => { setOtpSent(false); updateField('otp', ''); }}
-                      className="text-xs font-bold text-[#0B1F3A] hover:underline shrink-0 ml-3"
+                      className={`text-xs shrink-0 ml-3 ${linkCls}`}
                     >
                       Change
                     </button>
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-sm font-semibold text-[#111827]">Enter OTP</label>
-                    <p className="text-xs text-[#667085]">We sent a 6-digit code to your registered email.</p>
+                    <label htmlFor="login-otp" className="text-sm font-semibold text-slate-900">Enter code</label>
+                    <p className="text-xs text-slate-500">
+                      If an account exists for these details, we’ve emailed a 6-digit code to its email address. It expires in 10 minutes.
+                    </p>
                     <div className="relative">
-                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[#98a2b3] text-[20px] pointer-events-none">pin</span>
+                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-[20px] pointer-events-none">pin</span>
                       <input
-                        className={inputCls(errors.otp)}
+                        id="login-otp"
+                        name="one-time-code"
+                        autoComplete="one-time-code"
+                        className={`${inputCls(errors.otp)} tracking-[0.4em] font-bold`}
                         placeholder="• • • • • •"
                         inputMode="numeric"
                         maxLength={6}
@@ -338,48 +419,43 @@ const DesktopLoginForm = () => {
                         autoFocus
                       />
                     </div>
-                    {errors.otp && <p className="text-[#B42318] text-xs">{errors.otp}</p>}
+                    {errors.otp && <p className="text-red-600 text-xs">{errors.otp}</p>}
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="w-full py-4 px-6 bg-[#0B1F3A] text-white text-sm font-bold rounded-xl hover:bg-[#102A4C] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-60 shadow-[0_14px_30px_rgba(11,31,58,0.22)]"
-                  >
-                    {isLoading ? (
-                      <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>Verifying...</>
+                  <button type="submit" disabled={isLoading || lockedFor > 0} className={primaryBtnCls}>
+                    {lockedFor > 0 ? (
+                      <span>Try again in {lockedFor}s</span>
+                    ) : isLoading ? (
+                      <><Spinner />Verifying...</>
                     ) : (
-                      <><span>Verify & Sign In</span><span className="material-symbols-outlined text-[20px]">arrow_forward</span></>
+                      <><span>Verify &amp; Sign In</span><span className="material-symbols-outlined text-[20px]">arrow_forward</span></>
                     )}
                   </button>
 
-                  <p className="text-center text-xs text-[#667085]">
-                    Didn't receive it?{' '}
-                    <button
-                      type="button"
-                      onClick={handleSendOtp}
-                      disabled={isOtpSending}
-                      className="font-bold text-[#0B1F3A] hover:underline disabled:opacity-60"
-                    >
-                      {isOtpSending ? 'Sending...' : 'Resend OTP'}
-                    </button>
+                  <p className="text-center text-xs text-slate-500">
+                    Didn&apos;t get it? Check your spam folder, or{' '}
+                    {resendIn > 0 ? (
+                      <span className="font-semibold text-slate-400">resend in {resendIn}s</span>
+                    ) : (
+                      <button type="button" onClick={handleSendOtp} disabled={isOtpSending} className={`${linkCls} disabled:opacity-60`}>
+                        {isOtpSending ? 'sending...' : 'resend code'}
+                      </button>
+                    )}
                   </p>
                 </>
               )}
-
-              {isLoading && <p className="text-center text-xs text-[#8a94a6]">First login may take up to 60 seconds...</p>}
             </form>
 
             <div className="relative my-8">
-              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[#e4e8f0]" /></div>
+              <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200" /></div>
               <div className="relative flex justify-center">
-                <span className="px-4 bg-white text-[#8a94a6] text-xs font-medium">Or continue with</span>
+                <span className="px-4 bg-white text-slate-400 text-xs font-medium">Or continue with</span>
               </div>
             </div>
 
             <button
-              onClick={() => { window.location.href = `${API_BASE_URL}/oauth2/authorization/google`; }}
-              className="w-full bg-white border border-[#d8dde8] text-[#111827] py-3.5 rounded-xl text-sm font-semibold hover:bg-[#f8fafc] active:scale-[0.98] transition-all flex justify-center items-center gap-3"
+              onClick={handleGoogle}
+              className="w-full bg-white border border-slate-200 text-slate-900 py-3.5 rounded-xl text-sm font-semibold hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98] transition-all flex justify-center items-center gap-3"
             >
               <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -390,16 +466,16 @@ const DesktopLoginForm = () => {
               Sign in with Google
             </button>
 
-            <div className="mt-8 pt-8 border-t border-[#e4e8f0] text-center space-y-3">
-              <p className="text-sm text-[#667085]">
+            <div className="mt-8 pt-8 border-t border-slate-200 text-center space-y-3">
+              <p className="text-sm text-slate-500">
                 New to TripGo?{' '}
-                <button onClick={() => navigate('/register')} className="text-[#0B1F3A] font-bold hover:underline ml-1">
-                  Create traveller account
+                <button onClick={() => navigate('/register', { state: location.state })} className={`ml-1 ${linkCls}`}>
+                  Create an account
                 </button>
               </p>
-              <p className="text-sm text-[#667085]">
-                Running buses with TripGo?{' '}
-                <button onClick={() => navigate('/operator-register')} className="text-[#0B1F3A] font-bold hover:underline ml-1">
+              <p className="text-sm text-slate-500">
+                Running buses?{' '}
+                <button onClick={() => navigate('/operator-register')} className={`ml-1 ${linkCls}`}>
                   Become an operator
                 </button>
               </p>
@@ -408,10 +484,13 @@ const DesktopLoginForm = () => {
         </div>
 
         <footer className="p-8 lg:px-12 flex flex-col md:flex-row justify-between items-center gap-4">
-          <p className="text-xs text-[#8a94a6]">© {new Date().getFullYear()} TripGo. All rights reserved.</p>
+          <p className="text-xs text-slate-400">© {new Date().getFullYear()} TripGo. All rights reserved.</p>
           <div className="flex gap-6">
-            {['Status', 'Privacy', 'Terms'].map((l) => (
-              <a key={l} href="#" className="text-xs text-[#8a94a6] hover:text-[#111827] transition-colors">{l}</a>
+            {[
+              ['Privacy', ROUTES.PRIVACY],
+              ['Terms', ROUTES.TERMS],
+            ].map(([label, to]) => (
+              <Link key={label} to={to} className="text-xs text-slate-400 hover:text-slate-900 transition-colors">{label}</Link>
             ))}
           </div>
         </footer>

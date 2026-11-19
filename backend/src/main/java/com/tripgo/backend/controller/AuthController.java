@@ -95,7 +95,8 @@ public class AuthController {
     @PostMapping("/send-otp")
     public ResponseEntity<Map<String, String>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
         otpService.generateAndSend(request.getEmailOrPhone().trim());
-        return ResponseEntity.ok(Map.of("message", "OTP sent successfully. Please check your email."));
+        // Same response whether or not an account exists (prevents account enumeration)
+        return ResponseEntity.ok(Map.of("message", "If an account exists for these details, we've emailed a 6-digit code."));
     }
 
     @PostMapping("/verify-otp")
@@ -209,9 +210,12 @@ public class AuthController {
 
     @PostMapping("/forgot-password")
     public ResponseEntity<Void> forgotPassword(@RequestParam String email) {
-
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        // Always 200 so the response never reveals whether an account exists. No email is sent for
+        // unknown addresses or Google-only accounts (no password to reset).
+        User user = userRepository.findByEmail(email.trim()).orElse(null);
+        if (user == null || user.getPassword() == null) {
+            return ResponseEntity.ok().build();
+        }
 
         PasswordResetToken token = passwordResetService.createToken(user);
 
@@ -243,7 +247,7 @@ public class AuthController {
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<Void> resetPassword(@RequestBody ResetPasswordRequest request) {
+    public ResponseEntity<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
 
         PasswordResetToken resetToken = passwordResetService.validateToken(request.getToken());
         User user = resetToken.getUser();

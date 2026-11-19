@@ -1,5 +1,7 @@
 package com.tripgo.backend.controller;
 
+import com.tripgo.backend.dto.response.PublicReviewResponse;
+import com.tripgo.backend.dto.response.PublicReviewsResponse;
 import com.tripgo.backend.model.entities.*;
 import com.tripgo.backend.repository.*;
 import com.tripgo.backend.security.service.CustomUserDetails;
@@ -22,6 +24,38 @@ public class ReviewController {
     private final BookingRepository bookingRepository;
     private final BusRepository busRepository;
     private final RouteScheduleRepository scheduleRepository;
+
+    // ─── PUBLIC: GET /reviews/recent ──────────────────────────────────────────
+    // Landing page social proof. Only rider first name + last initial is exposed.
+    @GetMapping("/reviews/recent")
+    public PublicReviewsResponse getRecentPublicReviews(@RequestParam(defaultValue = "6") int limit) {
+        int size = Math.max(1, Math.min(limit, 12));
+        List<PublicReviewResponse> reviews = reviewRepository.findRecentPublicReviews(PageRequest.of(0, size))
+                .stream()
+                .map(r -> new PublicReviewResponse(
+                        publicName(r.getUser()),
+                        r.getRating(),
+                        r.getTitle(),
+                        r.getComment().trim(),
+                        r.getRoute() != null ? r.getRoute().getOrigin() : null,
+                        r.getRoute() != null ? r.getRoute().getDestination() : null,
+                        r.getTravelDate()))
+                .toList();
+
+        Object[] stats = reviewRepository.getPublicRatingStats().stream().findFirst().orElse(new Object[]{null, 0L});
+        Double average = stats[0] != null ? ((Number) stats[0]).doubleValue() : null;
+        long total = stats[1] != null ? ((Number) stats[1]).longValue() : 0L;
+
+        return new PublicReviewsResponse(average, total, reviews);
+    }
+
+    private static String publicName(User user) {
+        if (user == null || user.getFirstName() == null || user.getFirstName().isBlank()) return "TripGo rider";
+        String lastInitial = user.getLastName() != null && !user.getLastName().isBlank()
+                ? " " + user.getLastName().trim().charAt(0) + "."
+                : "";
+        return user.getFirstName().trim() + lastInitial;
+    }
 
     // ─── OPERATOR: GET /operator/reviews ─────────────────────────────────────
     @GetMapping("/operator/reviews")
