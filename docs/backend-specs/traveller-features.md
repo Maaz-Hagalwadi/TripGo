@@ -300,7 +300,7 @@ The frontend sends one page view per route change (`src/shared/utils/visitTracke
 totals, top pages/sources and a "who visited" list in Audit logs → Visitors. It never sends events
 for `/admin/**`, when the browser has Do Not Track on, or from automated browsers.
 
-### Migration (V61)
+### Migration (V62)
 ```sql
 CREATE TABLE site_visits (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
