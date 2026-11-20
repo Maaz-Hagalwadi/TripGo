@@ -29,6 +29,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final Map<String, Bucket> loginBuckets           = new ConcurrentHashMap<>();
     private final Map<String, Bucket> registerBuckets        = new ConcurrentHashMap<>();
     private final Map<String, Bucket> forgotPasswordBuckets  = new ConcurrentHashMap<>();
+    private final Map<String, Bucket> visitBuckets           = new ConcurrentHashMap<>();
     private final Map<String, Bucket> globalBuckets          = new ConcurrentHashMap<>();
 
     @Override
@@ -57,6 +58,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return registerBuckets.computeIfAbsent(ip, k -> newBucket(5, Duration.ofMinutes(1)));
         } else if (path.equals("/auth/forgot-password")) {
             return forgotPasswordBuckets.computeIfAbsent(ip, k -> newBucket(3, Duration.ofMinutes(1)));
+        } else if (path.equals("/analytics/visits")) {
+            return visitBuckets.computeIfAbsent(ip, k -> newBucket(60, Duration.ofMinutes(1)));
         } else {
             return globalBuckets.computeIfAbsent(ip, k -> newBucket(300, Duration.ofMinutes(1)));
         }

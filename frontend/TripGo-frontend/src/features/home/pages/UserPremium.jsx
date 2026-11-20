@@ -9,6 +9,8 @@ import { ROUTES } from '../../../shared/constants/routes';
 import { STRIPE_PUBLISHABLE_KEY } from '../../../config/env';
 import { createPremiumPaymentIntent } from '../../../api/paymentService';
 
+import { PREMIUM_SALES_ENABLED } from '../../../shared/constants/features';
+
 const stripePromise = STRIPE_PUBLISHABLE_KEY ? loadStripe(STRIPE_PUBLISHABLE_KEY) : null;
 
 const PLANS = [
@@ -176,14 +178,16 @@ const UserPremium = () => {
           )}
           {!user?.isPremium && (
             <p className="text-sm opacity-60 mt-3 max-w-md">
-              Unlock priority seats, zero cancellation fees, and exclusive perks on every trip with TripGo Premium.
+              {PREMIUM_SALES_ENABLED
+                ? 'Unlock priority seats, zero cancellation fees, and exclusive perks on every trip with TripGo Premium.'
+                : 'Premium is coming soon. We’re finishing the member benefits before opening memberships.'}
             </p>
           )}
         </div>
 
         {/* Features */}
         <div>
-          <h2 className="text-lg font-black text-slate-900 mb-3">What's included</h2>
+          <h2 className="text-lg font-black text-slate-900 mb-3">{PREMIUM_SALES_ENABLED || user?.isPremium ? 'What’s included' : 'What we’re planning'}</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {FEATURES.map((f) => (
               <div key={f.label} className="rounded-2xl bg-white ring-1 ring-slate-200 p-4 flex items-start gap-3 shadow-sm">
@@ -199,8 +203,22 @@ const UserPremium = () => {
           </div>
         </div>
 
+        {!user?.isPremium && !PREMIUM_SALES_ENABLED && (
+          <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm p-6 flex items-start gap-4">
+            <span className="w-11 h-11 flex-shrink-0 rounded-xl bg-[#FDBA74]/20 flex items-center justify-center">
+              <span className="material-symbols-outlined text-orange-600">schedule</span>
+            </span>
+            <div>
+              <p className="text-base font-bold text-slate-900">Memberships open soon</p>
+              <p className="text-sm text-slate-500 mt-1">
+                We’re not taking Premium payments yet. Until then, every booking already comes with no booking fees and instant QR e-tickets.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Plan selection */}
-        {!user?.isPremium && (
+        {!user?.isPremium && PREMIUM_SALES_ENABLED && (
           <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100">
               <h2 className="text-base font-bold text-slate-900">Choose your plan</h2>
@@ -253,6 +271,7 @@ const UserPremium = () => {
         )}
 
         {/* Compare free vs premium */}
+        {PREMIUM_SALES_ENABLED && (
         <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100">
             <h2 className="text-base font-bold text-slate-900">Free vs Premium</h2>
@@ -274,6 +293,7 @@ const UserPremium = () => {
             ))}
           </div>
         </div>
+        )}
 
       </div>
     </UserLayout>

@@ -1,5 +1,7 @@
 package com.tripgo.backend.controller;
 
+import com.tripgo.backend.config.AppTime;
+
 import com.tripgo.backend.dto.request.ApplyPromoRequest;
 import com.tripgo.backend.dto.response.ApplyPromoResponse;
 import com.tripgo.backend.dto.response.BoardingDroppingPointResponse;
@@ -69,6 +71,11 @@ public class BookingController {
                     .filter(bs -> seat.getSeatNumber().equalsIgnoreCase(bs.getSeatNumber()))
                     .anyMatch(bs -> segmentsOverlap(segments, bs.getFromStop(), bs.getToStop(), resolvedFrom, resolvedTo));
 
+            boolean bookedByFemale = isBooked && confirmedSeats.stream()
+                    .filter(bs -> seat.getSeatNumber().equalsIgnoreCase(bs.getSeatNumber()))
+                    .filter(bs -> segmentsOverlap(segments, bs.getFromStop(), bs.getToStop(), resolvedFrom, resolvedTo))
+                    .anyMatch(bs -> bs.getPassenger() != null && "female".equalsIgnoreCase(bs.getPassenger().getGender()));
+
             return Map.<String, Object>of(
                     "id", seat.getId(),
                     "seatNumber", seat.getSeatNumber(),
@@ -77,7 +84,8 @@ public class BookingController {
                     "isWindow", Boolean.TRUE.equals(seat.getIsWindow()),
                     "isAisle", Boolean.TRUE.equals(seat.getIsAisle()),
                     "isBlocked", Boolean.TRUE.equals(seat.getIsBlocked()),
-                    "available", !isLocked && !isBooked && !Boolean.TRUE.equals(seat.getIsBlocked())
+                    "available", !isLocked && !isBooked && !Boolean.TRUE.equals(seat.getIsBlocked()),
+                    "bookedByFemale", bookedByFemale
             );
         }).toList();
 
@@ -142,7 +150,7 @@ public class BookingController {
         if (requestedDate != null && !requestedDate.isBlank()) {
             return LocalDate.parse(requestedDate);
         }
-        return java.time.LocalDateTime.ofInstant(schedule.getDepartureTime(), java.time.ZoneOffset.UTC).toLocalDate();
+        return java.time.LocalDateTime.ofInstant(schedule.getDepartureTime(), AppTime.ZONE).toLocalDate();
     }
 
     private String normalizeFromStop(List<RouteSegment> segments, String from) {

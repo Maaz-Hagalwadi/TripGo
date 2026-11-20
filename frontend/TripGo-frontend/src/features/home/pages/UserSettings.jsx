@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
+import { loadStripe } from '@stripe/stripe-js';
 import UserLayout from '../../../shared/components/UserLayout';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ROUTES } from '../../../shared/constants/routes';
@@ -14,142 +14,155 @@ import {
   updateSavedPassengerProfile,
   deleteSavedPassengerProfile,
 } from '../../../api/bookingService';
+import { PASSWORD_RULES, isPasswordValid } from '../../../shared/utils/passwordRules';
+import { WALLET_ENABLED, REFERRALS_ENABLED } from '../../../shared/constants/features';
+import { getWallet, getMyReferral } from '../../../api/travellerFeaturesService';
 
 const stripePromise = STRIPE_PUBLISHABLE_KEY ? loadStripe(STRIPE_PUBLISHABLE_KEY) : null;
+// Saved cards live in this browser only (read by the checkout page via the same key)
 const SAVED_CARDS_KEY = 'tripgo_saved_cards';
-const NOTIF_KEY = 'tripgo_notif_prefs';
-const DEFAULT_NOTIFS = {
-  bookingConfirmation: true,
-  tripReminder: true,
-  cancellationUpdates: true,
-  promotionalOffers: false,
-  ratingReminders: true,
+
+const EMPTY_PASSENGER = { firstName: '', lastName: '', age: '', gender: '', phone: '' };
+
+const inputCls = (err) =>
+  `w-full rounded-xl bg-slate-50 border px-4 py-3 text-sm text-slate-900 outline-none focus:bg-white focus:border-[#FF8A65] focus:ring-4 focus:ring-[#FDBA74]/25 transition-all ${err ? 'border-red-500' : 'border-slate-200'}`;
+const primaryBtn = 'inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-white hover:bg-[#102A4C] disabled:opacity-60 transition-colors';
+const secondaryBtn = 'inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:border-[#FF8A65] hover:text-primary transition-colors';
+
+const normalizePhone = (value) => {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (digits.length > 10 && digits.startsWith('91')) digits = digits.slice(2);
+  else if (digits.length > 10 && digits.startsWith('0')) digits = digits.slice(1);
+  return digits.slice(0, 10);
 };
 
-const loadNotifPrefs = () => {
-  try {
-    const stored = localStorage.getItem(NOTIF_KEY);
-    return stored ? { ...DEFAULT_NOTIFS, ...JSON.parse(stored) } : DEFAULT_NOTIFS;
-  } catch {
-    return DEFAULT_NOTIFS;
-  }
-};
-
-const Toggle = ({ checked, onChange }) => (
-  <button
-    type="button"
-    onClick={() => onChange(!checked)}
-    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${checked ? 'bg-[#002046]' : 'bg-slate-200'}`}
-  >
-    <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
-  </button>
-);
+/** "phone: Phone must be exactly 10 digits" → "Phone must be exactly 10 digits" */
+const cleanServerMessage = (msg = '') => msg.replace(/^\w+:\s*/, '');
 
 const BRAND_STYLES = {
-  visa:       { label: 'VISA',  bg: 'from-[#1a1f71] to-[#0f5298]' },
-  mastercard: { label: 'MC',    bg: 'from-orange-600 to-red-600' },
-  amex:       { label: 'AMEX', bg: 'from-teal-700 to-teal-500' },
-  discover:   { label: 'DISC', bg: 'from-orange-400 to-yellow-400' },
+  visa: { label: 'VISA', bg: 'from-[#1a1f71] to-[#0f5298]' },
+  mastercard: { label: 'MC', bg: 'from-orange-600 to-red-600' },
+  amex: { label: 'AMEX', bg: 'from-teal-700 to-teal-500' },
+  discover: { label: 'DISC', bg: 'from-orange-400 to-yellow-400' },
 };
 const getBrand = (brand) => BRAND_STYLES[brand?.toLowerCase()] || { label: (brand || 'CARD').toUpperCase().slice(0, 4), bg: 'from-slate-700 to-slate-500' };
 
-const CARD_ELEMENT_OPTS = {
-  style: { base: { fontSize: '14px', color: '#0f172a', '::placeholder': { color: '#94a3b8' } } },
-  hidePostalCode: true,
-};
+const Section = ({ icon, title, subtitle, action, children }) => (
+  <section className="rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+    <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
+      <div className="flex items-center gap-3">
+        <span className="w-9 h-9 rounded-xl bg-[#FDBA74]/20 flex items-center justify-center">
+          <span className="material-symbols-outlined text-[18px] text-orange-600">{icon}</span>
+        </span>
+        <div>
+          <h2 className="text-base font-black text-slate-900">{title}</h2>
+          {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
+        </div>
+      </div>
+      {action}
+    </div>
+    {children}
+  </section>
+);
 
-const AddCardForm = ({ cardholderName, setCardholderName, onSaved, onCancel }) => {
+const Modal = ({ eyebrow, title, onClose, children, footer }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl max-h-[90vh] flex flex-col">
+      <div className="flex items-start justify-between gap-4 p-6 pb-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-orange-600">{eyebrow}</p>
+          <h2 className="mt-1 text-xl font-black text-slate-900">{title}</h2>
+        </div>
+        <button onClick={onClose} aria-label="Close" className="rounded-xl bg-slate-100 p-2 text-slate-500 hover:bg-slate-200">
+          <span className="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div className="px-6 overflow-y-auto">{children}</div>
+      <div className="flex gap-3 p-6 pt-5">{footer}</div>
+    </div>
+  </div>
+);
+
+const Field = ({ id, label, error, hint, children }) => (
+  <div>
+    <label htmlFor={id} className="block text-sm font-semibold text-slate-900 mb-1.5">{label}</label>
+    {children}
+    {error ? <p className="mt-1 text-xs text-red-600">{error}</p> : hint ? <p className="mt-1 text-xs text-slate-400">{hint}</p> : null}
+  </div>
+);
+
+const AddCardForm = ({ onSaved, onCancel }) => {
   const stripe = useStripe();
   const elements = useElements();
+  const [name, setName] = useState('');
   const [saving, setSaving] = useState(false);
   const [cardError, setCardError] = useState('');
 
   const handleSave = async () => {
     if (!stripe || !elements) return;
-    if (!cardholderName.trim()) { setCardError('Cardholder name is required'); return; }
+    if (!name.trim()) { setCardError('Enter the name on the card'); return; }
     setSaving(true);
     setCardError('');
-    const cardEl = elements.getElement(CardElement);
     const { paymentMethod, error } = await stripe.createPaymentMethod({
       type: 'card',
-      card: cardEl,
-      billing_details: { name: cardholderName.trim() },
+      card: elements.getElement(CardElement),
+      billing_details: { name: name.trim() },
     });
-    if (error) { setCardError(error.message); setSaving(false); return; }
+    setSaving(false);
+    if (error) { setCardError(error.message); return; }
     onSaved({
       id: paymentMethod.id,
       brand: paymentMethod.card.brand,
       last4: paymentMethod.card.last4,
       exp_month: paymentMethod.card.exp_month,
       exp_year: paymentMethod.card.exp_year,
-      name: cardholderName.trim(),
+      name: name.trim(),
     });
-    setSaving(false);
   };
 
   return (
     <div className="space-y-4">
+      <Field id="card-name" label="Name on card">
+        <input id="card-name" autoComplete="cc-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="As printed on the card" className={inputCls()} />
+      </Field>
       <div>
-        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Cardholder Name *</label>
-        <input
-          value={cardholderName}
-          onChange={e => setCardholderName(e.target.value)}
-          placeholder="Name on card"
-          className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40"
-        />
-      </div>
-      <div>
-        <label className="block text-xs font-semibold text-slate-600 mb-1.5">Card Details *</label>
-        <div className="rounded-2xl bg-slate-50 px-4 py-3.5 ring-1 ring-slate-200 focus-within:ring-2 focus-within:ring-[#002046]/40 transition-shadow">
-          <CardElement options={CARD_ELEMENT_OPTS} />
+        <p className="block text-sm font-semibold text-slate-900 mb-1.5">Card details</p>
+        <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3.5 focus-within:bg-white focus-within:border-[#FF8A65] transition-colors">
+          <CardElement options={{ hidePostalCode: true, style: { base: { fontSize: '14px', color: '#0f172a', '::placeholder': { color: '#94a3b8' } } } }} />
         </div>
       </div>
-      {cardError && <p className="text-xs text-rose-500">{cardError}</p>}
-      <div className="flex gap-3 pt-1">
-        <button onClick={onCancel} className="flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-colors">Cancel</button>
-        <button onClick={handleSave} disabled={saving || !stripe} className="flex-1 rounded-2xl bg-[#002046] px-4 py-3 text-sm font-bold text-white hover:bg-[#003a80] transition-colors disabled:opacity-60">
-          {saving ? 'Saving card...' : 'Save Card'}
-        </button>
+      {cardError && <p className="text-xs text-red-600">{cardError}</p>}
+      <div className="flex gap-3">
+        <button onClick={onCancel} className={`${secondaryBtn} flex-1`}>Cancel</button>
+        <button onClick={handleSave} disabled={saving || !stripe} className={`${primaryBtn} flex-1`}>{saving ? 'Saving...' : 'Save card'}</button>
       </div>
     </div>
   );
 };
 
-const TABS = [
-  { id: 'passengers', label: 'Saved Passengers', icon: 'group' },
-  { id: 'notifications', label: 'Notifications', icon: 'notifications' },
-  { id: 'cards', label: 'Payment Cards', icon: 'credit_card' },
-];
-
 const UserSettings = () => {
   const navigate = useNavigate();
   const { user, loading, logout, updateUser } = useAuth();
-  const [activeTab, setActiveTab] = useState('notifications');
+  const fileInputRef = useRef(null);
+
+  const [editModal, setEditModal] = useState(null); // { firstName, lastName, phone, errors }
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+
+  const [passwordModal, setPasswordModal] = useState(null); // { oldPassword, newPassword, confirmPassword, show, error }
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const [passengers, setPassengers] = useState([]);
+  const [passengerForm, setPassengerForm] = useState(null); // { id?, ...fields, errors }
+  const [savingPassenger, setSavingPassenger] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
   const [savedCards, setSavedCards] = useState(() => {
     try { return JSON.parse(localStorage.getItem(SAVED_CARDS_KEY) || '[]'); } catch { return []; }
   });
   const [addCardOpen, setAddCardOpen] = useState(false);
-  const [cardholderName, setCardholderName] = useState('');
-
-  const [passwordModal, setPasswordModal] = useState({ open: false, oldPassword: '', newPassword: '', confirmPassword: '' });
-  const [changingPassword, setChangingPassword] = useState(false);
-
-  const [editModal, setEditModal] = useState({ open: false, firstName: '', lastName: '', phone: '' });
-  const [savingProfile, setSavingProfile] = useState(false);
-
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const fileInputRef = useRef(null);
-
-  const [notifPrefs, setNotifPrefs] = useState(loadNotifPrefs);
-
-  const EMPTY_PROFILE_FORM = { firstName: '', lastName: '', age: '', gender: '', phone: '' };
-  const [savedProfiles, setSavedProfiles] = useState([]);
-  const [profileFormOpen, setProfileFormOpen] = useState(false);
-  const [editingProfile, setEditingProfile] = useState(null);
-  const [profileForm, setProfileForm] = useState(EMPTY_PROFILE_FORM);
-  const [savingProfileEntry, setSavingProfileEntry] = useState(false);
-  const [deletingProfileId, setDeletingProfileId] = useState(null);
+  const [wallet, setWallet] = useState(null);
+  const [referral, setReferral] = useState(null);
 
   useEffect(() => {
     if (loading) return;
@@ -157,651 +170,539 @@ const UserSettings = () => {
   }, [user, loading, navigate]);
 
   useEffect(() => {
-    getSavedPassengerProfiles().then(setSavedProfiles).catch(() => {});
+    getSavedPassengerProfiles().then((d) => setPassengers(Array.isArray(d) ? d : [])).catch(() => {});
+    if (WALLET_ENABLED) getWallet().then(setWallet).catch(() => setWallet(null));
+    if (REFERRALS_ENABLED) getMyReferral().then(setReferral).catch(() => setReferral(null));
   }, []);
 
-  const openAddProfile = () => {
-    setEditingProfile(null);
-    setProfileForm(EMPTY_PROFILE_FORM);
-    setProfileFormOpen(true);
-  };
-
-  const openEditProfile = (p) => {
-    setEditingProfile(p);
-    setProfileForm({ firstName: p.firstName, lastName: p.lastName || '', age: p.age ?? '', gender: p.gender || '', phone: p.phone || '' });
-    setProfileFormOpen(true);
-  };
-
-  const handleSaveProfileEntry = async () => {
-    if (!profileForm.firstName.trim()) return toast.error('First name is required');
-    setSavingProfileEntry(true);
-    const t = toast.loading(editingProfile ? 'Updating profile...' : 'Saving profile...');
-    try {
-      const payload = { ...profileForm, age: profileForm.age ? Number(profileForm.age) : null };
-      if (editingProfile) {
-        const updated = await updateSavedPassengerProfile(editingProfile.id, payload);
-        setSavedProfiles((prev) => prev.map((p) => p.id === editingProfile.id ? updated : p));
-      } else {
-        const created = await createSavedPassengerProfile(payload);
-        setSavedProfiles((prev) => [created, ...prev]);
-      }
-      toast.success(editingProfile ? 'Profile updated' : 'Profile saved', { id: t });
-      setProfileFormOpen(false);
-    } catch (e) {
-      toast.error(e.message || 'Failed to save profile', { id: t });
-    } finally {
-      setSavingProfileEntry(false);
+  const shareReferral = async () => {
+    const link = `${window.location.origin}${ROUTES.REGISTER}?ref=${encodeURIComponent(referral.code)}`;
+    const text = `Book bus tickets on TripGo with my code ${referral.code}${referral.friendRewardText ? ` — ${referral.friendRewardText}` : ''}: ${link}`;
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Join me on TripGo', text, url: link }); return; } catch (e) { if (e?.name === 'AbortError') return; }
     }
+    try { await navigator.clipboard.writeText(text); toast.success('Invite copied — paste it into WhatsApp or a message.'); } catch { toast.error('Couldn’t copy the invite.'); }
   };
 
-  const handleDeleteProfile = async (id) => {
-    setDeletingProfileId(id);
-    try {
-      await deleteSavedPassengerProfile(id);
-      setSavedProfiles((prev) => prev.filter((p) => p.id !== id));
-      toast.success('Profile removed');
-    } catch (e) {
-      toast.error(e.message || 'Failed to delete profile');
-    } finally {
-      setDeletingProfileId(null);
-    }
-  };
+  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'Traveller';
+  const initials = [user?.firstName?.[0], user?.lastName?.[0]].filter(Boolean).join('').toUpperCase() || 'T';
+  // Older API responses don't include hasPassword — assume a password account then
+  const hasPassword = user?.hasPassword !== false;
 
-  const openEditModal = () => {
-    const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || '';
-    const parts = fullName.split(' ');
-    setEditModal({
-      open: true,
-      firstName: parts[0] || '',
-      lastName: parts.slice(1).join(' ') || '',
-      phone: user?.phone || '',
-    });
-  };
-
+  // ── Profile ──
   const handleSaveProfile = async () => {
     const firstName = editModal.firstName.trim();
     const lastName = editModal.lastName.trim();
-    const phone = editModal.phone.trim();
-    if (!firstName) return toast.error('First name is required');
+    const phone = editModal.phone;
+    const errors = {};
+    if (!firstName) errors.firstName = 'First name is required';
+    if (phone && phone.length !== 10) errors.phone = 'Enter a 10-digit mobile number';
+    if (Object.keys(errors).length) return setEditModal((m) => ({ ...m, errors }));
 
     setSavingProfile(true);
-    const t = toast.loading('Saving profile...');
     try {
-      await updateCurrentUser({ firstName, lastName, phone });
+      await updateCurrentUser({ firstName, lastName, phone: phone || null });
       updateUser({ firstName, lastName, name: `${firstName} ${lastName}`.trim(), phone });
-      toast.success('Profile updated', { id: t });
-      setEditModal((p) => ({ ...p, open: false }));
+      toast.success('Profile updated');
+      setEditModal(null);
     } catch (e) {
-      toast.error(e.message || 'Failed to update profile', { id: t });
+      const msg = cleanServerMessage(e.message);
+      if (/phone/i.test(msg)) setEditModal((m) => ({ ...m, errors: { phone: /in use/i.test(msg) ? 'Another account already uses this number' : msg } }));
+      else toast.error(msg || 'Failed to update profile');
     } finally {
       setSavingProfile(false);
-    }
-  };
-
-  const closePasswordModal = () =>
-    setPasswordModal({ open: false, oldPassword: '', newPassword: '', confirmPassword: '' });
-
-  const handleChangePassword = async () => {
-    const { oldPassword, newPassword, confirmPassword } = passwordModal;
-    if (!oldPassword.trim()) return toast.error('Current password is required');
-    if (!newPassword.trim() || newPassword.length < 8) return toast.error('New password must be at least 8 characters');
-    if (newPassword !== confirmPassword) return toast.error('Passwords do not match');
-
-    setChangingPassword(true);
-    const t = toast.loading('Changing password...');
-    try {
-      await changePassword(oldPassword.trim(), newPassword.trim());
-      toast.success('Password changed successfully', { id: t });
-      closePasswordModal();
-    } catch (e) {
-      toast.error(e.message || 'Failed to change password', { id: t });
-    } finally {
-      setChangingPassword(false);
     }
   };
 
   const handleAvatarChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
-    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
-    if (!allowed.includes(file.type)) {
-      toast.error('Only JPG, PNG, WebP, or GIF images are allowed');
+    if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      toast.error('Use a JPG, PNG, WebP or GIF image');
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be smaller than 5MB');
+      toast.error('Image must be smaller than 5 MB');
       return;
     }
-
     setUploadingAvatar(true);
-    const t = toast.loading('Uploading profile picture...');
     try {
       const result = await uploadProfilePicture(file);
       updateUser({ profilePictureUrl: result.profilePictureUrl });
-      toast.success('Profile picture updated', { id: t });
+      toast.success('Photo updated');
     } catch (err) {
-      toast.error(err.message || 'Failed to upload profile picture', { id: t });
+      toast.error(err.message || 'Failed to upload photo');
     } finally {
       setUploadingAvatar(false);
       e.target.value = '';
     }
   };
 
-  const updateNotif = (key, value) => {
-    setNotifPrefs((prev) => {
-      const next = { ...prev, [key]: value };
-      localStorage.setItem(NOTIF_KEY, JSON.stringify(next));
-      return next;
-    });
-    toast.success(value ? 'Notification enabled' : 'Notification disabled');
+  // ── Password ──
+  const handleChangePassword = async () => {
+    const { oldPassword, newPassword, confirmPassword } = passwordModal;
+    let error = '';
+    if (!oldPassword) error = 'Enter your current password';
+    else if (!isPasswordValid(newPassword)) error = 'Your new password doesn’t meet all the requirements';
+    else if (newPassword !== confirmPassword) error = 'New passwords don’t match';
+    if (error) return setPasswordModal((m) => ({ ...m, error }));
+
+    setChangingPassword(true);
+    try {
+      // Passwords are sent exactly as typed — no trimming
+      await changePassword(oldPassword, newPassword);
+      // The backend signs out every session after a password change, including this one
+      toast.success('Password changed. Please sign in with your new password.');
+      setPasswordModal(null);
+      logout();
+      navigate(ROUTES.LOGIN, { replace: true });
+    } catch (e) {
+      setPasswordModal((m) => ({ ...m, error: cleanServerMessage(e.message) || 'Failed to change password' }));
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
-  const handleCardSaved = (card) => {
-    const updated = [card, ...savedCards];
-    setSavedCards(updated);
-    localStorage.setItem(SAVED_CARDS_KEY, JSON.stringify(updated));
-    setAddCardOpen(false);
-    setCardholderName('');
-    toast.success('Card saved successfully');
+  // ── Saved travellers ──
+  const handleSavePassenger = async () => {
+    const f = passengerForm;
+    const errors = {};
+    if (!f.firstName.trim()) errors.firstName = 'First name is required';
+    if (f.age !== '' && (Number(f.age) < 1 || Number(f.age) > 120)) errors.age = 'Enter an age between 1 and 120';
+    if (f.phone && f.phone.length !== 10) errors.phone = 'Enter a 10-digit mobile number';
+    if (Object.keys(errors).length) return setPassengerForm((p) => ({ ...p, errors }));
+
+    setSavingPassenger(true);
+    try {
+      const payload = {
+        firstName: f.firstName.trim(), lastName: f.lastName.trim(),
+        age: f.age !== '' ? Number(f.age) : null, gender: f.gender, phone: f.phone,
+      };
+      if (f.id) {
+        const updated = await updateSavedPassengerProfile(f.id, payload);
+        setPassengers((prev) => prev.map((p) => (p.id === f.id ? updated : p)));
+      } else {
+        const created = await createSavedPassengerProfile(payload);
+        setPassengers((prev) => [created, ...prev]);
+      }
+      toast.success(f.id ? 'Traveller updated' : 'Traveller saved');
+      setPassengerForm(null);
+    } catch (e) {
+      toast.error(cleanServerMessage(e.message) || 'Failed to save traveller');
+    } finally {
+      setSavingPassenger(false);
+    }
   };
 
-  const handleDeleteCard = (id) => {
-    const updated = savedCards.filter(c => c.id !== id);
-    setSavedCards(updated);
-    localStorage.setItem(SAVED_CARDS_KEY, JSON.stringify(updated));
-    toast.success('Card removed');
+  const handleDeletePassenger = async (p) => {
+    if (!window.confirm(`Remove ${p.firstName} from your saved travellers?`)) return;
+    setDeletingId(p.id);
+    try {
+      await deleteSavedPassengerProfile(p.id);
+      setPassengers((prev) => prev.filter((x) => x.id !== p.id));
+      toast.success('Traveller removed');
+    } catch (e) {
+      toast.error(e.message || 'Failed to remove traveller');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
-  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.name || 'Traveler';
+  // ── Cards ──
+  const persistCards = (cards) => {
+    setSavedCards(cards);
+    try { localStorage.setItem(SAVED_CARDS_KEY, JSON.stringify(cards)); } catch { /* storage unavailable */ }
+  };
 
-  const notifItems = [
-    { key: 'bookingConfirmation', label: 'Booking Confirmations', desc: 'Get notified when a booking is confirmed or payment received' },
-    { key: 'tripReminder', label: 'Trip Reminders', desc: 'Receive reminders 24 hours before your departure' },
-    { key: 'cancellationUpdates', label: 'Cancellation Updates', desc: 'Alerts when a booking is cancelled or refund is processed' },
-    { key: 'ratingReminders', label: 'Rating Reminders', desc: 'Prompted to rate a trip after it completes' },
-    { key: 'promotionalOffers', label: 'Promotional Offers', desc: 'Discounts, deals, and seasonal promotions from TripGo' },
-  ];
+  const passwordStarted = Boolean(passwordModal?.newPassword);
 
   return (
-    <UserLayout activeItem="settings" title="Settings">
-      <div className="space-y-5">
+    <UserLayout activeItem="settings" title="Settings" showHeaderTitle={false} showHeaderSearch={false}>
+      <div className="space-y-6">
 
         <div>
-          <h1 className="text-2xl font-black text-slate-900">Settings</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Manage your profile, security, and notification preferences</p>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900">Settings</h1>
+          <p className="text-sm text-slate-500 mt-1">Your profile, sign-in and booking preferences.</p>
         </div>
 
-        {/* Profile & Account */}
-        <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-slate-900">Profile & Account</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Your personal details and account security</p>
+        {/* ── Profile ── */}
+        <section className="rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="relative bg-primary px-5 pt-5 pb-12">
+            <div className="absolute -top-16 -right-10 w-56 h-56 rounded-full bg-[#FF8A65]/20 blur-3xl" aria-hidden="true" />
+            <p className="relative text-xs font-bold uppercase tracking-widest text-[#FDBA74]">Your profile</p>
+          </div>
+          <div className="px-5 pb-5">
+            {/* Only the avatar overlaps the navy band; name and actions sit below it */}
+            <div className="flex flex-col sm:flex-row sm:items-end gap-4">
+              <div className="relative w-20 h-20 flex-shrink-0 -mt-10">
+                {user?.profilePictureUrl ? (
+                  <img src={user.profilePictureUrl} alt="" className="w-20 h-20 rounded-2xl object-cover ring-4 ring-white shadow-md" />
+                ) : (
+                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#FDBA74] to-[#FF8A65] ring-4 ring-white shadow-md flex items-center justify-center">
+                    <span className="text-2xl font-black text-primary select-none">{initials}</span>
+                  </div>
+                )}
+                <button
+                  type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingAvatar}
+                  aria-label="Change profile photo"
+                  className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-white border border-slate-200 shadow flex items-center justify-center hover:border-[#FF8A65] disabled:opacity-60"
+                >
+                  {uploadingAvatar
+                    ? <span className="w-3.5 h-3.5 rounded-full border-2 border-slate-200 border-t-[#FF8A65] animate-spin" />
+                    : <span className="material-symbols-outlined text-[16px] text-slate-600">photo_camera</span>}
+                </button>
+                <input ref={fileInputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp,image/gif" className="hidden" onChange={handleAvatarChange} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xl font-black text-slate-900 truncate">{fullName}</p>
+                <p className="text-sm text-slate-500 truncate">{user?.email}</p>
+              </div>
+              <button onClick={() => setEditModal({ firstName: user?.firstName || '', lastName: user?.lastName || '', phone: normalizePhone(user?.phone), errors: {} })} className={secondaryBtn}>
+                <span className="material-symbols-outlined text-[18px]">edit</span>
+                Edit profile
+              </button>
             </div>
-            <button
-              onClick={openEditModal}
-              className="flex items-center gap-1.5 rounded-xl bg-[#002046] text-white px-4 py-2 text-sm font-semibold hover:bg-[#003a80] transition-colors"
-            >
-              <span className="material-symbols-outlined text-base">edit</span>
-              Edit Profile
+
+            <dl className="mt-5 grid gap-3 sm:grid-cols-3">
+              {[
+                { icon: 'mail', label: 'Email', value: user?.email || '—', badge: user?.emailVerified ? 'Verified' : 'Not verified', ok: user?.emailVerified },
+                { icon: 'call', label: 'Mobile', value: user?.phone || 'Not added' },
+                { icon: 'login', label: 'Sign-in method', value: hasPassword ? 'Email & password' : 'Google' },
+              ].map((f) => (
+                <div key={f.label} className="rounded-xl bg-slate-50 border border-slate-100 p-4 min-w-0">
+                  <dt className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    <span className="material-symbols-outlined text-[14px]">{f.icon}</span>{f.label}
+                  </dt>
+                  <dd className="mt-1 text-sm font-semibold text-slate-900 truncate">{f.value}</dd>
+                  {f.badge && (
+                    <span className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${f.ok ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
+                      <span className="material-symbols-outlined text-[13px]">{f.ok ? 'verified' : 'error'}</span>{f.badge}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </dl>
+          </div>
+        </section>
+
+        {/* ── Security ── */}
+        <Section icon="lock" title="Sign-in & security" subtitle="Manage how you sign in to TripGo">
+          <div className="p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {hasPassword ? (
+              <>
+                <div>
+                  <p className="text-sm font-bold text-slate-900">Password</p>
+                  <p className="text-xs text-slate-500">Changing it signs you out on all devices, including this one.</p>
+                </div>
+                <button onClick={() => setPasswordModal({ oldPassword: '', newPassword: '', confirmPassword: '', show: false, error: '' })} className={secondaryBtn}>
+                  <span className="material-symbols-outlined text-[18px]">key</span>
+                  Change password
+                </button>
+              </>
+            ) : (
+              <div>
+                <p className="text-sm font-bold text-slate-900">You sign in with Google</p>
+                <p className="text-xs text-slate-500">Your account doesn’t use a TripGo password — manage sign-in security from your Google account.</p>
+              </div>
+            )}
+          </div>
+          <div className="px-5 py-4 border-t border-slate-100 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-slate-900">Sign out</p>
+              <p className="text-xs text-slate-500">Sign out of TripGo on this device.</p>
+            </div>
+            <button onClick={() => { logout(); navigate(ROUTES.LOGIN); }} className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50 transition-colors">
+              <span className="material-symbols-outlined text-[18px]">logout</span>
+              Sign out
             </button>
           </div>
+        </Section>
 
-          <div className="p-5">
-            {/* Avatar */}
-            <div className="flex items-center gap-4 mb-5">
-              <div className="relative flex-shrink-0">
-                {user?.profilePictureUrl ? (
-                  <img
-                    src={user.profilePictureUrl}
-                    alt={fullName}
-                    className="w-20 h-20 rounded-full object-cover ring-2 ring-slate-200"
-                  />
-                ) : (
-                  <div className="w-20 h-20 rounded-full bg-[#002046] flex items-center justify-center ring-2 ring-slate-200">
-                    <span className="text-2xl font-black text-white select-none">
-                      {(user?.firstName?.[0] || user?.name?.[0] || 'U').toUpperCase()}
-                    </span>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingAvatar}
-                  className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-white ring-2 ring-slate-200 flex items-center justify-center shadow-sm hover:bg-slate-50 transition-colors disabled:opacity-60"
-                >
-                  {uploadingAvatar ? (
-                    <div className="w-3 h-3 rounded-full border border-[#002046]/20 border-t-[#002046] animate-spin" />
-                  ) : (
-                    <span className="material-symbols-outlined text-slate-600" style={{ fontSize: '14px' }}>photo_camera</span>
-                  )}
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
-                  className="hidden"
-                  onChange={handleAvatarChange}
-                />
-              </div>
+        {/* ── TripGo credit (spec §7) ── */}
+        {WALLET_ENABLED && wallet && (
+          <Section icon="account_balance_wallet" title="TripGo credit" subtitle="Instant refunds and rewards — use them on your next booking">
+            <div className="p-5 flex flex-wrap items-center justify-between gap-4">
               <div>
-                <p className="text-base font-black text-slate-900">{fullName}</p>
-                <p className="text-sm text-slate-500 mt-0.5">{user?.email || ''}</p>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingAvatar}
-                  className="mt-2 text-xs font-semibold text-[#002046] hover:underline disabled:opacity-60"
-                >
-                  {uploadingAvatar ? 'Uploading...' : 'Change photo'}
-                </button>
+                <p className="text-3xl font-black text-slate-900">₹{Math.round(Number(wallet.balance || 0)).toLocaleString('en-IN')}</p>
+                <p className="text-xs text-slate-500">Available balance</p>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
-              {[
-                { label: 'Full Name', value: fullName, icon: 'person' },
-                { label: 'Email', value: user?.email || '--', icon: 'mail' },
-                { label: 'Phone', value: user?.phone || '--', icon: 'phone' },
-                { label: 'Account Role', value: user?.role || 'USER', icon: 'badge' },
-              ].map((f) => (
-                <div key={f.label} className="rounded-xl bg-slate-50 ring-1 ring-slate-200/80 p-4 flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#002046]/[0.07] flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="material-symbols-outlined text-sm text-[#002046]">{f.icon}</span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{f.label}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900 truncate">{f.value}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => navigate(ROUTES.USER_PROFILE)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                <span className="material-symbols-outlined text-base">star</span>
-                My Ratings
-              </button>
-              <button
-                onClick={() => setPasswordModal((p) => ({ ...p, open: true }))}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                <span className="material-symbols-outlined text-base">lock</span>
-                Change Password
-              </button>
-              <button
-                onClick={() => { logout(); navigate(ROUTES.LOGIN); }}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors ml-auto"
-              >
-                <span className="material-symbols-outlined text-base">logout</span>
-                Logout
+              <button onClick={() => navigate(ROUTES.SEARCH_RESULTS)} className={secondaryBtn}>
+                <span className="material-symbols-outlined text-[18px]">search</span>Use on a booking
               </button>
             </div>
-          </div>
-        </div>
-
-        {/* Tab selector */}
-        <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-          <div className="flex items-center gap-1 p-1.5 border-b border-slate-100">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(activeTab === tab.id ? null : tab.id)}
-                className={`flex-1 flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-[#002046] text-white shadow-sm'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <span className="material-symbols-outlined text-base">{tab.icon}</span>
-                <span className="hidden sm:inline">{tab.label}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Saved Passengers panel */}
-          {activeTab === 'passengers' && (
-            <div>
-              <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
-                <p className="text-xs text-slate-500">Saved traveler details auto-fill during booking</p>
-                <button
-                  onClick={openAddProfile}
-                  className="flex items-center gap-1.5 rounded-xl bg-[#002046] text-white px-3 py-1.5 text-xs font-semibold hover:bg-[#003a80] transition-colors"
-                >
-                  <span className="material-symbols-outlined text-sm">add</span>
-                  Add
-                </button>
-              </div>
-              {savedProfiles.length === 0 ? (
-                <div className="px-5 py-12 flex flex-col items-center gap-3 text-center">
-                  <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-2xl text-slate-400">group</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700">No saved passengers yet</p>
-                    <p className="text-xs text-slate-400 mt-1">Add a co-traveler to speed up future bookings</p>
-                  </div>
-                  <button onClick={openAddProfile} className="mt-1 text-sm font-semibold text-[#002046] hover:underline">
-                    + Add your first passenger
-                  </button>
-                </div>
-              ) : (
-                <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {savedProfiles.map((p) => {
-                    const initials = [(p.firstName?.[0] || ''), (p.lastName?.[0] || '')].join('').toUpperCase() || 'P';
-                    const genderColor = p.gender === 'Female' ? 'bg-pink-100 text-pink-700' : p.gender === 'Male' ? 'bg-sky-100 text-sky-700' : 'bg-slate-100 text-slate-600';
-                    return (
-                      <div key={p.id} className="group relative rounded-2xl ring-1 ring-slate-200 bg-slate-50 p-4 flex items-start gap-3 hover:ring-[#002046]/30 hover:bg-white transition-all">
-                        <div className="w-11 h-11 rounded-xl bg-[#002046] flex items-center justify-center flex-shrink-0 shadow-sm">
-                          <span className="text-sm font-black text-white select-none">{initials}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-slate-900 truncate">{p.firstName} {p.lastName}</p>
-                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                            {p.gender && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${genderColor}`}>{p.gender}</span>}
-                            {p.age && <span className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">{p.age} yrs</span>}
-                            {p.phone && <span className="text-[10px] text-slate-400 truncate">{p.phone}</span>}
-                          </div>
-                        </div>
-                        <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                          <button onClick={() => openEditProfile(p)} className="w-7 h-7 rounded-lg bg-white ring-1 ring-slate-200 text-slate-500 flex items-center justify-center hover:text-[#002046] hover:ring-[#002046]/30 transition-colors shadow-sm">
-                            <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>edit</span>
-                          </button>
-                          <button onClick={() => handleDeleteProfile(p.id)} disabled={deletingProfileId === p.id} className="w-7 h-7 rounded-lg bg-white ring-1 ring-slate-200 text-slate-400 flex items-center justify-center hover:text-rose-500 hover:ring-rose-200 hover:bg-rose-50 transition-colors shadow-sm disabled:opacity-50">
-                            {deletingProfileId === p.id
-                              ? <div className="w-3 h-3 rounded-full border border-rose-300 border-t-rose-500 animate-spin" />
-                              : <span className="material-symbols-outlined" style={{ fontSize: '14px' }}>delete</span>
-                            }
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Notifications panel */}
-          {activeTab === 'notifications' && (
-            <div className="divide-y divide-slate-100">
-              {notifItems.map((item) => (
-                <div key={item.key} className="flex items-center gap-4 px-5 py-4">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-900">{item.label}</p>
-                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{item.desc}</p>
-                  </div>
-                  <div className="flex-shrink-0 flex items-center gap-2.5">
-                    <span className={`text-[10px] font-bold ${notifPrefs[item.key] ? 'text-emerald-600' : 'text-slate-400'}`}>
-                      {notifPrefs[item.key] ? 'On' : 'Off'}
+            {Array.isArray(wallet.transactions) && wallet.transactions.length > 0 && (
+              <ul className="border-t border-slate-100 divide-y divide-slate-100">
+                {wallet.transactions.slice(0, 5).map((t) => (
+                  <li key={t.id} className="flex items-center justify-between gap-3 px-5 py-3 text-sm">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-slate-900 truncate">{t.description}</p>
+                      <p className="text-xs text-slate-400">{t.createdAt ? new Date(t.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</p>
+                    </div>
+                    <span className={`font-black ${Number(t.amount) >= 0 ? 'text-green-700' : 'text-slate-900'}`}>
+                      {Number(t.amount) >= 0 ? '+' : '−'}₹{Math.abs(Math.round(Number(t.amount))).toLocaleString('en-IN')}
                     </span>
-                    <Toggle checked={notifPrefs[item.key]} onChange={(val) => updateNotif(item.key, val)} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+        )}
 
-          {/* Payment Cards panel */}
-          {activeTab === 'cards' && (
-            <div>
-              <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between bg-slate-50/60">
-                <p className="text-xs text-slate-500">Saved cards appear at checkout for one-click payment</p>
-                {!addCardOpen && stripePromise && (
-                  <button
-                    onClick={() => setAddCardOpen(true)}
-                    className="flex items-center gap-1.5 rounded-xl bg-[#002046] text-white px-3 py-1.5 text-xs font-semibold hover:bg-[#003a80] transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-sm">add</span>
-                    Add Card
-                  </button>
-                )}
+        {/* ── Invite friends (spec §8) ── */}
+        {REFERRALS_ENABLED && referral?.code && (
+          <section className="relative overflow-hidden rounded-2xl bg-primary p-6 text-white">
+            <div className="absolute -top-16 -right-10 w-56 h-56 rounded-full bg-[#FF8A65]/20 blur-3xl" aria-hidden="true" />
+            <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-5">
+              <div>
+                <p className="text-sm font-semibold text-[#FDBA74]">Invite friends</p>
+                <h2 className="text-xl font-black mt-0.5">{referral.rewardText || 'You both get rewarded when a friend books their first trip'}</h2>
+                <p className="text-sm text-slate-300 mt-1">
+                  {Number(referral.successfulReferrals || 0)} friend{Number(referral.successfulReferrals || 0) !== 1 ? 's' : ''} joined
+                  {referral.totalEarned ? ` · ₹${Math.round(Number(referral.totalEarned)).toLocaleString('en-IN')} earned` : ''}
+                </p>
               </div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-xl border-2 border-dashed border-[#FDBA74]/60 bg-white/5 px-4 py-2.5 font-mono font-black tracking-[0.2em]">{referral.code}</span>
+                <button onClick={shareReferral} className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#FDBA74] to-[#FF8A65] px-4 py-2.5 text-sm font-extrabold text-primary hover:brightness-105">
+                  <span className="material-symbols-outlined text-[18px]">share</span>Invite
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
 
-              {/* Add card form — inside Elements wrapper */}
-              {addCardOpen && stripePromise && (
-                <div className="px-5 py-5 border-b border-slate-100 bg-slate-50/40">
-                  <p className="text-sm font-bold text-slate-900 mb-4">Add new card</p>
-                  <Elements stripe={stripePromise}>
-                    <AddCardForm
-                      cardholderName={cardholderName}
-                      setCardholderName={setCardholderName}
-                      onSaved={handleCardSaved}
-                      onCancel={() => { setAddCardOpen(false); setCardholderName(''); }}
-                    />
-                  </Elements>
-                </div>
-              )}
-
-              {!addCardOpen && savedCards.length === 0 && (
-                <div className="px-5 py-12 flex flex-col items-center gap-3 text-center">
-                  <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-2xl text-slate-400">credit_card_off</span>
+        {/* ── Saved travellers ── */}
+        <Section
+          icon="group" title="Saved travellers" subtitle="Fill in passenger details in one tap when you book"
+          action={<button onClick={() => setPassengerForm({ ...EMPTY_PASSENGER, errors: {} })} className={primaryBtn}><span className="material-symbols-outlined text-[18px]">add</span>Add traveller</button>}
+        >
+          {passengers.length === 0 ? (
+            <div className="px-5 py-10 text-center">
+              <p className="text-sm font-semibold text-slate-700">No saved travellers yet</p>
+              <p className="text-xs text-slate-400 mt-1">Add family or friends you often travel with.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {passengers.map((p) => (
+                <li key={p.id} className="flex items-center gap-3 px-5 py-3.5">
+                  <span className="w-10 h-10 flex-shrink-0 rounded-xl bg-primary text-white text-sm font-black flex items-center justify-center">
+                    {[(p.firstName?.[0] || ''), (p.lastName?.[0] || '')].join('').toUpperCase() || 'P'}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-900 truncate">{p.firstName} {p.lastName}</p>
+                    <p className="text-xs text-slate-500 truncate">{[p.gender, p.age ? `${p.age} yrs` : null, p.phone].filter(Boolean).join(' · ') || 'No other details'}</p>
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-700">No saved cards yet</p>
-                    <p className="text-xs text-slate-400 mt-1">Add a card to pay faster at checkout</p>
-                  </div>
-                  {stripePromise && (
-                    <button onClick={() => setAddCardOpen(true)} className="mt-1 text-sm font-semibold text-[#002046] hover:underline">
-                      + Add your first card
-                    </button>
-                  )}
-                </div>
-              )}
+                  <button onClick={() => setPassengerForm({ id: p.id, firstName: p.firstName || '', lastName: p.lastName || '', age: p.age ?? '', gender: p.gender || '', phone: normalizePhone(p.phone), errors: {} })}
+                    aria-label={`Edit ${p.firstName}`} className="w-9 h-9 rounded-xl border border-slate-200 text-slate-500 hover:border-[#FF8A65] hover:text-primary flex items-center justify-center transition-colors">
+                    <span className="material-symbols-outlined text-[18px]">edit</span>
+                  </button>
+                  <button onClick={() => handleDeletePassenger(p)} disabled={deletingId === p.id}
+                    aria-label={`Remove ${p.firstName}`} className="w-9 h-9 rounded-xl border border-slate-200 text-slate-400 hover:border-red-200 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors disabled:opacity-50">
+                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
 
-              {savedCards.length > 0 && (
-                <div className="p-4 space-y-3">
-                  {savedCards.map(card => {
-                    const brand = getBrand(card.brand);
-                    const expiry = `${String(card.exp_month).padStart(2, '0')}/${String(card.exp_year).slice(-2)}`;
-                    return (
-                      <div key={card.id} className="group flex items-center gap-4 rounded-2xl ring-1 ring-slate-200 p-4 bg-white hover:ring-[#002046]/30 transition-all">
-                        {/* Card visual */}
-                        <div className={`w-14 h-10 rounded-xl bg-gradient-to-br ${brand.bg} flex items-center justify-center flex-shrink-0 shadow-sm`}>
-                          <span className="text-[10px] font-black text-white tracking-wider">{brand.label}</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-slate-900">•••• •••• •••• {card.last4}</p>
-                          <p className="text-xs text-slate-500 mt-0.5">{card.name} · Expires {expiry}</p>
-                        </div>
-                        <button
-                          onClick={() => handleDeleteCard(card.id)}
-                          className="w-8 h-8 rounded-lg bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
-                        >
-                          <span className="material-symbols-outlined text-sm">delete</span>
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+        {/* ── Payment cards ── */}
+        <Section
+          icon="credit_card" title="Payment cards" subtitle="Cards are saved on this device only and handled securely by Stripe"
+          action={!addCardOpen && stripePromise && <button onClick={() => setAddCardOpen(true)} className={secondaryBtn}><span className="material-symbols-outlined text-[18px]">add</span>Add card</button>}
+        >
+          {addCardOpen && stripePromise && (
+            <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+              <Elements stripe={stripePromise}>
+                <AddCardForm
+                  onSaved={(card) => { persistCards([card, ...savedCards]); setAddCardOpen(false); toast.success('Card saved on this device'); }}
+                  onCancel={() => setAddCardOpen(false)}
+                />
+              </Elements>
             </div>
           )}
-        </div>
+          {savedCards.length === 0 && !addCardOpen ? (
+            <div className="px-5 py-10 text-center">
+              <p className="text-sm font-semibold text-slate-700">No saved cards</p>
+              <p className="text-xs text-slate-400 mt-1">You can always pay with a new card at checkout.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {savedCards.map((card) => {
+                const brand = getBrand(card.brand);
+                return (
+                  <li key={card.id} className="flex items-center gap-4 px-5 py-3.5">
+                    <span className={`w-12 h-8 flex-shrink-0 rounded-lg bg-gradient-to-br ${brand.bg} flex items-center justify-center text-[10px] font-black text-white`}>{brand.label}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-900">•••• {card.last4}</p>
+                      <p className="text-xs text-slate-500 truncate">{card.name} · Expires {String(card.exp_month).padStart(2, '0')}/{String(card.exp_year).slice(-2)}</p>
+                    </div>
+                    <button onClick={() => { persistCards(savedCards.filter((c) => c.id !== card.id)); toast.success('Card removed'); }}
+                      aria-label={`Remove card ending ${card.last4}`} className="w-9 h-9 rounded-xl border border-slate-200 text-slate-400 hover:border-red-200 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors">
+                      <span className="material-symbols-outlined text-[18px]">delete</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Section>
 
+        {/* ── Notifications ── */}
+        <Section icon="notifications" title="Notifications" subtitle="What we send you">
+          <ul className="divide-y divide-slate-100">
+            {[
+              { icon: 'confirmation_number', title: 'Booking confirmations', sub: 'Your ticket details after every booking' },
+              { icon: 'alarm', title: 'Trip reminders', sub: 'A reminder before your bus departs' },
+              { icon: 'currency_exchange', title: 'Changes, cancellations & refunds', sub: 'Date changes, cancellations and refund updates' },
+            ].map((n) => (
+              <li key={n.title} className="flex items-center gap-3 px-5 py-3.5">
+                <span className="material-symbols-outlined text-[20px] text-slate-400">{n.icon}</span>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-slate-900">{n.title}</p>
+                  <p className="text-xs text-slate-500">{n.sub}</p>
+                </div>
+                <span className="text-xs font-bold text-green-700 bg-green-50 rounded-full px-2.5 py-1">Email · In app</span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex items-center gap-3 px-5 py-3.5 border-t border-slate-100 bg-slate-50/60">
+            <span className="material-symbols-outlined text-[20px] text-slate-400">chat</span>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-slate-900">Tickets on WhatsApp &amp; SMS</p>
+              <p className="text-xs text-slate-500">Get your ticket and trip updates on your phone</p>
+            </div>
+            <span className="text-xs font-bold text-orange-700 bg-[#FDBA74]/20 rounded-full px-2.5 py-1">Coming soon</span>
+          </div>
+          <p className="px-5 py-3 border-t border-slate-100 text-xs text-slate-400">
+            These are essential messages about your trips. We don’t send marketing emails.
+          </p>
+        </Section>
+
+        {/* ── App & language ── */}
+        <Section icon="language" title="App & language">
+          <ul className="divide-y divide-slate-100">
+            {[
+              { icon: 'translate', title: 'Language', sub: 'English · हिंदी and more Indian languages' },
+              { icon: 'install_mobile', title: 'Install the TripGo app', sub: 'Add TripGo to your home screen and open tickets offline' },
+            ].map((item) => (
+              <li key={item.title} className="flex items-center gap-3 px-5 py-3.5">
+                <span className="material-symbols-outlined text-[20px] text-slate-400">{item.icon}</span>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                  <p className="text-xs text-slate-500">{item.sub}</p>
+                </div>
+                <span className="text-xs font-bold text-orange-700 bg-[#FDBA74]/20 rounded-full px-2.5 py-1">Coming soon</span>
+              </li>
+            ))}
+          </ul>
+        </Section>
       </div>
 
-      {/* Add / Edit Passenger Profile Modal */}
-      {profileFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl ring-1 ring-slate-200/70">
-            <div className="flex items-start justify-between gap-4 mb-5">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#002046]/60">Passenger</p>
-                <h2 className="mt-1 text-xl font-black text-slate-900">{editingProfile ? 'Edit Profile' : 'New Profile'}</h2>
-              </div>
-              <button onClick={() => setProfileFormOpen(false)} className="rounded-xl bg-slate-100 p-2 text-slate-500 hover:bg-slate-200">
-                <span className="material-symbols-outlined">close</span>
-              </button>
+      {/* ── Edit profile ── */}
+      {editModal && (
+        <Modal eyebrow="Profile" title="Edit profile" onClose={() => setEditModal(null)}
+          footer={<>
+            <button onClick={() => setEditModal(null)} className={`${secondaryBtn} flex-1`}>Cancel</button>
+            <button onClick={handleSaveProfile} disabled={savingProfile} className={`${primaryBtn} flex-1`}>{savingProfile ? 'Saving...' : 'Save changes'}</button>
+          </>}>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <Field id="edit-first" label="First name" error={editModal.errors.firstName}>
+                <input id="edit-first" autoComplete="given-name" value={editModal.firstName} onChange={(e) => setEditModal((m) => ({ ...m, firstName: e.target.value, errors: { ...m.errors, firstName: '' } }))} className={inputCls(editModal.errors.firstName)} />
+              </Field>
+              <Field id="edit-last" label="Last name">
+                <input id="edit-last" autoComplete="family-name" value={editModal.lastName} onChange={(e) => setEditModal((m) => ({ ...m, lastName: e.target.value }))} className={inputCls()} />
+              </Field>
             </div>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">First Name *</label>
-                  <input type="text" value={profileForm.firstName} onChange={(e) => setProfileForm((p) => ({ ...p, firstName: e.target.value }))} placeholder="First name" className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Last Name</label>
-                  <input type="text" value={profileForm.lastName} onChange={(e) => setProfileForm((p) => ({ ...p, lastName: e.target.value }))} placeholder="Last name" className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40" />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Age</label>
-                  <input type="number" min="1" max="120" value={profileForm.age} onChange={(e) => setProfileForm((p) => ({ ...p, age: e.target.value }))} placeholder="Enter your age" className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Gender</label>
-                  <select value={profileForm.gender} onChange={(e) => setProfileForm((p) => ({ ...p, gender: e.target.value }))} className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40">
-                    <option value="">Select</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone</label>
-                <input type="tel" value={profileForm.phone} onChange={(e) => setProfileForm((p) => ({ ...p, phone: e.target.value }))} placeholder="Enter phone number" className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40" />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setProfileFormOpen(false)} className="flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200">Cancel</button>
-              <button onClick={handleSaveProfileEntry} disabled={savingProfileEntry} className="flex-1 rounded-2xl bg-[#002046] px-4 py-3 text-sm font-bold text-white hover:bg-[#003a80] disabled:opacity-60">
-                {savingProfileEntry ? 'Saving...' : editingProfile ? 'Save Changes' : 'Save Profile'}
-              </button>
-            </div>
+            <Field id="edit-phone" label="Mobile number" error={editModal.errors.phone}>
+              <input id="edit-phone" type="tel" inputMode="numeric" autoComplete="tel-national" placeholder="10-digit mobile" value={editModal.phone}
+                onChange={(e) => setEditModal((m) => ({ ...m, phone: normalizePhone(e.target.value), errors: { ...m.errors, phone: '' } }))} className={inputCls(editModal.errors.phone)} />
+            </Field>
+            <Field id="edit-email" label="Email" hint="Your email address can’t be changed.">
+              <input id="edit-email" value={user?.email || ''} disabled className="w-full rounded-xl bg-slate-100 border border-slate-200 px-4 py-3 text-sm text-slate-400 cursor-not-allowed" />
+            </Field>
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Edit Profile Modal */}
-      {editModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl ring-1 ring-slate-200/70">
-            <div className="flex items-center justify-between gap-4 mb-5">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#002046]/60">Account</p>
-                <h2 className="mt-1 text-xl font-black text-slate-900">Edit Profile</h2>
-              </div>
-              <button onClick={() => setEditModal((p) => ({ ...p, open: false }))} className="rounded-xl bg-slate-100 p-2 text-slate-500 hover:bg-slate-200">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">First Name *</label>
-                  <input
-                    type="text"
-                    value={editModal.firstName}
-                    onChange={(e) => setEditModal((p) => ({ ...p, firstName: e.target.value }))}
-                    placeholder="First name"
-                    className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Last Name</label>
-                  <input
-                    type="text"
-                    value={editModal.lastName}
-                    onChange={(e) => setEditModal((p) => ({ ...p, lastName: e.target.value }))}
-                    placeholder="Last name"
-                    className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone Number</label>
-                <input
-                  type="tel"
-                  value={editModal.phone}
-                  onChange={(e) => setEditModal((p) => ({ ...p, phone: e.target.value }))}
-                  placeholder="Enter phone number"
-                  className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Email</label>
-                <input
-                  type="email"
-                  value={user?.email || ''}
-                  disabled
-                  className="w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-400 outline-none ring-1 ring-slate-200 cursor-not-allowed"
-                />
-                <p className="text-[10px] text-slate-400 mt-1 ml-1">Email cannot be changed</p>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setEditModal((p) => ({ ...p, open: false }))} className="flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200">
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveProfile}
-                disabled={savingProfile}
-                className="flex-1 color-white rounded-2xl bg-[#002046] px-4 py-3 text-sm font-bold text-white hover:bg-[#003a80] disabled:opacity-60 transition-colors"
-              >
-                {savingProfile ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
+      {/* ── Change password ── */}
+      {passwordModal && (
+        <Modal eyebrow="Security" title="Change password" onClose={() => setPasswordModal(null)}
+          footer={<>
+            <button onClick={() => setPasswordModal(null)} className={`${secondaryBtn} flex-1`}>Cancel</button>
+            <button onClick={handleChangePassword} disabled={changingPassword} className={`${primaryBtn} flex-1`}>{changingPassword ? 'Changing...' : 'Change password'}</button>
+          </>}>
+          <div className="space-y-4">
+            {passwordModal.error && (
+              <p role="alert" className="flex items-start gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-2.5 text-sm text-red-700">
+                <span className="material-symbols-outlined text-[18px]">error</span>{passwordModal.error}
+              </p>
+            )}
+            {[
+              { key: 'oldPassword', label: 'Current password', auto: 'current-password' },
+              { key: 'newPassword', label: 'New password', auto: 'new-password' },
+              { key: 'confirmPassword', label: 'Confirm new password', auto: 'new-password' },
+            ].map((f) => (
+              <Field key={f.key} id={`pw-${f.key}`} label={f.label}>
+                <input id={`pw-${f.key}`} type={passwordModal.show ? 'text' : 'password'} autoComplete={f.auto} value={passwordModal[f.key]}
+                  onChange={(e) => setPasswordModal((m) => ({ ...m, [f.key]: e.target.value, error: '' }))} className={inputCls()} />
+              </Field>
+            ))}
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 rounded-xl bg-slate-50 border border-slate-100 px-4 py-3">
+              {PASSWORD_RULES.map((rule) => {
+                const ok = passwordStarted && rule.test(passwordModal.newPassword);
+                return (
+                  <li key={rule.id} className={`flex items-center gap-1.5 text-xs ${ok ? 'text-green-700' : 'text-slate-500'}`}>
+                    <span className="material-symbols-outlined text-[15px]" style={ok ? { fontVariationSettings: "'FILL' 1" } : undefined}>{ok ? 'check_circle' : 'radio_button_unchecked'}</span>
+                    {rule.label}
+                  </li>
+                );
+              })}
+            </ul>
+            <label className="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+              <input type="checkbox" checked={passwordModal.show} onChange={(e) => setPasswordModal((m) => ({ ...m, show: e.target.checked }))} className="rounded border-slate-300 text-primary focus:ring-[#FDBA74]" />
+              Show passwords
+            </label>
           </div>
-        </div>
+        </Modal>
       )}
 
-      {/* Change Password Modal */}
-      {passwordModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl ring-1 ring-slate-200/70">
-            <div className="flex items-center justify-between gap-4 mb-5">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#002046]/60">Security</p>
-                <h2 className="mt-1 text-xl font-black text-slate-900">Change Password</h2>
-              </div>
-              <button onClick={closePasswordModal} className="rounded-xl bg-slate-100 p-2 text-slate-500 hover:bg-slate-200">
-                <span className="material-symbols-outlined">close</span>
-              </button>
+      {/* ── Add / edit traveller ── */}
+      {passengerForm && (
+        <Modal eyebrow="Saved traveller" title={passengerForm.id ? 'Edit traveller' : 'Add traveller'} onClose={() => setPassengerForm(null)}
+          footer={<>
+            <button onClick={() => setPassengerForm(null)} className={`${secondaryBtn} flex-1`}>Cancel</button>
+            <button onClick={handleSavePassenger} disabled={savingPassenger} className={`${primaryBtn} flex-1`}>{savingPassenger ? 'Saving...' : 'Save traveller'}</button>
+          </>}>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <Field id="tr-first" label="First name" error={passengerForm.errors.firstName}>
+                <input id="tr-first" value={passengerForm.firstName} onChange={(e) => setPassengerForm((p) => ({ ...p, firstName: e.target.value, errors: { ...p.errors, firstName: '' } }))} className={inputCls(passengerForm.errors.firstName)} />
+              </Field>
+              <Field id="tr-last" label="Last name">
+                <input id="tr-last" value={passengerForm.lastName} onChange={(e) => setPassengerForm((p) => ({ ...p, lastName: e.target.value }))} className={inputCls()} />
+              </Field>
             </div>
-
-            <div className="space-y-3">
-              {[
-                { key: 'oldPassword', label: 'Current Password', placeholder: 'Enter current password' },
-                { key: 'newPassword', label: 'New Password', placeholder: 'Min. 8 characters' },
-                { key: 'confirmPassword', label: 'Confirm Password', placeholder: 'Repeat new password' },
-              ].map((f) => (
-                <div key={f.key}>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">{f.label} *</label>
-                  <input
-                    type="password"
-                    value={passwordModal[f.key]}
-                    onChange={(e) => setPasswordModal((p) => ({ ...p, [f.key]: e.target.value }))}
-                    placeholder={f.placeholder}
-                    className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40"
-                  />
-                </div>
-              ))}
+            <div className="grid grid-cols-2 gap-3">
+              <Field id="tr-age" label="Age" error={passengerForm.errors.age}>
+                <input id="tr-age" type="number" inputMode="numeric" min="1" max="120" value={passengerForm.age} onChange={(e) => setPassengerForm((p) => ({ ...p, age: e.target.value, errors: { ...p.errors, age: '' } }))} className={inputCls(passengerForm.errors.age)} />
+              </Field>
+              <Field id="tr-gender" label="Gender">
+                <select id="tr-gender" value={passengerForm.gender} onChange={(e) => setPassengerForm((p) => ({ ...p, gender: e.target.value }))} className={inputCls()}>
+                  <option value="">Select</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </Field>
             </div>
-
-            <div className="flex gap-3 mt-6">
-              <button onClick={closePasswordModal} className="flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200">
-                Cancel
-              </button>
-              <button
-                onClick={handleChangePassword}
-                disabled={changingPassword}
-                className="flex-1 rounded-2xl bg-[#002046] px-4 py-3 text-sm font-bold text-white hover:bg-[#003a80] disabled:opacity-60 transition-colors"
-              >
-                {changingPassword ? 'Changing...' : 'Change Password'}
-              </button>
-            </div>
+            <Field id="tr-phone" label="Mobile number (optional)" error={passengerForm.errors.phone}>
+              <input id="tr-phone" type="tel" inputMode="numeric" placeholder="10-digit mobile" value={passengerForm.phone}
+                onChange={(e) => setPassengerForm((p) => ({ ...p, phone: normalizePhone(e.target.value), errors: { ...p.errors, phone: '' } }))} className={inputCls(passengerForm.errors.phone)} />
+            </Field>
           </div>
-        </div>
+        </Modal>
       )}
     </UserLayout>
   );

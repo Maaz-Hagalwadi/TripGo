@@ -1,5 +1,7 @@
 package com.tripgo.backend.service.impl;
 
+import com.tripgo.backend.config.AppTime;
+
 import com.tripgo.backend.dto.response.FareResult;
 import com.tripgo.backend.dto.response.SeatAvailability;
 import com.tripgo.backend.dto.response.SearchResult;
@@ -58,7 +60,7 @@ public class SeatAvailabilityService {
                         java.time.LocalDate bookingDate = bs.getBooking().getTravelDate();
                         if (bookingDate == null) return true;
                         java.time.LocalDate requestedDate = java.time.LocalDateTime
-                                .ofInstant(schedule.getDepartureTime(), java.time.ZoneOffset.UTC)
+                                .ofInstant(schedule.getDepartureTime(), AppTime.ZONE)
                                 .toLocalDate();
                         return bookingDate.equals(requestedDate);
                     }

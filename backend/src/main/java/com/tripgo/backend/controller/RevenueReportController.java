@@ -1,5 +1,7 @@
 package com.tripgo.backend.controller;
 
+import com.tripgo.backend.config.AppTime;
+
 import com.tripgo.backend.model.entities.Booking;
 import com.tripgo.backend.model.entities.Operator;
 import com.tripgo.backend.model.entities.User;
@@ -76,8 +78,8 @@ public class RevenueReportController {
         Map<String, Long>       dailyBookings  = new LinkedHashMap<>();
         for (int i = 29; i >= 0; i--) {
             LocalDate day   = LocalDate.now().minusDays(i);
-            Instant   start = day.atStartOfDay(ZoneOffset.UTC).toInstant();
-            Instant   end   = day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+            Instant   start = day.atStartOfDay(AppTime.ZONE).toInstant();
+            Instant   end   = day.plusDays(1).atStartOfDay(AppTime.ZONE).toInstant();
             String    key   = day.toString();
 
             BigDecimal rev = confirmed.stream()
@@ -97,8 +99,8 @@ public class RevenueReportController {
         Map<String, BigDecimal> monthlyRevenue = new LinkedHashMap<>();
         for (int i = 11; i >= 0; i--) {
             YearMonth ym    = YearMonth.now().minusMonths(i);
-            Instant   start = ym.atDay(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-            Instant   end   = ym.atEndOfMonth().plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+            Instant   start = ym.atDay(1).atStartOfDay(AppTime.ZONE).toInstant();
+            Instant   end   = ym.atEndOfMonth().plusDays(1).atStartOfDay(AppTime.ZONE).toInstant();
 
             BigDecimal rev = confirmed.stream()
                     .filter(b -> !b.getCreatedAt().isBefore(start) && b.getCreatedAt().isBefore(end))

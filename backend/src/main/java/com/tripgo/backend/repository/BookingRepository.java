@@ -6,10 +6,13 @@ import com.tripgo.backend.model.entities.RouteSchedule;
 import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.model.enums.BookingStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -30,6 +33,19 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
     @Query("SELECT b FROM Booking b WHERE b.user = :user AND b.routeSchedule.id = :scheduleId AND b.travelDate = :travelDate AND b.status = 'PENDING' ORDER BY b.createdAt DESC")
     List<Booking> findPendingByUserAndScheduleAndTravelDate(@Param("user") User user, @Param("scheduleId") UUID scheduleId, @Param("travelDate") java.time.LocalDate travelDate);
+
+    @Query("SELECT b FROM Booking b WHERE b.user IS NULL AND LOWER(b.guestEmail) = LOWER(:guestEmail) AND b.routeSchedule.id = :scheduleId AND b.travelDate = :travelDate AND b.status = 'PENDING' ORDER BY b.createdAt DESC")
+    List<Booking> findPendingByGuestAndScheduleAndTravelDate(@Param("guestEmail") String guestEmail, @Param("scheduleId") UUID scheduleId, @Param("travelDate") java.time.LocalDate travelDate);
+
+    /** PENDING bookings created before the cutoff — candidates for automatic expiry. */
+    @Query("SELECT b FROM Booking b WHERE b.status = 'PENDING' AND b.createdAt < :cutoff")
+    List<Booking> findStalePending(@Param("cutoff") Instant cutoff);
+
+    /** Atomically moves a still-PENDING booking to FAILED; returns 0 if something else changed it first. */
+    @Modifying
+    @Transactional
+    @Query("UPDATE Booking b SET b.status = 'FAILED' WHERE b.id = :id AND b.status = 'PENDING'")
+    int markFailedIfPending(@Param("id") UUID id);
 
     @Query("SELECT b FROM Booking b JOIN FETCH b.user WHERE b.travelDate = :date AND b.status = :status")
     List<Booking> findByTravelDateAndStatus(@Param("date") java.time.LocalDate date, @Param("status") BookingStatus status);
@@ -60,4 +76,7 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
     @Query("SELECT b.routeSchedule.route.origin, b.routeSchedule.route.destination, COUNT(b) FROM Booking b WHERE b.status = 'CONFIRMED' GROUP BY b.routeSchedule.route.origin, b.routeSchedule.route.destination ORDER BY COUNT(b) DESC")
     List<Object[]> getTopRoutesByBookingCount();
+
+    @Query("SELECT b FROM Booking b JOIN FETCH b.user WHERE b.routeSchedule.id = :scheduleId AND b.status = 'CONFIRMED'")
+    List<Booking> findByRouteScheduleIdAndStatus(@Param("scheduleId") UUID scheduleId);
 }

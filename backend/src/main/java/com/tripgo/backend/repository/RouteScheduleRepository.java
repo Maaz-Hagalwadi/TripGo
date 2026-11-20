@@ -4,6 +4,7 @@ import com.tripgo.backend.model.entities.Bus;
 import com.tripgo.backend.model.entities.Route;
 import com.tripgo.backend.model.entities.RouteSchedule;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -70,4 +71,17 @@ public interface RouteScheduleRepository extends JpaRepository<RouteSchedule, UU
         AND rs.arrivalTime < :now
         """)
     List<RouteSchedule> findPastUncompletedSchedules(@Param("now") Instant now);
+
+    /**
+     * Atomically claims a finished schedule: returns 1 for exactly one caller, 0 if another thread or
+     * app instance already completed it. Guards the daily roll-over against creating duplicates.
+     */
+    @Modifying
+    @Query("""
+        UPDATE RouteSchedule rs SET rs.tripStatus = 'COMPLETED', rs.active = false
+        WHERE rs.id = :id AND rs.tripStatus NOT IN ('COMPLETED', 'CANCELLED')
+        """)
+    int markCompletedIfOpen(@Param("id") UUID id);
+
+    boolean existsByBusAndRouteAndDepartureTimeAndActiveTrue(Bus bus, Route route, Instant departureTime);
 }

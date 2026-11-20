@@ -29,6 +29,10 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class EmailService {
 
+    // Where support tickets are delivered — set SUPPORT_EMAIL to a real, monitored inbox
+    @Value("${app.support.email:support@tripgo.com}")
+    private String supportEmail;
+
     private final UserRepository userRepository;
     private final TemplateEngine templateEngine;
     private final RestTemplate restTemplate = new RestTemplate();
@@ -234,7 +238,7 @@ public class EmailService {
         model.put("subject", subject);
         model.put("category", category);
         model.put("message", message);
-        sendTemplate("support@tripgo.com",
+        sendTemplate(supportEmail,
                 "[TripGo Support] " + category + ": " + subject,
                 "support-ticket",
                 model);
@@ -279,6 +283,22 @@ public class EmailService {
         data.put("seatNumbers", seatNumbers);
         data.put("frontendUrl", frontendUrl);
         sendResendTemplate(user.getEmail(), "booking-reminder", data);
+    }
+
+    @Async
+    public void sendRouteAlert(User user, String fromStop, String toStop,
+                                java.time.LocalDate travelDate, java.math.BigDecimal lowestFare, int busCount) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("subject", "Trip Alert: " + fromStop + " → " + toStop + " | TripGo");
+        data.put("firstName", user.getFirstName());
+        data.put("fromStop", fromStop);
+        data.put("toStop", toStop);
+        data.put("travelDate", travelDate.toString());
+        data.put("lowestFare", lowestFare);
+        data.put("busCount", busCount);
+        data.put("searchUrl", frontendUrl + "/search?from=" + fromStop + "&to=" + toStop + "&date=" + travelDate);
+        data.put("frontendUrl", frontendUrl);
+        sendResendTemplate(user.getEmail(), "route-alert", data);
     }
 
     private void sendResendTemplate(String to, String templateName, Map<String, Object> variables) {

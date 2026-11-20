@@ -40,7 +40,8 @@ public class CancellationController {
         }
 
         String reason = body.getOrDefault("reason", "Cancelled by user");
-        BigDecimal refundAmount = cancellationService.cancel(booking, CancelledBy.USER, reason);
+        String refundTo = body.getOrDefault("refundTo", "ORIGINAL");
+        BigDecimal refundAmount = cancellationService.cancel(booking, CancelledBy.USER, reason, refundTo);
 
         return ResponseEntity.ok(Map.of(
                 "message", "Booking cancelled successfully",

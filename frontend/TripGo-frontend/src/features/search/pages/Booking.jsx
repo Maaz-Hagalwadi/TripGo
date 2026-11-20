@@ -1,16 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import UserLayout from '../../../shared/components/UserLayout';
 import { ROUTES } from '../../../shared/constants/routes';
 import { INDIA_STATES } from '../../../shared/constants/indiaStates';
 import {
-  formatUtcDateTime,
   getDelayMinutes,
   getTripStatusValue,
   isSeatAvailableForBooking,
-  isSeatBlocked,
-  isSeatBooked,
 } from '../../../shared/utils/scheduleSearchUtils';
 import {
   applyPromoCode,
@@ -24,174 +21,33 @@ import {
   getSavedPassengerProfiles,
   createSavedPassengerProfile,
 } from '../../../api/bookingService';
+import CheckoutHeader from '../components/CheckoutHeader';
+import SeatMap from '../components/SeatMap';
+import { getWomenOnlySeats } from '../utils/seatLayout';
 
 const CURRENT_BOOKING_STORAGE_KEY = 'tripgo_current_booking_state';
 const BOOKING_DRAFT_PREFIX = 'tripgo_booking_draft_';
 const SAVED_TRAVELERS_KEY = 'tripgo_saved_travelers';
 const SAVED_CONTACT_KEY = 'tripgo_saved_contact';
 const RECENT_TRAVELERS_LIMIT = 6;
+const MAX_SEATS = 6;
+const STEPS = ['seats', 'points', 'details'];
 const seatComparator = (a, b) => String(a.seatNumber || '').localeCompare(String(b.seatNumber || ''), undefined, { numeric: true, sensitivity: 'base' });
-const SEATER_COL_MAP = { A: 0, B: 1, C: 2, D: 3 };
-
-const formatDuration = (dep, arr) => {
-  if (!dep || !arr) return '--';
-  const mins = Math.round((new Date(arr) - new Date(dep)) / 60000);
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return `${h} hr ${m} min`;
-};
-
-const formatCountdown = (seconds) => {
-  const safe = Math.max(0, seconds);
-  const mm = String(Math.floor(safe / 60)).padStart(2, '0');
-  const ss = String(safe % 60).padStart(2, '0');
-  return `${mm}:${ss}`;
-};
-
-const formatInstant = (instant) => {
-  return formatUtcDateTime(instant);
-};
-
-const getTripStatusMeta = (tripStatus, delayMinutes) => {
-  const status = String(tripStatus || '').toUpperCase();
-  const delay = Number(delayMinutes || 0);
-  if (status === 'DELAYED' || delay > 0) return { label: `Delayed${delay > 0 ? ` by ${delay} min` : ''}`, className: 'bg-amber-500/12 text-amber-700' };
-  if (status === 'STARTED') return { label: 'Started', className: 'bg-sky-500/12 text-sky-700' };
-  if (status === 'COMPLETED') return { label: 'Completed', className: 'bg-emerald-500/12 text-emerald-700' };
-  return { label: 'On Time', className: 'bg-emerald-500/12 text-emerald-700' };
-};
 
 const stopLabel = (stop) => stop?.name || stop?.stopName || stop?.city || stop?.location || stop?.address || stop?.landmark || '';
 const amenityLabel = (item) => {
   if (typeof item === 'string') return item;
   return item?.code || item?.name || item?.description || '';
 };
+const prettyLabel = (value) => String(value || '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
-const parseSleeperSeat = (seat) => {
-  const match = String(seat.seatNumber || '').trim().toUpperCase().match(/^([LU])(\d+)$/);
-  if (!match) return null;
-  const deck = match[1] === 'L' ? 'lower' : 'upper';
-  const position = Number(match[2]) - 1;
-  if (Number.isNaN(position) || position < 0) return null;
-  return { ...seat, deck, row: Math.floor(position / 3), col: position % 3 };
+/** "21:30:00" → "09:30 PM" (boarding points store a local time of day) */
+const formatPointTime = (value) => {
+  const match = String(value || '').match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return '';
+  const h = Number(match[1]);
+  return `${String(h % 12 || 12).padStart(2, '0')}:${match[2]} ${h >= 12 ? 'PM' : 'AM'}`;
 };
-
-const parseSeaterSeat = (seat) => {
-  const match = String(seat.seatNumber || '').trim().toUpperCase().match(/^(\d+)([A-Z])$/);
-  if (!match) return null;
-  const row = Number(match[1]) - 1;
-  const col = SEATER_COL_MAP[match[2]];
-  if (Number.isNaN(row) || row < 0 || col === undefined) return null;
-  return { ...seat, row, col };
-};
-
-const SeatMarks = ({ seat }) => {
-  const marks = [];
-  if (seat.isLadiesOnly) marks.push({ text: 'F', className: 'bg-pink-500 text-white' });
-  if (seat.isWindow) marks.push({ text: 'W', className: 'bg-blue-500 text-white' });
-  if (seat.isAisle) marks.push({ text: 'A', className: 'bg-emerald-500 text-white' });
-  if (seat.isBlocked) marks.push({ text: 'X', className: 'bg-red-500 text-white' });
-  if (!marks.length) return null;
-  return (
-    <div className="absolute -top-1 -right-1 flex gap-0.5">
-      {marks.map((mark, idx) => (
-        <span key={`${mark.text}-${idx}`} className={`h-3 w-3 rounded text-center text-[8px] font-bold leading-3 ${mark.className}`}>{mark.text}</span>
-      ))}
-    </div>
-  );
-};
-
-const UserSeaterSeat = ({ seat, selectedSeats, onToggleSeat }) => {
-  const isSelected = selectedSeats.includes(seat.seatNumber);
-  const isAvailable = isSeatAvailableForBooking(seat);
-  return (
-    <button
-      onClick={() => isAvailable && onToggleSeat(seat.seatNumber)}
-      disabled={!isAvailable}
-      className="group relative flex flex-col items-center transition-all disabled:cursor-not-allowed"
-      style={{ width: 36, height: 44 }}
-      title={seat.seatNumber}
-    >
-      <SeatMarks seat={seat} />
-      <div className={`h-2.5 w-6 rounded-t-md border-t-2 border-x-2 ${
-        isAvailable ? (isSelected ? 'border-[#002046] bg-[#002046]/[0.12]' : 'border-emerald-400/80 bg-emerald-400/20') : 'border-slate-400 bg-slate-300/40'
-      }`} />
-      <div className={`flex h-7 w-8 items-end justify-center rounded-b-lg border-2 border-t-0 pb-0.5 ${
-        isAvailable ? (isSelected ? 'border-[#002046] bg-[#002046]/[0.08]' : 'border-emerald-400/80 bg-emerald-400/10') : 'border-slate-400 bg-slate-300/30'
-      }`}>
-        <span className={`text-[9px] font-bold ${isAvailable ? (isSelected ? 'text-[#002046]' : 'text-emerald-700') : 'text-slate-500'}`}>{seat.seatNumber}</span>
-      </div>
-    </button>
-  );
-};
-
-const UserSleeperSeat = ({ seat, selectedSeats, onToggleSeat }) => {
-  const isSelected = selectedSeats.includes(seat.seatNumber);
-  const isAvailable = isSeatAvailableForBooking(seat);
-  return (
-    <button
-      onClick={() => isAvailable && onToggleSeat(seat.seatNumber)}
-      disabled={!isAvailable}
-      className={`group relative flex flex-col items-center justify-between rounded border-2 transition-all disabled:cursor-not-allowed ${
-        isAvailable ? (isSelected ? 'border-[#002046] bg-[#002046]/[0.08]' : 'border-emerald-400/70 bg-emerald-400/10') : 'border-slate-400 bg-slate-300/30'
-      }`}
-      style={{ width: 30, height: 58, padding: '4px 2px' }}
-      title={seat.seatNumber}
-    >
-      <SeatMarks seat={seat} />
-      <div className="h-4 w-5 rounded-sm border border-slate-300 bg-slate-100" />
-      <span className={`text-[8px] font-bold leading-none ${isAvailable ? (isSelected ? 'text-[#002046]' : 'text-emerald-700') : 'text-slate-500'}`}>{seat.seatNumber}</span>
-    </button>
-  );
-};
-
-const UserSleeperDeck = ({ deck, seats, selectedSeats, onToggleSeat }) => {
-  const deckSeats = seats.filter((seat) => seat.deck === deck);
-  const rows = [...new Set(deckSeats.map((seat) => seat.row))].sort((a, b) => a - b);
-  return (
-    <div className="flex gap-1">
-      <div className="flex flex-col gap-1">
-        {rows.map((row) => {
-          const seat = deckSeats.find((item) => item.row === row && item.col === 0);
-          return seat ? <UserSleeperSeat key={seat.seatNumber} seat={seat} selectedSeats={selectedSeats} onToggleSeat={onToggleSeat} /> : <div key={`${deck}-${row}-0`} style={{ width: 30, height: 58 }} />;
-        })}
-      </div>
-      <div className="flex flex-col justify-center" style={{ width: 16 }}>
-        <div className="w-px bg-slate-300" style={{ height: rows.length * 58 + (rows.length - 1) * 4 }} />
-      </div>
-      {[1, 2].map((col) => (
-        <div key={`${deck}-${col}`} className="flex flex-col gap-1">
-          {rows.map((row) => {
-            const seat = deckSeats.find((item) => item.row === row && item.col === col);
-            return seat ? <UserSleeperSeat key={seat.seatNumber} seat={seat} selectedSeats={selectedSeats} onToggleSeat={onToggleSeat} /> : <div key={`${deck}-${row}-${col}`} style={{ width: 30, height: 58 }} />;
-          })}
-        </div>
-      ))}
-    </div>
-  );
-};
-
-const UserSeaterLayout = ({ seats, selectedSeats, onToggleSeat }) => {
-  const rows = [...new Set(seats.map((seat) => seat.row))].sort((a, b) => a - b);
-  return (
-    <div className="space-y-2">
-      {rows.map((row) => {
-        const rowSeats = seats.filter((seat) => seat.row === row).sort((a, b) => a.col - b.col);
-        const left = rowSeats.filter((seat) => seat.col < 2);
-        const right = rowSeats.filter((seat) => seat.col >= 2);
-        return (
-          <div key={`row-${row}`} className="flex items-center gap-1">
-            <div className="flex gap-1">{left.map((seat) => <UserSeaterSeat key={seat.seatNumber} seat={seat} selectedSeats={selectedSeats} onToggleSeat={onToggleSeat} />)}</div>
-            <div className="flex w-6 items-center justify-center"><div className="h-8 w-px bg-slate-300" /></div>
-            <div className="flex gap-1">{right.map((seat) => <UserSeaterSeat key={seat.seatNumber} seat={seat} selectedSeats={selectedSeats} onToggleSeat={onToggleSeat} />)}</div>
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-const pointLabel = (point) => [point.arrivalTime, point.name, point.landmark, point.address].filter(Boolean).join(' • ');
 
 const formatCancellationLines = (policy) => {
   if (!Array.isArray(policy?.cancellation)) return [];
@@ -201,8 +57,8 @@ const formatCancellationLines = (policy) => {
 const formatDateChangeLines = (policy) => {
   const dateChange = policy?.dateChange;
   if (!dateChange || typeof dateChange !== 'object') return [];
-  if (!dateChange.allowed) return ['Date change is not allowed for this schedule.'];
-  return [`Date change allowed up to ${dateChange.minHoursBeforeDeparture ?? 0} hrs before departure with ${dateChange.feePercent ?? 0}% fee.`];
+  if (!dateChange.allowed) return ['Date change is not allowed for this trip.'];
+  return [`Date change allowed up to ${dateChange.minHoursBeforeDeparture ?? 0} hrs before departure with a ${dateChange.feePercent ?? 0}% fee.`];
 };
 
 const formatRuleLines = (policy) => {
@@ -218,19 +74,16 @@ const formatRuleLines = (policy) => {
   ].filter(Boolean);
 };
 
-const formatRestStopText = (featuresInfo, policiesInfo, bus) => {
-  if (Array.isArray(featuresInfo?.restStops) && featuresInfo.restStops.length) {
-    return featuresInfo.restStops.map((stop) => `${stop.name}${stop.location ? `, ${stop.location}` : ''}${stop.durationMinutes ? ` · ${stop.durationMinutes} mins` : ''}`).join(' | ');
+const formatRestStops = (featuresInfo, policiesInfo, bus) => {
+  const stops = (Array.isArray(featuresInfo?.restStops) && featuresInfo.restStops.length ? featuresInfo.restStops : policiesInfo?.restStops) || [];
+  if (stops.length) {
+    return stops.map((stop) => `${stop.name}${stop.location ? `, ${stop.location}` : ''}${stop.durationMinutes ? ` · ${stop.durationMinutes} min` : ''}`).join(' | ');
   }
-  if (Array.isArray(policiesInfo?.restStops) && policiesInfo.restStops.length) {
-    return policiesInfo.restStops.map((stop) => `${stop.name}${stop.location ? `, ${stop.location}` : ''}${stop.durationMinutes ? ` · ${stop.durationMinutes} mins` : ''}`).join(' | ');
-  }
-  return featuresInfo?.restStopName || (featuresInfo?.hasRestStop === false ? 'This bus has no rest stop' : bus?.restStopName || 'This bus has no rest stop');
+  return featuresInfo?.restStopName || bus?.restStopName || '';
 };
 
-const INPUT_SHELL_CLASS = 'w-full rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40 transition-all';
-const SUBTLE_PANEL_CLASS = 'rounded-xl bg-slate-50 ring-1 ring-slate-200';
-const SOFT_BUTTON_CLASS = 'rounded-xl bg-slate-100 px-4 py-2 text-slate-700 hover:bg-slate-200 transition-colors font-semibold text-sm';
+const INPUT_CLASS = 'w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 transition-all';
+const LABEL_CLASS = 'mb-1.5 block text-xs font-bold text-slate-600';
 const createEmptyPassenger = (seatNumber = '') => ({ seatNumber, name: '', age: '', gender: '', phone: '', email: '' });
 
 const readStorage = (key, storage = localStorage) => {
@@ -271,15 +124,8 @@ const normalizeTraveler = (traveler = {}) => ({
   email: traveler?.email || '',
 });
 
-const getTravelerLabel = (traveler = {}) => {
-  const fullName = normalizeTraveler(traveler).name.trim();
-  if (!fullName) return 'Saved traveler';
-  return fullName;
-};
-
 const dedupeTravelers = (travelers = []) => {
   const unique = new Map();
-
   travelers.forEach((traveler) => {
     const normalized = normalizeTraveler(traveler);
     const key = [
@@ -287,51 +133,79 @@ const dedupeTravelers = (travelers = []) => {
       normalized.phone.trim(),
       normalized.email.trim().toLowerCase(),
     ].join('|');
-
     if (!normalized.name.trim() || !key.replace(/\|/g, '')) return;
     if (!unique.has(key)) unique.set(key, normalized);
   });
-
   return [...unique.values()].slice(0, RECENT_TRAVELERS_LIMIT);
 };
 
 const InlineLoader = ({ label }) => (
-  <div className="flex items-center gap-3 text-sm text-slate-600">
-    <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#002046]/30 border-t-[#002046]" />
+  <div className="flex items-center gap-3 py-6 text-sm text-slate-500">
+    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
     <span>{label}</span>
   </div>
 );
 
-const DetailCard = ({ icon, title, subtitle, children, className = '' }) => (
-  <div className={`rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden ${className}`}>
-    <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
-      <div className="w-9 h-9 rounded-xl bg-[#002046]/[0.08] flex items-center justify-center flex-shrink-0">
-        <span className="material-symbols-outlined text-[#002046] text-lg">{icon}</span>
+const Card = ({ title, subtitle, icon, action, children, className = '' }) => (
+  <section className={`rounded-2xl bg-white border border-slate-200/80 shadow-sm ${className}`}>
+    {title && (
+      <div className="flex items-center justify-between gap-3 px-5 pt-5">
+        <div className="flex items-center gap-3 min-w-0">
+          {icon && (
+            <span className="w-9 h-9 flex-shrink-0 rounded-xl bg-[#FDBA74]/20 flex items-center justify-center">
+              <span className="material-symbols-outlined text-[20px] text-orange-600">{icon}</span>
+            </span>
+          )}
+          <div className="min-w-0">
+            <h2 className="font-black text-slate-900">{title}</h2>
+            {subtitle && <p className="text-xs text-slate-500">{subtitle}</p>}
+          </div>
+        </div>
+        {action}
       </div>
-      <div className="min-w-0">
-        <p className="text-sm font-black text-slate-900">{title}</p>
-        {subtitle ? <p className="text-xs text-slate-400 mt-0.5">{subtitle}</p> : null}
-      </div>
-    </div>
-    <div className="px-5 py-5">{children}</div>
-  </div>
+    )}
+    <div className="p-5">{children}</div>
+  </section>
 );
+
+/** Selectable boarding / dropping point */
+const PointOption = ({ point, name, checked, onChange }) => (
+  <label className={`flex cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 transition-colors focus-within:ring-2 focus-within:ring-[#FF8A65]/40 ${
+    checked ? 'border-primary bg-primary/[0.04] ring-1 ring-primary' : 'border-slate-200 hover:border-[#FF8A65]'
+  }`}>
+    <input type="radio" name={name} checked={checked} onChange={onChange} className="sr-only" />
+    <span className={`mt-0.5 w-4 h-4 flex-shrink-0 rounded-full border-2 ${checked ? 'border-primary bg-primary shadow-[inset_0_0_0_3px_white]' : 'border-slate-300'}`} aria-hidden="true" />
+    <span className="min-w-0 flex-1">
+      <span className="flex items-baseline justify-between gap-3">
+        <span className="font-bold text-slate-900">{point.name}</span>
+        {point.arrivalTime && <span className="flex-shrink-0 text-sm font-black text-slate-900">{formatPointTime(point.arrivalTime)}</span>}
+      </span>
+      {(point.landmark || point.address) && (
+        <span className="mt-0.5 block text-xs text-slate-500">{[point.landmark, point.address].filter(Boolean).join(' · ')}</span>
+      )}
+    </span>
+  </label>
+);
+
+const GENDERS = [['MALE', 'Male'], ['FEMALE', 'Female'], ['OTHER', 'Other']];
 
 const Booking = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const persistedBookingState = location.state?.bus ? null : readStorage(CURRENT_BOOKING_STORAGE_KEY);
-  const bookingState = location.state?.bus ? location.state : (persistedBookingState || {});
+  const bookingState = useMemo(
+    () => (location.state?.bus ? location.state : (readStorage(CURRENT_BOOKING_STORAGE_KEY) || {})),
+    [location.state],
+  );
   const { bus, selectedType, selectedFare, searchParams } = bookingState;
   const scheduleId = bus?.scheduleId || bus?.id;
   const travelDate = searchParams?.date || bookingState?.travelDate || '';
   const draftKey = scheduleId ? `${BOOKING_DRAFT_PREFIX}${toDraftKeyPart(scheduleId)}_${toDraftKeyPart(travelDate || 'unscheduled')}` : '';
-  const savedDraft = draftKey ? readStorage(draftKey) : null;
-  const savedTravelers = readStorage(SAVED_TRAVELERS_KEY, localStorage) || [];
+  // Read once: re-parsing it every render gave the passengers effect a new dependency each time
+  const [savedDraft] = useState(() => (draftKey ? readStorage(draftKey) : null));
   const savedLockExpiresAt = Number(savedDraft?.lockExpiresAt || 0);
   const hasActiveSavedLock = savedLockExpiresAt > Date.now();
 
-  const [step, setStep] = useState(hasActiveSavedLock && savedDraft?.step === 'details' ? 'details' : 'seats');
+  const [step, setStep] = useState(hasActiveSavedLock && STEPS.includes(savedDraft?.step) ? savedDraft.step : 'seats');
   const [selectedSeats, setSelectedSeats] = useState(Array.isArray(savedDraft?.selectedSeats) ? savedDraft.selectedSeats : []);
   const [seatsResponse, setSeatsResponse] = useState(null);
   const [loadingSeats, setLoadingSeats] = useState(false);
@@ -343,15 +217,17 @@ const Booking = () => {
   const [points, setPoints] = useState({ boardingPoints: [], droppingPoints: [] });
   const [loadingPoints, setLoadingPoints] = useState(false);
   const [selection, setSelection] = useState(savedDraft?.selection || { boardingPointId: '', droppingPointId: '' });
-  const [contact, setContact] = useState(savedDraft?.contact || { countryCode: '+91', phone: '', email: '', stateOfResidence: '', whatsappOptIn: false });
+  const [contact, setContact] = useState(() => savedDraft?.contact || {
+    countryCode: '+91', phone: '', email: '', stateOfResidence: '', whatsappOptIn: false,
+    ...(readStorage(SAVED_CONTACT_KEY) || {}),
+  });
   const [passengers, setPassengers] = useState([]);
   const [savePassengerFlags, setSavePassengerFlags] = useState({});
   const [routeInfo, setRouteInfo] = useState(null);
   const [policiesInfo, setPoliciesInfo] = useState(null);
   const [featuresInfo, setFeaturesInfo] = useState(null);
   const [ratingSummary, setRatingSummary] = useState(null);
-  const [loadingMeta, setLoadingMeta] = useState(false);
-  const recentTravelers = useMemo(() => dedupeTravelers(savedTravelers), [savedTravelers]);
+  const [recentTravelers] = useState(() => dedupeTravelers(readStorage(SAVED_TRAVELERS_KEY) || []));
   const [savedProfilesList, setSavedProfilesList] = useState([]);
   const [promoInput, setPromoInput] = useState('');
   const [promoResult, setPromoResult] = useState(null);
@@ -393,10 +269,10 @@ const Booking = () => {
   useEffect(() => {
     if (!scheduleId) return;
     refreshSeats();
-  }, [scheduleId]);
+  }, [scheduleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (step !== 'details' || !scheduleId) return;
+    if (step === 'seats' || !scheduleId) return;
     const fetchPoints = async () => {
       setLoadingPoints(true);
       try {
@@ -422,6 +298,7 @@ const Booking = () => {
         setLockInfo(null);
         setLockExpiresAt(null);
         if (draftKey) removeStorage(draftKey);
+        toast.error('Your seat hold expired. Pick your seats again.');
       }
     };
     tick();
@@ -434,13 +311,11 @@ const Booking = () => {
       const draftPassengers = Array.isArray(savedDraft?.passengers) ? savedDraft.passengers : [];
       const bySeat = new Map(prev.map((item) => [item.seatNumber, item]));
       const draftBySeat = new Map(draftPassengers.map((item) => [item.seatNumber, normalizeTraveler(item)]));
-      return selectedSeats.map((seatNumber, index) => {
+      return selectedSeats.map((seatNumber) => {
         const existing = bySeat.get(seatNumber);
         if (existing) return existing;
-
         const fromDraft = draftBySeat.get(seatNumber);
         if (fromDraft) return { ...createEmptyPassenger(seatNumber), ...fromDraft, seatNumber };
-
         return createEmptyPassenger(seatNumber);
       });
     });
@@ -449,25 +324,18 @@ const Booking = () => {
   useEffect(() => {
     if (!scheduleId) return;
     let isMounted = true;
-    const fetchScheduleMeta = async () => {
-      setLoadingMeta(true);
-      try {
-        const [routeRes, policyRes, featureRes, ratingRes] = await Promise.allSettled([
-          getScheduleRouteStops(scheduleId),
-          getSchedulePolicies(scheduleId),
-          getScheduleFeatures(scheduleId),
-          bus?.id ? getBusRatingSummary(bus.id) : Promise.resolve(null),
-        ]);
-        if (!isMounted) return;
-        if (routeRes.status === 'fulfilled') setRouteInfo(routeRes.value);
-        if (policyRes.status === 'fulfilled') setPoliciesInfo(policyRes.value);
-        if (featureRes.status === 'fulfilled') setFeaturesInfo(featureRes.value);
-        if (ratingRes.status === 'fulfilled') setRatingSummary(ratingRes.value);
-      } finally {
-        if (isMounted) setLoadingMeta(false);
-      }
-    };
-    fetchScheduleMeta();
+    Promise.allSettled([
+      getScheduleRouteStops(scheduleId),
+      getSchedulePolicies(scheduleId),
+      getScheduleFeatures(scheduleId),
+      bus?.id ? getBusRatingSummary(bus.id) : Promise.resolve(null),
+    ]).then(([routeRes, policyRes, featureRes, ratingRes]) => {
+      if (!isMounted) return;
+      if (routeRes.status === 'fulfilled') setRouteInfo(routeRes.value);
+      if (policyRes.status === 'fulfilled') setPoliciesInfo(policyRes.value);
+      if (featureRes.status === 'fulfilled') setFeaturesInfo(featureRes.value);
+      if (ratingRes.status === 'fulfilled') setRatingSummary(ratingRes.value);
+    });
     return () => { isMounted = false; };
   }, [scheduleId, bus?.id]);
 
@@ -489,25 +357,27 @@ const Booking = () => {
     return [];
   }, [seatsResponse, bus]);
 
-  const isSleeper = useMemo(() => {
-    if (seats.some((seat) => String(seat.seatType || '').toUpperCase().includes('SLEEPER'))) return true;
-    return String(bus?.busType || '').includes('SLEEPER') && !String(bus?.busType || '').includes('SEMI');
-  }, [seats, bus]);
-
-  const parsedLayoutSeats = useMemo(() => {
-    if (!seats.length) return [];
-    const parser = isSleeper ? parseSleeperSeat : parseSeaterSeat;
-    return seats.map(parser).filter(Boolean).sort((a, b) => (a.row - b.row) || (a.col - b.col) || String(a.seatNumber).localeCompare(String(b.seatNumber), undefined, { numeric: true }));
-  }, [seats, isSleeper]);
+  // Each seat is priced by its own type (seater / lower / upper berth); the type picked in search is the fallback
+  const fareOf = useCallback((seat) => bus?.faresByType?.[seat?.seatType] || selectedFare || null, [bus, selectedFare]);
+  const priceOf = useCallback((seat) => {
+    const fare = fareOf(seat);
+    return fare ? Math.round(Number(fare.totalFare)) : null;
+  }, [fareOf]);
+  const seatByNumber = useMemo(() => new Map(seats.map((seat) => [seat.seatNumber, seat])), [seats]);
+  const seatFares = useMemo(
+    () => selectedSeats.map((seatNumber) => ({ seatNumber, ...(fareOf(seatByNumber.get(seatNumber)) || {}) })),
+    [selectedSeats, seatByNumber, fareOf],
+  );
+  const seatsTotal = seatFares.reduce((sum, fare) => sum + Math.round(Number(fare.totalFare || 0)), 0);
+  const discount = promoResult ? Math.round(Number(promoResult.discountAmount || 0)) : 0;
+  const payable = Math.max(0, seatsTotal - discount);
+  const availableCount = useMemo(() => seats.filter(isSeatAvailableForBooking).length, [seats]);
+  const womenOnlySeats = useMemo(() => getWomenOnlySeats(seats), [seats]);
 
   const boardingPoints = points.boardingPoints || [];
   const droppingPoints = points.droppingPoints || [];
-  const selectedSeatSet = useMemo(() => new Set(selectedSeats), [selectedSeats]);
-  const baseAvailableSeatCount = useMemo(() => seats.filter(isSeatAvailableForBooking).length, [seats]);
-  const remainingAvailableSeatCount = Math.max(0, baseAvailableSeatCount - selectedSeats.length);
-  const blockedSeatCount = useMemo(() => seats.filter((seat) => isSeatBlocked(seat)).length, [seats]);
-  const bookedSeatCount = useMemo(() => seats.filter((seat) => !isSeatBlocked(seat) && isSeatBooked(seat)).length, [seats]);
-  const hasLayoutData = parsedLayoutSeats.length === seats.length;
+  const boardingPoint = boardingPoints.find((p) => String(p.id) === String(selection.boardingPointId));
+  const droppingPoint = droppingPoints.find((p) => String(p.id) === String(selection.droppingPointId));
 
   const routeStops = useMemo(() => {
     if (Array.isArray(routeInfo?.stops) && routeInfo.stops.length) return routeInfo.stops.map(stopLabel).filter(Boolean);
@@ -518,674 +388,581 @@ const Booking = () => {
   }, [routeInfo, bus, searchParams]);
 
   const busFeatures = useMemo(() => {
-    if (Array.isArray(featuresInfo?.amenities) && featuresInfo.amenities.length) {
-      return featuresInfo.amenities.map(amenityLabel).filter(Boolean);
-    }
-    if (Array.isArray(featuresInfo?.features) && featuresInfo.features.length) {
-      return featuresInfo.features.map(amenityLabel).filter(Boolean);
-    }
-    const amenities = Array.isArray(bus?.amenities) ? bus.amenities : [];
-    const normalizedAmenities = amenities.map(amenityLabel).filter(Boolean);
-    return normalizedAmenities.length ? normalizedAmenities : ['Charging Point', 'Reading Light'];
+    const source = (Array.isArray(featuresInfo?.amenities) && featuresInfo.amenities.length && featuresInfo.amenities)
+      || (Array.isArray(featuresInfo?.features) && featuresInfo.features.length && featuresInfo.features)
+      || (Array.isArray(bus?.amenities) ? bus.amenities : []);
+    return source.map(amenityLabel).filter(Boolean);
   }, [featuresInfo, bus]);
 
-  const routeDistanceKm = routeInfo?.distanceKm || routeInfo?.distance || bus?.distanceKm || 487;
-  const routeDuration = routeInfo?.duration || (routeInfo?.durationMinutes ? `${Math.floor(routeInfo.durationMinutes / 60)} hr ${routeInfo.durationMinutes % 60} min` : formatDuration(bus?.departureTime, bus?.arrivalTime));
-  const restStopText = formatRestStopText(featuresInfo, policiesInfo, bus);
-  const tripStatusMeta = getTripStatusMeta(
-    getTripStatusValue(featuresInfo) || getTripStatusValue(bus),
-    getDelayMinutes(featuresInfo) || getDelayMinutes(bus)
-  );
+  const restStops = formatRestStops(featuresInfo, policiesInfo, bus);
+  const delayMinutes = getDelayMinutes(featuresInfo) || getDelayMinutes(bus);
+  const isDelayed = (getTripStatusValue(featuresInfo) || getTripStatusValue(bus)) === 'DELAYED' || delayMinutes > 0;
   const averageRating = Number(ratingSummary?.averageRating ?? ratingSummary?.avgRating ?? 0);
   const totalRatings = Number(ratingSummary?.totalRatings ?? ratingSummary?.count ?? 0);
   const cancellationLines = formatCancellationLines(policiesInfo);
   const dateChangeLines = formatDateChangeLines(policiesInfo);
-  const otherPolicyLines = formatRuleLines(policiesInfo).length ? formatRuleLines(policiesInfo) : [
-    'Children: Children above the age of 5 will need a ticket.',
-    'Luggage: 2 pieces of luggage accepted free of charge per passenger. Excess baggage over 20 kgs is chargeable.',
-    'Pets: Pets are not allowed.',
-    'Liquor: Carrying or consuming liquor inside the bus is prohibited.',
-    'Pickup: Operator is not obligated to wait beyond scheduled departure time.',
-  ];
+  const ruleLines = formatRuleLines(policiesInfo);
 
   const onToggleSeat = (seatNumber) => {
+    if (!selectedSeats.includes(seatNumber) && selectedSeats.length >= MAX_SEATS) {
+      toast.error(`You can book up to ${MAX_SEATS} seats at a time`);
+      return;
+    }
     setSelectedSeats((prev) => (prev.includes(seatNumber) ? prev.filter((seat) => seat !== seatNumber) : [...prev, seatNumber]));
     setLockInfo(null);
     setLockExpiresAt(null);
     setLockSecondsLeft(0);
+    setPromoResult(null);
   };
 
   const updatePassenger = (seatNumber, field, value) => {
-    setPassengers((prev) => prev.map((item) => (
-      item.seatNumber === seatNumber
-        ? { ...item, [field]: value }
-        : item
-    )));
+    setPassengers((prev) => prev.map((item) => (item.seatNumber === seatNumber ? { ...item, [field]: value } : item)));
   };
 
   const applyTravelerToSeat = (seatNumber, traveler) => {
     const normalized = normalizeTraveler(traveler);
-    setPassengers((prev) => prev.map((item) => (
-      item.seatNumber === seatNumber
-        ? {
-            ...item,
-            ...normalized,
-            seatNumber,
-          }
-        : item
-    )));
+    setPassengers((prev) => prev.map((item) => (item.seatNumber === seatNumber ? { ...item, ...normalized, seatNumber } : item)));
   };
 
   const resetTravelerForSeat = (seatNumber) => {
-    setPassengers((prev) => prev.map((item) => (
-      item.seatNumber === seatNumber
-        ? createEmptyPassenger(seatNumber)
-        : item
-    )));
+    setPassengers((prev) => prev.map((item) => (item.seatNumber === seatNumber ? createEmptyPassenger(seatNumber) : item)));
+  };
+
+  const lockAndContinue = async () => {
+    if (!selectedSeats.length) return toast.error('Pick at least one seat');
+    if (!scheduleId) return toast.error('This trip is missing its schedule. Please search again.');
+    if (lockInfo && lockSecondsLeft > 0) { setStep('points'); return; }
+    try {
+      setLockingSeats(true);
+      const result = await lockScheduleSeats(scheduleId, selectedSeats, travelDate, searchParams?.from || '', searchParams?.to || '');
+      setLockInfo(result || null);
+      const expiresInMinutes = Number(result?.expiresInMinutes || 15);
+      setLockExpiresAt(Date.now() + expiresInMinutes * 60 * 1000);
+      setLockSecondsLeft(expiresInMinutes * 60);
+      toast.success(`Seats held for ${expiresInMinutes} minutes`);
+      setStep('points');
+    } catch (e) {
+      await refreshSeats();
+      setSelectedSeats([]);
+      toast.error(e.message || 'Those seats were just taken. Please pick again.');
+    } finally {
+      setLockingSeats(false);
+    }
+  };
+
+  const continueFromPoints = () => {
+    if (boardingPoints.length > 0 && !selection.boardingPointId) return toast.error('Choose where you’ll board');
+    if (droppingPoints.length > 0 && !selection.droppingPointId) return toast.error('Choose where you’ll get off');
+    setStep('details');
+  };
+
+  const applyPromo = async () => {
+    if (!promoInput.trim()) return;
+    setPromoLoading(true);
+    setPromoError('');
+    try {
+      const result = await applyPromoCode(promoInput.trim(), seatsTotal);
+      setPromoResult(result);
+      toast.success(result.message);
+    } catch (e) {
+      setPromoError(e.message || 'Invalid promo code');
+    } finally {
+      setPromoLoading(false);
+    }
+  };
+
+  const proceedToPayment = () => {
+    const phoneValid = /^[6-9]\d{9}$/.test(contact.phone.trim());
+    const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim());
+    if (!passengers.length || passengers.length !== selectedSeats.length) return toast.error('Add traveller details for every seat');
+    const incomplete = passengers.find((p) => !p.name.trim() || !p.age || !p.gender);
+    if (incomplete) return toast.error(`Fill in the name, age and gender for seat ${incomplete.seatNumber}`);
+    const badAge = passengers.find((p) => Number(p.age) < 1 || Number(p.age) > 120);
+    if (badAge) return toast.error(`Enter a valid age for seat ${badAge.seatNumber}`);
+    const womenOnlyClash = passengers.find((p) => womenOnlySeats.has(p.seatNumber) && p.gender !== 'FEMALE');
+    if (womenOnlyClash) {
+      return toast.error(womenOnlySeats.get(womenOnlyClash.seatNumber) === 'beside-woman'
+        ? `Seat ${womenOnlyClash.seatNumber} is next to a woman traveller, so it can only be booked for a woman. Choose another seat or change the traveller.`
+        : `Seat ${womenOnlyClash.seatNumber} is reserved for women`);
+    }
+    if (!phoneValid) return toast.error('Enter a valid 10-digit mobile number');
+    if (!emailValid) return toast.error('Enter a valid email address');
+    if (!contact.stateOfResidence.trim()) return toast.error('Select your state of residence');
+    if (lockSecondsLeft <= 0) return toast.error('Your seat hold expired. Pick your seats again.');
+
+    // Ticket and trip updates go to the contact details unless a traveller has their own
+    const finalPassengers = passengers.map((p) => ({ ...p, phone: p.phone || contact.phone, email: p.email || contact.email }));
+    writeStorage(SAVED_CONTACT_KEY, contact, localStorage);
+    writeStorage(SAVED_TRAVELERS_KEY, dedupeTravelers([...finalPassengers.map(normalizeTraveler), ...recentTravelers]), localStorage);
+    if (localStorage.getItem('accessToken')) {
+      finalPassengers.forEach((passenger) => {
+        if (!savePassengerFlags[passenger.seatNumber]) return;
+        const nameParts = (passenger.name || '').trim().split(' ');
+        createSavedPassengerProfile({
+          firstName: nameParts[0] || '',
+          lastName: nameParts.slice(1).join(' ') || '',
+          age: passenger.age ? Number(passenger.age) : null,
+          gender: passenger.gender || '',
+          phone: passenger.phone || '',
+        }).catch(() => {});
+      });
+    }
+    navigate(ROUTES.PAYMENT, {
+      state: {
+        bus, scheduleId, selectedSeats, selectedFare, selectedType, seatFares, searchParams,
+        travelDate: searchParams?.date || '', contact, passengers: finalPassengers, selection,
+        boardingPoint: boardingPoint || null, droppingPoint: droppingPoint || null,
+        lockSecondsLeft, lockExpiresAt, lockToken: lockInfo?.lockToken || '', lockInfo, promoResult,
+      },
+    });
   };
 
   if (!bus) {
     return (
-      <UserLayout activeItem="search" title="Select Seat">
-        <div className="rounded-2xl bg-white p-6 ring-1 ring-slate-200 shadow-sm">
-          <p className="mb-4 text-sm text-slate-600">No bus selected. Please search and choose a bus first.</p>
-          <button onClick={() => navigate(ROUTES.SEARCH_RESULTS)} className="rounded-xl bg-[#002046] px-4 py-2 font-semibold text-white">Back to Search</button>
-        </div>
+      <UserLayout activeItem="search" title="Select seats" showHeaderSearch={false}>
+        <section className="rounded-2xl bg-white border border-slate-200/80 p-10 text-center">
+          <span className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-[#FDBA74]/20 flex items-center justify-center">
+            <span className="material-symbols-outlined text-3xl text-orange-600">directions_bus</span>
+          </span>
+          <h2 className="text-lg font-black text-slate-900">No bus selected</h2>
+          <p className="mt-1 text-sm text-slate-500">Search for a route and pick a bus to choose your seats.</p>
+          <button onClick={() => navigate(ROUTES.SEARCH_RESULTS)} className="mt-5 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-[#102A4C] transition-colors">
+            Search buses
+          </button>
+        </section>
       </UserLayout>
     );
   }
 
-  return (
-    <UserLayout activeItem="search" title="Booking Details" showHeaderSearch={false}>
-      <div className="space-y-5">
-        {/* Mobile compact trip bar */}
-        <div className="md:hidden rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm p-3 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-slate-900 truncate">{bus.busName}</p>
-            <p className="text-xs text-slate-500 truncate">{searchParams?.from} → {searchParams?.to} · {selectedType || 'Seat'}</p>
-            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tripStatusMeta.className}`}>{tripStatusMeta.label}</span>
-              <span className="text-[10px] text-slate-400">{step === 'seats' ? 'Step 1: Select seats' : 'Step 2: Passenger details'}</span>
+  const stepIndex = STEPS.indexOf(step);
+  const goBack = () => (step === 'seats' ? navigate(-1) : setStep(STEPS[stepIndex - 1]));
+  const primaryAction = {
+    seats: { label: lockingSeats ? 'Holding seats…' : 'Continue', onClick: lockAndContinue, disabled: lockingSeats || loadingSeats || !selectedSeats.length },
+    points: { label: 'Continue', onClick: continueFromPoints, disabled: loadingPoints },
+    details: { label: `Proceed to pay ₹${payable.toLocaleString('en-IN')}`, onClick: proceedToPayment, disabled: false },
+  }[step];
+
+  const summary = (
+    <div className="space-y-4">
+      <section className="rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="p-5 border-b border-slate-100">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-black text-slate-900 truncate">{bus.busName}</p>
+              <p className="text-xs text-slate-500 truncate">{[prettyLabel(bus.busType), bus.busNumber].filter(Boolean).join(' · ')}</p>
             </div>
-          </div>
-          <div className="text-right flex-shrink-0">
-            <p className="text-lg font-black text-[#002046]">₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}</p>
-            {lockInfo && lockSecondsLeft > 0 && (
-              <p className="text-[11px] font-bold text-amber-500">{formatCountdown(lockSecondsLeft)}</p>
+            {totalRatings > 0 && (
+              <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-lg bg-green-600 px-2 py-1 text-xs font-black text-white">
+                <span className="material-symbols-outlined text-[14px]" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                {averageRating.toFixed(1)}
+              </span>
             )}
           </div>
+          {isDelayed && (
+            <p className="mt-3 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
+              <span className="material-symbols-outlined text-[14px]">schedule</span>
+              Running late{delayMinutes > 0 ? ` · ${delayMinutes} min` : ''}
+            </p>
+          )}
         </div>
 
-        {/* Desktop: Trip Summary + Seat Lock */}
-        <div className="hidden md:grid gap-4 xl:grid-cols-[1.65fr_0.9fr]">
-
-          {/* Trip Summary — navy gradient */}
-          <div className="rounded-2xl bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] p-5 text-white shadow-sm relative overflow-hidden">
-            <div className="absolute -top-3 -right-3 text-7xl opacity-10 select-none">★</div>
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-[10px] font-semibold opacity-60 uppercase tracking-widest mb-1">Trip Summary</p>
-                <h2 className="text-2xl font-black">{bus.busName}</h2>
-                <p className="mt-1 text-sm opacity-70">{searchParams?.from} to {searchParams?.to} · {selectedType || 'Seat'}</p>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${tripStatusMeta.className}`}>{tripStatusMeta.label}</span>
-                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs">{routeDuration}</span>
-                  <span className="rounded-full bg-white/10 px-3 py-1 text-xs">{routeDistanceKm} km</span>
-                  {totalRatings > 0 && <span className="rounded-full bg-white/10 px-3 py-1 text-xs">⭐ {averageRating.toFixed(1)} · {totalRatings} ratings</span>}
-                </div>
-              </div>
-              <div className="rounded-xl bg-white/10 px-5 py-4 text-right flex-shrink-0">
-                <p className="text-[10px] font-semibold opacity-60 uppercase tracking-widest mb-1">Fare</p>
-                <p className="text-3xl font-black">₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}</p>
-                {selectedSeats.length > 0 && <p className="mt-1 text-xs opacity-60">{selectedSeats.length} seat{selectedSeats.length > 1 ? 's' : ''} selected</p>}
-              </div>
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
-              {[
-                ['Departure', formatInstant(bus?.departureTime)],
-                ['Arrival', formatInstant(bus?.arrivalTime)],
-                ['Step', step === 'seats' ? '1. Select & lock seats' : '2. Passenger & points'],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-xl bg-white/10 p-3">
-                  <p className="text-[10px] font-semibold opacity-60 uppercase tracking-widest mb-1">{label}</p>
-                  <p className="text-sm font-bold">{value}</p>
+        <div className="p-5 space-y-4">
+          {(boardingPoint || droppingPoint) && (
+            <div className="space-y-3">
+              {[['Boarding', boardingPoint, 'trip_origin'], ['Dropping', droppingPoint, 'location_on']].filter(([, p]) => p).map(([label, p, icon]) => (
+                <div key={label} className="flex items-start gap-2.5">
+                  <span className="material-symbols-outlined text-[18px] text-[#FF8A65] mt-0.5">{icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
+                    <p className="text-sm font-bold text-slate-900 truncate">{p.name}</p>
+                  </div>
+                  {p.arrivalTime && <span className="text-sm font-black text-slate-900">{formatPointTime(p.arrivalTime)}</span>}
                 </div>
               ))}
             </div>
-            {loadingMeta && <div className="mt-3 opacity-70"><InlineLoader label="Refreshing trip details..." /></div>}
-          </div>
+          )}
 
-          {/* Seat Lock Timer — white card */}
-          <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm p-5">
-            <div className="flex items-center justify-between gap-3 mb-1">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-[#002046]/[0.08] flex items-center justify-center flex-shrink-0">
-                  <span className="material-symbols-outlined text-[#002046] text-lg">timer</span>
-                </div>
-                <div>
-                  <p className="text-sm font-black text-slate-900">Payment timer</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Seat Lock</p>
-                </div>
-              </div>
-              {lockInfo && lockSecondsLeft > 0 && (
-                <span className="text-lg font-black text-amber-500">{formatCountdown(lockSecondsLeft)}</span>
-              )}
-            </div>
-            <p className="text-sm text-slate-500 mt-3 mb-4">
-              {lockInfo && lockSecondsLeft > 0
-                ? <>Complete payment in <span className="font-black text-slate-900">{formatCountdown(lockSecondsLeft)}</span> to keep your seats.</>
-                : 'Choose your seats to reserve them briefly before payment.'}
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+              {selectedSeats.length ? `${selectedSeats.length} seat${selectedSeats.length > 1 ? 's' : ''} selected` : 'Your seats'}
             </p>
-            <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-4 space-y-3">
-              <div className="flex items-center justify-between text-xs text-slate-500">
-                <span>Available now</span>
-                <span className="font-bold text-emerald-600">{remainingAvailableSeatCount}</span>
-              </div>
-              <div className="h-2 rounded-full bg-slate-200">
-                <div className="h-2 rounded-full bg-[#002046] transition-all" style={{ width: `${seats.length ? Math.max(8, (remainingAvailableSeatCount / seats.length) * 100) : 8}%` }} />
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
-                <div className="rounded-xl bg-white ring-1 ring-slate-200 px-2 py-2">
-                  <div className="font-black text-slate-900">{remainingAvailableSeatCount}</div>
-                  <div className="text-slate-400">free</div>
-                </div>
-                <div className="rounded-xl bg-white ring-1 ring-slate-200 px-2 py-2">
-                  <div className="font-black text-slate-900">{bookedSeatCount}</div>
-                  <div className="text-slate-400">booked</div>
-                </div>
-                <div className="rounded-xl bg-white ring-1 ring-slate-200 px-2 py-2">
-                  <div className="font-black text-slate-900">{blockedSeatCount}</div>
-                  <div className="text-slate-400">blocked</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {step === 'seats' && (
-          <div className="grid gap-5 xl:grid-cols-[1.65fr_0.9fr]">
-          <DetailCard icon="event_seat" title="Choose your seats" subtitle="Blocked and already booked seats are excluded from available count.">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex flex-wrap gap-2 text-xs">
-                <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-emerald-700 font-semibold">Available</span>
-                <span className="rounded-full bg-[#002046]/[0.08] px-3 py-1.5 text-[#002046] font-semibold">Selected</span>
-                <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-500 font-semibold">Booked</span>
-                <span className="rounded-full bg-red-50 px-3 py-1.5 text-red-600 font-semibold">Blocked</span>
-              </div>
-              <div className="text-right text-sm">
-                <p className="text-slate-500">Available seats</p>
-                <p className="text-2xl font-black text-emerald-600">{remainingAvailableSeatCount}<span className="ml-1 text-sm font-semibold text-slate-400">/ {seats.length}</span></p>
-              </div>
-            </div>
-            {loadingSeatsError ? <p className="mb-3 text-sm text-red-500">{loadingSeatsError}</p> : null}
-            {loadingSeats ? (
-              <InlineLoader label="Loading seat layout..." />
-            ) : seats.length === 0 ? (
-              <p className="text-sm text-slate-600">Seat layout is not available for this bus yet.</p>
+            {selectedSeats.length === 0 ? (
+              <p className="text-sm text-slate-500">Tap a seat on the map to select it.</p>
             ) : (
-              <div className="flex gap-4 items-start">
-                {/* Seat grid */}
-                <div className="overflow-x-auto rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200 flex-1 min-w-0">
-                  {hasLayoutData ? (
-                    isSleeper ? (
-                      <div className="flex gap-8">
-                        <div>
-                          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Lower Deck</p>
-                          <UserSleeperDeck deck="lower" seats={parsedLayoutSeats} selectedSeats={selectedSeats} onToggleSeat={onToggleSeat} />
-                        </div>
-                        <div>
-                          <p className="mb-2 text-xs uppercase tracking-[0.18em] text-slate-500">Upper Deck</p>
-                          <UserSleeperDeck deck="upper" seats={parsedLayoutSeats} selectedSeats={selectedSeats} onToggleSeat={onToggleSeat} />
-                        </div>
-                      </div>
-                    ) : (
-                      <UserSeaterLayout seats={parsedLayoutSeats} selectedSeats={selectedSeats} onToggleSeat={onToggleSeat} />
-                    )
-                  ) : (
-                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8">
-                      {seats.map((seat) => {
-                        const isSelected = selectedSeatSet.has(seat.seatNumber);
-                        const isAvailable = isSeatAvailableForBooking(seat);
-                        return (
-                          <button
-                            key={seat.seatNumber}
-                            disabled={!isAvailable}
-                            onClick={() => isAvailable && onToggleSeat(seat.seatNumber)}
-                            className={`rounded-xl px-2 py-3 text-xs font-semibold ring-1 transition-colors ${
-                              isAvailable
-                                ? isSelected
-                                  ? 'bg-[#002046]/[0.08] text-[#002046] ring-[#002046]/30'
-                                  : 'bg-emerald-50 text-emerald-700 ring-emerald-200 hover:ring-emerald-300'
-                                : seat.isBlocked
-                                  ? 'cursor-not-allowed bg-red-50 text-red-700 ring-red-200'
-                                  : 'cursor-not-allowed bg-slate-100 text-slate-500 ring-slate-200'
-                            }`}
-                          >
-                            <div className="leading-tight">
-                              <div>{seat.seatNumber}</div>
-                              <div className="text-[9px]">{isAvailable ? 'Available' : seat.isBlocked ? 'Blocked' : 'Booked'}</div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Right sidebar — selection summary */}
-                <div className="hidden lg:flex flex-col gap-3 w-48 flex-shrink-0">
-                  {/* Selected seats */}
-                  <div className="rounded-xl bg-white ring-1 ring-slate-200 p-4">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-3">Your Selection</p>
-                    {selectedSeats.length === 0 ? (
-                      <div className="text-center py-3">
-                        <span className="material-symbols-outlined text-2xl text-slate-200">event_seat</span>
-                        <p className="text-xs text-slate-400 mt-1">No seats selected</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {selectedSeats.map(seat => (
-                          <div key={seat} className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-[#002046] flex-shrink-0" />
-                              <span className="text-sm font-semibold text-slate-900">Seat {seat}</span>
-                            </div>
-                            <button
-                              onClick={() => onToggleSeat(seat)}
-                              className="text-slate-300 hover:text-rose-400 transition-colors"
-                            >
-                              <span className="material-symbols-outlined text-sm">close</span>
-                            </button>
-                          </div>
-                        ))}
-                        <div className="border-t border-slate-100 pt-2 mt-1 flex items-center justify-between">
-                          <span className="text-xs text-slate-500">{selectedSeats.length} seat{selectedSeats.length > 1 ? 's' : ''}</span>
-                          <span className="text-sm font-black text-[#002046]">
-                            ₹{selectedFare ? Math.round(selectedFare.totalFare * selectedSeats.length) : '--'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Timer if locked */}
-                  {lockInfo && lockSecondsLeft > 0 && (
-                    <div className="rounded-xl bg-amber-50 ring-1 ring-amber-200 p-4 text-center">
-                      <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-widest mb-1">Time Left</p>
-                      <p className="text-2xl font-black text-amber-700">{formatCountdown(lockSecondsLeft)}</p>
-                    </div>
-                  )}
-
-                  {/* Mark legend */}
-                  <div className="rounded-xl bg-white ring-1 ring-slate-200 p-4 space-y-2">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-2">Seat Marks</p>
-                    {[
-                      { mark: 'W', label: 'Window', color: 'bg-blue-500' },
-                      { mark: 'F', label: 'Ladies only', color: 'bg-pink-500' },
-                      { mark: 'X', label: 'Blocked', color: 'bg-red-500' },
-                    ].map(item => (
-                      <div key={item.mark} className="flex items-center gap-2">
-                        <span className={`w-4 h-4 rounded text-[8px] font-black text-white flex items-center justify-center flex-shrink-0 ${item.color}`}>{item.mark}</span>
-                        <span className="text-xs text-slate-600">{item.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-            <div className="mt-5 flex justify-end gap-3">
-              <button onClick={() => navigate(-1)} className={SOFT_BUTTON_CLASS}>Back</button>
-              <button
-                onClick={async () => {
-                  if (!selectedSeats.length) return toast.error('Please select seat(s)');
-                  if (!scheduleId) return toast.error('Schedule ID missing for this bus');
-                  try {
-                    setLockingSeats(true);
-                    const result = await lockScheduleSeats(scheduleId, selectedSeats, travelDate, searchParams?.from || '', searchParams?.to || '');
-                    setLockInfo(result || null);
-                    const expiresInMinutes = Number(result?.expiresInMinutes || 15);
-                    setLockExpiresAt(Date.now() + expiresInMinutes * 60 * 1000);
-                    setLockSecondsLeft(expiresInMinutes * 60);
-                    toast.success(`Seats locked. Complete payment within ${result?.expiresInMinutes || 15} minutes to confirm booking.`);
-                    setStep('details');
-                  } catch (e) {
-                    await refreshSeats();
-                    setSelectedSeats([]);
-                    toast.error(e.message || 'Failed to lock seats');
-                  } finally {
-                    setLockingSeats(false);
-                  }
-                }}
-                disabled={lockingSeats || loadingSeats}
-                className="rounded-xl bg-[#002046] px-5 py-2.5 text-sm font-bold text-white hover:bg-[#003a80] transition-colors disabled:opacity-60"
-              >
-                {lockingSeats ? 'Locking...' : 'Continue'}
-              </button>
-            </div>
-          </DetailCard>
-
-          {/* Bus features + Other policies — right of seat layout */}
-          <div className="space-y-5">
-            <DetailCard icon="star" title="Bus features" subtitle={restStopText}>
-              <div className="grid grid-cols-1 gap-2">
-                {busFeatures.map((feature, idx) => (
-                  <div key={`${feature}-${idx}`} className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700 ring-1 ring-slate-200">
-                    <span className="material-symbols-outlined text-base text-[#002046]">check_circle</span>
-                    <span>{feature}</span>
+              <div className="space-y-1.5">
+                {seatFares.map((fare) => (
+                  <div key={fare.seatNumber} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="inline-flex items-center gap-2 min-w-0">
+                      <span className="rounded-md bg-primary px-2 py-0.5 text-xs font-black text-white">{fare.seatNumber}</span>
+                      <span className="text-slate-500 truncate">{prettyLabel(seatByNumber.get(fare.seatNumber)?.seatType) || 'Seat'}</span>
+                      {womenOnlySeats.has(fare.seatNumber) && <span className="rounded bg-pink-50 px-1.5 py-0.5 text-[10px] font-bold text-pink-600">Women only</span>}
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="font-bold text-slate-900">₹{Math.round(Number(fare.totalFare || 0)).toLocaleString('en-IN')}</span>
+                      {step === 'seats' && (
+                        <button onClick={() => onToggleSeat(fare.seatNumber)} aria-label={`Remove seat ${fare.seatNumber}`} className="text-slate-300 hover:text-red-500 transition-colors">
+                          <span className="material-symbols-outlined text-[18px]">close</span>
+                        </button>
+                      )}
+                    </span>
                   </div>
                 ))}
               </div>
-            </DetailCard>
-            <DetailCard icon="policy" title="Other policies" subtitle="Additional rider instructions and restrictions.">
-              {otherPolicyLines.map((line, idx) => <p key={`other-policy-${idx}`} className="mb-2 text-sm text-slate-600">{line}</p>)}
-            </DetailCard>
+            )}
           </div>
-          </div>
-        )}
 
-        {step === 'details' && (
-          <div className="grid gap-6 xl:grid-cols-[1.5fr_0.85fr]">
-            <div className="space-y-6">
-              <DetailCard icon="contact_mail" title="Passenger & contact details" subtitle="This is the same info used for tickets, GST details, and trip updates.">
-                {recentTravelers.length > 0 ? (
-                  <div className="mb-5 rounded-xl bg-emerald-50 px-4 py-4 ring-1 ring-emerald-200">
-                    <p className="text-sm font-semibold text-emerald-800">Saved travelers available</p>
-                    <p className="mt-1 text-xs text-emerald-700">Pick a saved traveler per seat, or leave it on new traveler and enter fresh details.</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {recentTravelers.map((traveler, index) => (
-                        <span key={`${getTravelerLabel(traveler)}-${index}`} className="rounded-full bg-white px-3 py-1.5 text-xs font-medium text-emerald-800 ring-1 ring-emerald-200">
-                          {getTravelerLabel(traveler)}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <label className="mb-1 block text-xs text-slate-500">Country Code</label>
-                    <div className={`flex items-center gap-2 px-3 py-2 text-sm text-slate-500 ${SUBTLE_PANEL_CLASS}`}>
-                      <span className="material-symbols-outlined text-base text-slate-400">lock</span>
-                      <input value={contact.countryCode} readOnly className="w-full bg-transparent outline-none" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-slate-500">Phone *</label>
-                    <input value={contact.phone} onChange={(e) => setContact((p) => ({ ...p, phone: e.target.value.replace(/[^\d]/g, '').slice(0, 10) }))} placeholder="10-digit mobile number" className={INPUT_SHELL_CLASS} />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-slate-500">Email ID *</label>
-                    <input type="email" value={contact.email} onChange={(e) => setContact((p) => ({ ...p, email: e.target.value }))} placeholder="Enter email id" className={INPUT_SHELL_CLASS} />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-slate-500">State of Residence *</label>
-                    <select value={contact.stateOfResidence} onChange={(e) => setContact((p) => ({ ...p, stateOfResidence: e.target.value }))} className={INPUT_SHELL_CLASS}>
-                      <option value="">Select state</option>
-                      {INDIA_STATES.map((state) => <option key={state} value={state}>{state}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div className={`mt-5 flex items-center justify-between px-4 py-3 ${SUBTLE_PANEL_CLASS}`}>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">Send booking details and trip updates on WhatsApp</p>
-                    <p className="text-xs text-slate-500">Disabled by default. Turn it on only if the traveler wants WhatsApp alerts.</p>
-                  </div>
-                  <button type="button" onClick={() => setContact((p) => ({ ...p, whatsappOptIn: !p.whatsappOptIn }))} className={`relative h-7 w-14 rounded-full transition ${contact.whatsappOptIn ? 'bg-[#002046]' : 'bg-slate-400'}`} aria-pressed={contact.whatsappOptIn}>
-                    <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition ${contact.whatsappOptIn ? 'left-8' : 'left-1'}`} />
+          {step === 'details' && (
+            <div className="border-t border-slate-100 pt-4">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Offers</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={promoInput}
+                  onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoError(''); }}
+                  placeholder="Enter promo code"
+                  className={`${INPUT_CLASS} py-2`}
+                  disabled={!!promoResult}
+                />
+                {promoResult ? (
+                  <button onClick={() => { setPromoResult(null); setPromoInput(''); setPromoError(''); }} className="rounded-xl border border-slate-200 px-3.5 text-sm font-bold text-slate-600 hover:border-red-300 hover:text-red-600 transition-colors">
+                    Remove
                   </button>
-                </div>
-
-                <div className="mt-5 space-y-4">
-                  {passengers.map((passenger, index) => (
-                    <div key={passenger.seatNumber || index} className={`${SUBTLE_PANEL_CLASS} p-4`}>
-                      <div className="mb-4 flex items-center justify-between gap-3">
-                        <p className="text-sm font-bold text-slate-900">Passenger {index + 1}</p>
-                        <span className="rounded-full bg-[#002046]/[0.08] px-3 py-1 text-xs font-semibold text-[#002046]">Seat {passenger.seatNumber || '--'}</span>
-                      </div>
-                      {(recentTravelers.length > 0 || savedProfilesList.length > 0) ? (
-                        <div className="mb-4 grid gap-3 md:grid-cols-[1fr_auto]">
-                          <div>
-                            <label className="mb-1 block text-xs text-slate-500">Choose saved traveler</label>
-                            <select
-                              value={recentTravelers.findIndex((traveler) => normalizeTraveler(traveler).name === passenger.name && normalizeTraveler(traveler).phone === passenger.phone && normalizeTraveler(traveler).email === passenger.email)}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                if (val === '__new__') { resetTravelerForSeat(passenger.seatNumber); return; }
-                                if (val.startsWith('profile:')) {
-                                  const profileId = val.replace('profile:', '');
-                                  const profile = savedProfilesList.find((p) => String(p.id) === profileId);
-                                  if (profile) applyTravelerToSeat(passenger.seatNumber, { name: `${profile.firstName} ${profile.lastName || ''}`.trim(), age: profile.age, gender: profile.gender, phone: profile.phone, email: '' });
-                                  return;
-                                }
-                                const selectedIndex = Number(val);
-                                if (selectedIndex < 0) { resetTravelerForSeat(passenger.seatNumber); return; }
-                                applyTravelerToSeat(passenger.seatNumber, recentTravelers[selectedIndex]);
-                              }}
-                              className={INPUT_SHELL_CLASS}
-                            >
-                              <option value="__new__">Enter new traveler</option>
-                              {savedProfilesList.length > 0 && (
-                                <optgroup label="── Saved Profiles ──">
-                                  {savedProfilesList.map((profile) => (
-                                    <option key={`profile-${profile.id}`} value={`profile:${profile.id}`}>
-                                      {profile.firstName} {profile.lastName || ''}{profile.phone ? ` · ${profile.phone}` : ''}
-                                    </option>
-                                  ))}
-                                </optgroup>
-                              )}
-                              {recentTravelers.length > 0 && (
-                                <optgroup label="── Recent Travelers ──">
-                                  {recentTravelers.map((traveler, travelerIndex) => (
-                                    <option key={`${getTravelerLabel(traveler)}-${travelerIndex}`} value={travelerIndex}>
-                                      {getTravelerLabel(traveler)}{traveler?.phone ? ` · ${traveler.phone}` : ''}
-                                    </option>
-                                  ))}
-                                </optgroup>
-                              )}
-                            </select>
-                          </div>
-                          <button type="button" onClick={() => resetTravelerForSeat(passenger.seatNumber)} className="mt-6 rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200">
-                            Clear
-                          </button>
-                        </div>
-                      ) : null}
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div><label className="mb-1 block text-xs text-slate-500">Passenger Name *</label><input value={passenger.name} onChange={(e) => updatePassenger(passenger.seatNumber, 'name', e.target.value)} placeholder="Enter passenger name" className={INPUT_SHELL_CLASS} /></div>
-                        <div><label className="mb-1 block text-xs text-slate-500">Age *</label><input type="number" min="1" value={passenger.age} onChange={(e) => updatePassenger(passenger.seatNumber, 'age', e.target.value)} placeholder="Enter age" className={INPUT_SHELL_CLASS} /></div>
-                        <div><label className="mb-1 block text-xs text-slate-500">Gender *</label><select value={passenger.gender} onChange={(e) => updatePassenger(passenger.seatNumber, 'gender', e.target.value)} className={INPUT_SHELL_CLASS}><option value="">Select gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option><option value="OTHER">Other</option></select></div>
-                        <div><label className="mb-1 block text-xs text-slate-500">Phone *</label><input value={passenger.phone} onChange={(e) => updatePassenger(passenger.seatNumber, 'phone', e.target.value.replace(/[^\d]/g, '').slice(0, 10))} placeholder="Enter phone number" className={INPUT_SHELL_CLASS} /></div>
-                        <div className="md:col-span-2"><label className="mb-1 block text-xs text-slate-500">Email *</label><input type="email" value={passenger.email} onChange={(e) => updatePassenger(passenger.seatNumber, 'email', e.target.value)} placeholder="Enter email" className={INPUT_SHELL_CLASS} /></div>
-                      </div>
-                      <label className="mt-3 flex items-center gap-2.5 cursor-pointer select-none group">
-                        <input
-                          type="checkbox"
-                          checked={!!savePassengerFlags[passenger.seatNumber]}
-                          onChange={(e) => setSavePassengerFlags((prev) => ({ ...prev, [passenger.seatNumber]: e.target.checked }))}
-                          className="w-4 h-4 rounded border-slate-300 text-[#002046] accent-[#002046] cursor-pointer"
-                        />
-                        <span className="text-xs text-slate-500 group-hover:text-slate-700 transition-colors">Save this passenger for future bookings</span>
-                      </label>
-                    </div>
-                  ))}
-                </div>
-              </DetailCard>
-
-              <DetailCard icon="alt_route" title="Boarding & dropping" subtitle="Pickup and drop points fetched for this schedule.">
-                {loadingPoints ? (
-                  <InlineLoader label="Loading boarding and dropping points..." />
                 ) : (
-                  <>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div><label className="mb-1 block text-xs text-slate-500">{`Boarding Point${boardingPoints.length > 0 ? ' *' : ''}`}</label><select value={selection.boardingPointId} onChange={(e) => setSelection((p) => ({ ...p, boardingPointId: e.target.value }))} className={INPUT_SHELL_CLASS} disabled={boardingPoints.length === 0}><option value="">{boardingPoints.length > 0 ? 'Select boarding point' : 'No boarding point required'}</option>{boardingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
-                      <div><label className="mb-1 block text-xs text-slate-500">{`Dropping Point${droppingPoints.length > 0 ? ' *' : ''}`}</label><select value={selection.droppingPointId} onChange={(e) => setSelection((p) => ({ ...p, droppingPointId: e.target.value }))} className={INPUT_SHELL_CLASS} disabled={droppingPoints.length === 0}><option value="">{droppingPoints.length > 0 ? 'Select dropping point' : 'No dropping point required'}</option>{droppingPoints.map((point) => <option key={point.id} value={point.id}>{pointLabel(point)}</option>)}</select></div>
-                    </div>
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
-                      <div className={`${SUBTLE_PANEL_CLASS} p-4`}><p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Boarding points</p>{boardingPoints.length === 0 ? <p className="text-xs text-slate-500">No boarding points available</p> : boardingPoints.map((point) => <p key={point.id} className="mb-2 text-xs text-slate-600">{pointLabel(point)}</p>)}</div>
-                      <div className={`${SUBTLE_PANEL_CLASS} p-4`}><p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Dropping points</p>{droppingPoints.length === 0 ? <p className="text-xs text-slate-500">No dropping points available</p> : droppingPoints.map((point) => <p key={point.id} className="mb-2 text-xs text-slate-600">{pointLabel(point)}</p>)}</div>
-                    </div>
-                  </>
+                  <button onClick={applyPromo} disabled={promoLoading || !promoInput.trim()} className="rounded-xl border border-primary px-3.5 text-sm font-bold text-primary hover:bg-primary hover:text-white transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-primary">
+                    {promoLoading ? '…' : 'Apply'}
+                  </button>
                 )}
-              </DetailCard>
+              </div>
+              {promoError && <p className="mt-1.5 text-xs text-red-600">{promoError}</p>}
+              {promoResult && <p className="mt-1.5 text-xs font-semibold text-green-700">{promoResult.message}</p>}
             </div>
+          )}
 
-            <div className="space-y-6">
-              <DetailCard icon="confirmation_number" title="Review before payment" subtitle="A quick final check before moving to the payment screen.">
-                <div className="space-y-3 text-sm text-slate-600">
-                  <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Selected seats</span><span className="font-bold text-slate-900">{selectedSeats.join(', ') || '--'}</span></div>
-                  <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Travelers</span><span className="font-bold text-slate-900">{passengers.length || selectedSeats.length || 0}</span></div>
-                  <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}><span>Seat fare</span><span className="font-bold text-slate-900">₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}</span></div>
-                  {promoResult && (
-                    <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3 bg-emerald-50 ring-emerald-200`}>
-                      <span className="text-emerald-700">Discount ({promoResult.code})</span>
-                      <span className="font-bold text-emerald-700">−₹{Math.round(promoResult.discountAmount)}</span>
-                    </div>
+          {selectedSeats.length > 0 && (
+            <div className="border-t border-slate-100 pt-4 space-y-1.5">
+              {discount > 0 && (
+                <>
+                  <div className="flex justify-between text-sm text-slate-500"><span>Seat fare</span><span>₹{seatsTotal.toLocaleString('en-IN')}</span></div>
+                  <div className="flex justify-between text-sm text-green-700"><span>Promo ({promoResult.code})</span><span>−₹{discount.toLocaleString('en-IN')}</span></div>
+                </>
+              )}
+              <div className="flex items-end justify-between">
+                <span className="text-sm font-bold text-slate-900">Total</span>
+                <span className="text-2xl font-black text-slate-900">₹{payable.toLocaleString('en-IN')}</span>
+              </div>
+              <p className="text-[11px] text-slate-400">Taxes included</p>
+            </div>
+          )}
+
+          <button
+            onClick={primaryAction.onClick}
+            disabled={primaryAction.disabled}
+            className="hidden md:flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white hover:bg-[#102A4C] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {primaryAction.label}
+            <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+          </button>
+        </div>
+      </section>
+
+      {step !== 'seats' && (
+        <p className="flex items-start gap-2 px-1 text-xs text-slate-500">
+          <span className="material-symbols-outlined text-[16px] text-[#FF8A65]">lock_clock</span>
+          Your seats are held while the timer runs. Complete payment before it ends.
+        </p>
+      )}
+    </div>
+  );
+
+  return (
+    <UserLayout activeItem="search" title="Book your seats" showHeaderSearch={false}>
+      <div className="space-y-5 pb-20 md:pb-0">
+        <CheckoutHeader
+          from={searchParams?.from}
+          to={searchParams?.to}
+          departure={bus.departureTime}
+          arrival={bus.arrivalTime}
+          busName={bus.busName}
+          step={stepIndex}
+          onStepClick={(i) => setStep(STEPS[i])}
+          onBack={goBack}
+          secondsLeft={lockInfo ? lockSecondsLeft : 0}
+        />
+
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+          <div className="space-y-5 min-w-0">
+            {step === 'seats' && (
+              <>
+                <Card
+                  title="Select your seats"
+                  subtitle={seats.length ? `${availableCount} of ${seats.length} available · up to ${MAX_SEATS} per booking` : undefined}
+                  icon="event_seat"
+                  action={!loadingSeats && (
+                    <button onClick={refreshSeats} className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:text-[#FF8A65] transition-colors">
+                      <span className="material-symbols-outlined text-[16px]">refresh</span>
+                      Refresh
+                    </button>
                   )}
-                  {promoResult && (
-                    <div className={`${SUBTLE_PANEL_CLASS} flex items-center justify-between px-4 py-3`}>
-                      <span className="font-semibold text-slate-900">Total</span>
-                      <span className="font-black text-[#002046]">₹{Math.round(promoResult.finalAmount)}</span>
-                    </div>
+                >
+                  {loadingSeatsError && (
+                    <p className="mb-3 rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">{loadingSeatsError}</p>
                   )}
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={promoInput}
-                        onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoError(''); }}
-                        placeholder="Promo code"
-                        className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-[#002046] focus:ring-1 focus:ring-[#002046]"
-                        disabled={!!promoResult}
-                      />
-                      {promoResult ? (
-                        <button
-                          onClick={() => { setPromoResult(null); setPromoInput(''); setPromoError(''); }}
-                          className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-100 transition-colors"
-                        >
-                          Remove
-                        </button>
-                      ) : (
-                        <button
-                          onClick={async () => {
-                            if (!promoInput.trim()) return;
-                            setPromoLoading(true);
-                            setPromoError('');
-                            try {
-                              const result = await applyPromoCode(promoInput.trim(), selectedFare?.totalFare || 0);
-                              setPromoResult(result);
-                              toast.success(result.message);
-                            } catch (e) {
-                              setPromoError(e.message || 'Invalid promo code');
-                            } finally {
-                              setPromoLoading(false);
-                            }
-                          }}
-                          disabled={promoLoading || !promoInput.trim()}
-                          className="rounded-xl bg-[#002046] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#003a80] transition-colors disabled:opacity-50"
-                        >
-                          {promoLoading ? '...' : 'Apply'}
-                        </button>
+                  {loadingSeats && !seats.length ? (
+                    <InlineLoader label="Loading the seat map…" />
+                  ) : seats.length === 0 ? (
+                    <p className="py-6 text-sm text-slate-500">The seat map for this bus isn’t available yet.</p>
+                  ) : (
+                    <SeatMap seats={seats} selectedSeats={selectedSeats} onToggleSeat={onToggleSeat} priceOf={priceOf} />
+                  )}
+                </Card>
+
+                <div className="grid gap-5 md:grid-cols-2">
+                  <Card title="Amenities & route" icon="directions_bus">
+                    {busFeatures.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {busFeatures.map((feature, idx) => (
+                          <span key={`${feature}-${idx}`} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                            <span className="material-symbols-outlined text-[14px] text-green-600">check</span>
+                            {prettyLabel(feature)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <ol className="space-y-0">
+                      {routeStops.map((stop, idx) => (
+                        <li key={`${stop}-${idx}`} className="flex gap-3">
+                          <span className="flex flex-col items-center">
+                            <span className={`mt-1 w-2.5 h-2.5 rounded-full ${idx === 0 || idx === routeStops.length - 1 ? 'bg-[#FF8A65]' : 'bg-slate-300'}`} />
+                            {idx < routeStops.length - 1 && <span className="w-px flex-1 min-h-[18px] bg-slate-200" />}
+                          </span>
+                          <span className="pb-3 text-sm font-semibold text-slate-800">{stop}</span>
+                        </li>
+                      ))}
+                    </ol>
+                    {restStops && <p className="text-xs text-slate-500"><span className="font-bold text-slate-700">Rest stop:</span> {restStops}</p>}
+                  </Card>
+
+                  <Card title="Policies" icon="verified_user">
+                    <div className="space-y-4 text-sm text-slate-600">
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Cancellation</p>
+                        {(cancellationLines.length ? cancellationLines : ['Refunds depend on how early you cancel, as per the TripGo refund policy.']).map((line, idx) => <p key={idx} className="mb-1">{line}</p>)}
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Date change</p>
+                        {(dateChangeLines.length ? dateChangeLines : ['Subject to seat availability and the operator’s policy.']).map((line, idx) => <p key={idx} className="mb-1">{line}</p>)}
+                      </div>
+                      {ruleLines.length > 0 && (
+                        <details className="group">
+                          <summary className="cursor-pointer list-none text-xs font-bold text-primary hover:text-[#FF8A65]">
+                            Other rules <span className="inline-block transition-transform group-open:rotate-180">▾</span>
+                          </summary>
+                          <div className="mt-2 space-y-1">{ruleLines.map((line, idx) => <p key={idx}>{line}</p>)}</div>
+                        </details>
                       )}
                     </div>
-                    {promoError && <p className="text-xs text-rose-500">{promoError}</p>}
-                    {promoResult && <p className="text-xs text-emerald-600 font-medium">{promoResult.message}</p>}
-                  </div>
-                  <div className="rounded-xl bg-[#002046]/[0.07] px-4 py-4 ring-1 ring-[#002046]/20">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-[#002046] opacity-80">Payment timer</p>
-                    <p className="mt-2 text-xl font-black text-slate-900">{lockSecondsLeft > 0 ? formatCountdown(lockSecondsLeft) : 'Expired'}</p>
-                    <p className="mt-1 text-xs text-slate-500">Finish payment before the timer ends to keep these seats reserved.</p>
-                  </div>
+                  </Card>
                 </div>
-                {/* Mobile-only compact trip summary */}
-                <div className="md:hidden mt-4 rounded-xl bg-slate-50 ring-1 ring-slate-200 p-4">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400 mb-1.5">Trip Summary</p>
-                  <p className="font-bold text-slate-900 text-sm">{bus?.busName}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{searchParams?.from} → {searchParams?.to}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="text-xs text-slate-500">{selectedSeats.length ? `Seats: ${selectedSeats.join(', ')}` : 'No seats selected'}</span>
-                    <span className="text-lg font-black text-[#002046]">₹{selectedFare ? Math.round(selectedFare.totalFare) : '--'}</span>
-                  </div>
-                </div>
+              </>
+            )}
 
-                <div className="mt-5 flex gap-3">
-                  <button onClick={() => setStep('seats')} className={`flex-1 ${SOFT_BUTTON_CLASS}`}>Back to Seats</button>
-                  <button
-                    onClick={() => {
-                      const phoneValid = /^[6-9]\d{9}$/.test(contact.phone.trim());
-                      const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact.email.trim());
-                      if (!phoneValid) return toast.error('Enter a valid 10-digit phone number');
-                      if (!emailValid) return toast.error('Enter a valid email address');
-                      if (!contact.stateOfResidence.trim()) return toast.error('State of residence is required');
-                      if (!passengers.length || passengers.length !== selectedSeats.length) return toast.error('Please add passenger details for each selected seat');
-                      const hasInvalidPassenger = passengers.some((passenger) => !passenger.name.trim() || !passenger.age || !passenger.gender || !passenger.phone.trim() || !passenger.email.trim());
-                      if (hasInvalidPassenger) return toast.error('Please fill passenger details for all selected seats');
-                      if (lockSecondsLeft <= 0) return toast.error('Seat lock expired. Please select and lock seats again.');
-                      if (boardingPoints.length > 0 && !selection.boardingPointId) return toast.error('Please select a boarding point');
-                      if (droppingPoints.length > 0 && !selection.droppingPointId) return toast.error('Please select a dropping point');
-                      writeStorage(SAVED_CONTACT_KEY, contact, localStorage);
-                      writeStorage(
-                        SAVED_TRAVELERS_KEY,
-                        dedupeTravelers([
-                          ...passengers.map((passenger) => normalizeTraveler(passenger)),
-                          ...recentTravelers,
-                        ]),
-                        localStorage
+            {step === 'points' && (
+              loadingPoints ? (
+                <Card><InlineLoader label="Loading boarding and dropping points…" /></Card>
+              ) : (
+                <div className="grid gap-5 md:grid-cols-2">
+                  {[
+                    ['Boarding point', 'Where you’ll get on', 'trip_origin', boardingPoints, 'boardingPointId', searchParams?.from],
+                    ['Dropping point', 'Where you’ll get off', 'location_on', droppingPoints, 'droppingPointId', searchParams?.to],
+                  ].map(([title, subtitle, icon, list, key, city]) => (
+                    <Card key={key} title={title} subtitle={subtitle} icon={icon}>
+                      {list.length === 0 ? (
+                        <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                          No fixed points for this bus — it stops at the main bus stand in <span className="font-bold">{city}</span>.
+                        </p>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {list.map((point) => (
+                            <PointOption
+                              key={point.id}
+                              point={point}
+                              name={key}
+                              checked={String(selection[key]) === String(point.id)}
+                              onChange={() => setSelection((prev) => ({ ...prev, [key]: point.id }))}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </Card>
+                  ))}
+                </div>
+              )
+            )}
+
+            {step === 'details' && (
+              <>
+                <Card title="Traveller details" subtitle="Names as on a government ID" icon="group">
+                  <div className="space-y-4">
+                    {passengers.map((passenger, index) => {
+                      const womenOnly = womenOnlySeats.get(passenger.seatNumber);
+                      return (
+                        <div key={passenger.seatNumber || index} className="rounded-xl border border-slate-200 p-4">
+                          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                            <p className="flex items-center gap-2 text-sm font-black text-slate-900">
+                              Traveller {index + 1}
+                              <span className="rounded-md bg-primary px-2 py-0.5 text-xs text-white">Seat {passenger.seatNumber}</span>
+                              {womenOnly && <span className="rounded-md bg-pink-50 px-2 py-0.5 text-[11px] font-bold text-pink-600">Women only</span>}
+                            </p>
+                            {(recentTravelers.length > 0 || savedProfilesList.length > 0) && (
+                              <select
+                                value=""
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  if (val === '__clear__') { resetTravelerForSeat(passenger.seatNumber); return; }
+                                  if (val.startsWith('profile:')) {
+                                    const profile = savedProfilesList.find((p) => String(p.id) === val.replace('profile:', ''));
+                                    if (profile) applyTravelerToSeat(passenger.seatNumber, { name: `${profile.firstName} ${profile.lastName || ''}`.trim(), age: profile.age, gender: profile.gender, phone: profile.phone, email: '' });
+                                    return;
+                                  }
+                                  if (val.startsWith('recent:')) applyTravelerToSeat(passenger.seatNumber, recentTravelers[Number(val.replace('recent:', ''))]);
+                                }}
+                                className="rounded-lg border border-slate-200 bg-white py-1.5 pl-2.5 pr-8 text-xs font-bold text-primary outline-none focus:border-primary"
+                                aria-label={`Fill traveller ${index + 1} from saved travellers`}
+                              >
+                                <option value="" disabled>Fill from saved…</option>
+                                {savedProfilesList.length > 0 && (
+                                  <optgroup label="Saved travellers">
+                                    {savedProfilesList.map((profile) => (
+                                      <option key={`profile-${profile.id}`} value={`profile:${profile.id}`}>{profile.firstName} {profile.lastName || ''}</option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                                {recentTravelers.length > 0 && (
+                                  <optgroup label="Recent">
+                                    {recentTravelers.map((traveler, i) => (
+                                      <option key={`recent-${i}`} value={`recent:${i}`}>{normalizeTraveler(traveler).name}</option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                                <option value="__clear__">Clear details</option>
+                              </select>
+                            )}
+                          </div>
+                          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_110px]">
+                            <div>
+                              <label className={LABEL_CLASS} htmlFor={`name-${passenger.seatNumber}`}>Full name</label>
+                              <input id={`name-${passenger.seatNumber}`} value={passenger.name} autoComplete="name" onChange={(e) => updatePassenger(passenger.seatNumber, 'name', e.target.value)} placeholder="e.g. Priya Sharma" className={INPUT_CLASS} />
+                            </div>
+                            <div>
+                              <label className={LABEL_CLASS} htmlFor={`age-${passenger.seatNumber}`}>Age</label>
+                              <input id={`age-${passenger.seatNumber}`} type="number" inputMode="numeric" min="1" max="120" value={passenger.age} onChange={(e) => updatePassenger(passenger.seatNumber, 'age', e.target.value.slice(0, 3))} placeholder="Age" className={INPUT_CLASS} />
+                            </div>
+                          </div>
+                          <div className="mt-4">
+                            <p className={LABEL_CLASS}>Gender</p>
+                            <div className="inline-flex rounded-xl border border-slate-200 p-1" role="radiogroup" aria-label={`Gender of traveller ${index + 1}`}>
+                              {GENDERS.map(([value, label]) => (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={passenger.gender === value}
+                                  disabled={womenOnly && value !== 'FEMALE'}
+                                  onClick={() => updatePassenger(passenger.seatNumber, 'gender', value)}
+                                  className={`rounded-lg px-4 py-1.5 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:text-slate-300 ${
+                                    passenger.gender === value ? 'bg-primary text-white' : 'text-slate-500 hover:text-primary'
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                            {womenOnly && (
+                              <p className="mt-2 flex items-start gap-1.5 text-xs text-pink-700">
+                                <span className="material-symbols-outlined text-[16px]">info</span>
+                                {womenOnly === 'beside-woman'
+                                  ? 'This seat is next to a woman traveller, so it can only be booked for a woman.'
+                                  : 'The operator has reserved this seat for women.'}
+                              </p>
+                            )}
+                          </div>
+                          {localStorage.getItem('accessToken') && (
+                            <label className="mt-4 flex items-center gap-2.5 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={!!savePassengerFlags[passenger.seatNumber]}
+                                onChange={(e) => setSavePassengerFlags((prev) => ({ ...prev, [passenger.seatNumber]: e.target.checked }))}
+                                className="w-4 h-4 rounded accent-[#0B1F3A] cursor-pointer"
+                              />
+                              <span className="text-xs text-slate-500">Save this traveller for next time</span>
+                            </label>
+                          )}
+                        </div>
                       );
-                      if (localStorage.getItem('accessToken')) {
-                        passengers.forEach((passenger) => {
-                          if (!savePassengerFlags[passenger.seatNumber]) return;
-                          const nameParts = (passenger.name || '').trim().split(' ');
-                          createSavedPassengerProfile({
-                            firstName: nameParts[0] || '',
-                            lastName: nameParts.slice(1).join(' ') || '',
-                            age: passenger.age ? Number(passenger.age) : null,
-                            gender: passenger.gender || '',
-                            phone: passenger.phone || '',
-                          }).catch(() => {});
-                        });
-                      }
-                      navigate(ROUTES.PAYMENT, { state: { bus, scheduleId, selectedSeats, selectedFare, selectedType, searchParams, travelDate: searchParams?.date || '', contact, passengers, selection, lockSecondsLeft, lockExpiresAt, lockToken: lockInfo?.lockToken || '', lockInfo, promoResult } });
-                    }}
-                    className="flex-1 rounded-xl bg-[#002046] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#003a80] transition-colors"
-                  >
-                    Proceed to Payment
-                  </button>
-                </div>
-              </DetailCard>
-            </div>
+                    })}
+                  </div>
+                </Card>
+
+                <Card title="Contact details" subtitle="Your ticket and trip updates are sent here" icon="contact_mail">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className={LABEL_CLASS} htmlFor="contact-phone">Mobile number</label>
+                      <div className="flex rounded-xl border border-slate-200 bg-white focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15 transition-all">
+                        <span className="flex items-center border-r border-slate-200 px-3 text-sm font-semibold text-slate-500">{contact.countryCode}</span>
+                        <input id="contact-phone" value={contact.phone} inputMode="numeric" autoComplete="tel-national" onChange={(e) => setContact((p) => ({ ...p, phone: e.target.value.replace(/[^\d]/g, '').slice(0, 10) }))} placeholder="10-digit mobile" className="w-full rounded-r-xl border-0 bg-transparent px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-0" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={LABEL_CLASS} htmlFor="contact-email">Email</label>
+                      <input id="contact-email" type="email" autoComplete="email" value={contact.email} onChange={(e) => setContact((p) => ({ ...p, email: e.target.value }))} placeholder="you@example.com" className={INPUT_CLASS} />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className={LABEL_CLASS} htmlFor="contact-state">State of residence <span className="font-normal text-slate-400">(for GST)</span></label>
+                      <select id="contact-state" value={contact.stateOfResidence} onChange={(e) => setContact((p) => ({ ...p, stateOfResidence: e.target.value }))} className={INPUT_CLASS}>
+                        <option value="">Select state</option>
+                        {INDIA_STATES.map((state) => <option key={state} value={state}>{state}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <label className="mt-4 flex items-center justify-between gap-4 rounded-xl bg-slate-50 px-4 py-3 cursor-pointer">
+                    <span>
+                      <span className="block text-sm font-bold text-slate-900">Trip updates on WhatsApp</span>
+                      <span className="block text-xs text-slate-500">Ticket, bus location and delay alerts</span>
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={contact.whatsappOptIn}
+                      onClick={() => setContact((p) => ({ ...p, whatsappOptIn: !p.whatsappOptIn }))}
+                      className={`relative h-6 w-11 flex-shrink-0 rounded-full transition-colors ${contact.whatsappOptIn ? 'bg-green-600' : 'bg-slate-300'}`}
+                    >
+                      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${contact.whatsappOptIn ? 'left-[22px]' : 'left-0.5'}`} />
+                    </button>
+                  </label>
+                </Card>
+              </>
+            )}
           </div>
-        )}
 
-        <div className="grid gap-5 xl:grid-cols-2">
-          <DetailCard icon="route" title="Bus route" subtitle={`${routeDistanceKm} km · ${routeDuration}`}>
-            <div className="space-y-3">
-              {routeStops.map((stop, idx) => (
-                <div key={`${stop}-${idx}`} className="flex items-start gap-3">
-                  <div className="mt-0.5 flex flex-col items-center">
-                    <div className="h-3 w-3 rounded-full bg-[#002046]" />
-                    {idx < routeStops.length - 1 ? <div className="mt-1 h-10 w-px bg-slate-200" /> : null}
-                  </div>
-                  <div>
-                    <p className="font-semibold text-slate-900">{stop}</p>
-                    <p className="text-xs text-slate-400">{idx === 0 ? 'Boarding origin' : idx === routeStops.length - 1 ? 'Final stop' : `Stop ${idx + 1}`}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </DetailCard>
-
-          <DetailCard icon="verified_user" title="Cancellation & date change" subtitle="Rules visible to travelers before they pay.">
-            <div className="space-y-4">
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-400">Cancellation</p>
-                {(cancellationLines.length ? cancellationLines : ['Cancellation charges may vary based on cancellation time and operator rules. Refund, if eligible, will be processed as per platform T&C.']).map((line, idx) => <p key={`cancel-${idx}`} className="mb-2 text-sm text-slate-600">{line}</p>)}
-              </div>
-              <div>
-                <p className="mb-2 text-xs font-semibold uppercase tracking-widest text-slate-400">Date change</p>
-                {(dateChangeLines.length ? dateChangeLines : ['Date change is subject to seat availability and operator policy. Fare difference and applicable reschedule charges may apply.']).map((line, idx) => <p key={`date-${idx}`} className="mb-2 text-sm text-slate-600">{line}</p>)}
-              </div>
-            </div>
-          </DetailCard>
+          <aside className="lg:sticky lg:top-4">{summary}</aside>
         </div>
+      </div>
+
+      {/* Phone: total + next step pinned above the tab bar */}
+      <div className="md:hidden fixed inset-x-0 bottom-[calc(65px+env(safe-area-inset-bottom))] z-30 border-t border-slate-200 bg-white/95 backdrop-blur px-4 py-3 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] text-slate-500 truncate">
+            {selectedSeats.length ? `Seats ${selectedSeats.join(', ')}` : 'No seats selected'}
+          </p>
+          <p className="text-lg font-black text-slate-900">₹{payable.toLocaleString('en-IN')}</p>
+        </div>
+        <button
+          onClick={primaryAction.onClick}
+          disabled={primaryAction.disabled}
+          className="rounded-xl bg-primary px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
+        >
+          {step === 'details' ? 'Proceed to pay' : primaryAction.label}
+        </button>
       </div>
     </UserLayout>
   );

@@ -125,3 +125,9 @@ input::placeholder {
   .reveal { opacity: 1; transform: none; transition: none; }
   .fade-up, .gradient-shift, .seat-pulse { animation: none; }
 }
+
+@keyframes pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  70% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}

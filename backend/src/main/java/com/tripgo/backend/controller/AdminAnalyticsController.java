@@ -1,5 +1,7 @@
 package com.tripgo.backend.controller;
 
+import com.tripgo.backend.config.AppTime;
+
 import com.tripgo.backend.model.enums.BookingStatus;
 import com.tripgo.backend.model.enums.OperatorStatus;
 import com.tripgo.backend.repository.*;
@@ -40,13 +42,13 @@ public class AdminAnalyticsController {
         Map<String, Long>       dailyBookings = new LinkedHashMap<>();
         Map<String, BigDecimal> dailyRevenue  = new LinkedHashMap<>();
         for (int i = 29; i >= 0; i--) {
-            String key = LocalDate.now().minusDays(i).toString();
+            String key = LocalDate.now(AppTime.ZONE).minusDays(i).toString();
             dailyBookings.put(key, 0L);
             dailyRevenue.put(key, BigDecimal.ZERO);
         }
-        Instant since = LocalDate.now().minusDays(29).atStartOfDay(ZoneOffset.UTC).toInstant();
+        Instant since = LocalDate.now(AppTime.ZONE).minusDays(29).atStartOfDay(AppTime.ZONE).toInstant();
         for (Object[] row : bookingRepository.findConfirmedStatsForPeriod(since)) {
-            String day = ((Instant) row[0]).atZone(ZoneOffset.UTC).toLocalDate().toString();
+            String day = ((Instant) row[0]).atZone(AppTime.ZONE).toLocalDate().toString();
             if (dailyBookings.containsKey(day)) {
                 dailyBookings.merge(day, 1L, Long::sum);
                 dailyRevenue.merge(day, (BigDecimal) row[1], BigDecimal::add);

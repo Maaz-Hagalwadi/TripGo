@@ -59,6 +59,12 @@ public class User {
     @Column(name = "is_email_verified")
     private boolean isEmailVerified;
 
+    @Column(name = "referral_code", unique = true, length = 10)
+    private String referralCode;
+
+    @Column(name = "referred_by")
+    private UUID referredBy;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

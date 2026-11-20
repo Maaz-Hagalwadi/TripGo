@@ -1,10 +1,13 @@
 package com.tripgo.backend.service.impl;
 
+import com.tripgo.backend.config.AppTime;
+
 import com.stripe.model.Refund;
 import com.stripe.param.RefundCreateParams;
 import com.tripgo.backend.model.entities.Booking;
 import com.tripgo.backend.model.entities.Payment;
 import com.tripgo.backend.model.entities.RouteSchedule;
+import com.tripgo.backend.model.entities.SchedulePolicy;
 import com.tripgo.backend.model.enums.BookingStatus;
 import com.tripgo.backend.model.enums.CancelledBy;
 import com.tripgo.backend.model.enums.PaymentStatus;
@@ -13,6 +16,7 @@ import com.tripgo.backend.repository.BookingSeatRepository;
 import com.tripgo.backend.repository.PaymentRepository;
 import com.tripgo.backend.repository.TicketRepository;
 import com.tripgo.backend.repository.BookingRepository;
+import com.tripgo.backend.repository.SchedulePolicyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +25,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -32,9 +38,16 @@ public class CancellationService {
     private final BookingSeatRepository bookingSeatRepository;
     private final EmailService emailService;
     private final NotificationService notificationService;
+    private final SchedulePolicyRepository schedulePolicyRepository;
+    private final WalletService walletService;
 
     @Transactional
     public BigDecimal cancel(Booking booking, CancelledBy cancelledBy, String reason) {
+        return cancel(booking, cancelledBy, reason, "ORIGINAL");
+    }
+
+    @Transactional
+    public BigDecimal cancel(Booking booking, CancelledBy cancelledBy, String reason, String refundTo) {
 
         validateCancellation(booking, cancelledBy);
 
@@ -55,9 +68,16 @@ public class CancellationService {
             ticketRepository.save(ticket);
         });
 
-        // Process Stripe refund if applicable
+        // Process refund
         if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
-            processStripeRefund(booking, refundAmount);
+            if ("CREDIT".equalsIgnoreCase(refundTo) && booking.getUser() != null) {
+                walletService.credit(booking.getUser(), refundAmount,
+                        "Refund for cancelled booking " + booking.getBookingCode(), booking.getId());
+                booking.setRefundStatus("PROCESSED");
+                bookingRepository.save(booking);
+            } else {
+                processStripeRefund(booking, refundAmount);
+            }
         }
 
         // Extract email data inside transaction before async call
@@ -118,9 +138,9 @@ public class CancellationService {
         // For recurring schedules, combine travelDate with the time-of-day from departureTime
         if (schedule.getFrequency() != null && booking.getTravelDate() != null) {
             java.time.LocalTime timeOfDay = java.time.LocalDateTime
-                    .ofInstant(schedule.getDepartureTime(), java.time.ZoneOffset.UTC)
+                    .ofInstant(schedule.getDepartureTime(), AppTime.ZONE)
                     .toLocalTime();
-            return booking.getTravelDate().atTime(timeOfDay).toInstant(java.time.ZoneOffset.UTC);
+            return booking.getTravelDate().atTime(timeOfDay).atZone(AppTime.ZONE).toInstant();
         }
         return schedule.getDepartureTime();
     }
@@ -131,29 +151,18 @@ public class CancellationService {
             return booking.getPayableAmount();
         }
 
-        // User cancels → time-based partial refund
+        // User cancels → the operator's cancellation slabs for this schedule (same slabs shown before booking)
         Instant departure = resolveActualDeparture(booking);
-        long hoursUntilDeparture = ChronoUnit.HOURS.between(Instant.now(), departure);
+        double hoursUntilDeparture = ChronoUnit.MINUTES.between(Instant.now(), departure) / 60.0;
+        List<Map<String, Object>> slabs = schedulePolicyRepository
+                .findByScheduleId(booking.getRouteSchedule().getId())
+                .map(SchedulePolicy::getCancellationSlabs)
+                .orElse(null);
+        int percent = RefundPolicy.refundPercent(slabs, hoursUntilDeparture);
 
-        if (hoursUntilDeparture >= 24) {
-            // More than 24 hours → 75% refund
-            return booking.getPayableAmount()
-                    .multiply(BigDecimal.valueOf(0.75))
-                    .setScale(2, RoundingMode.HALF_UP);
-        } else if (hoursUntilDeparture >= 12) {
-            // 12–24 hours → 50% refund
-            return booking.getPayableAmount()
-                    .multiply(BigDecimal.valueOf(0.50))
-                    .setScale(2, RoundingMode.HALF_UP);
-        } else if (hoursUntilDeparture >= 4) {
-            // 4–12 hours → 25% refund
-            return booking.getPayableAmount()
-                    .multiply(BigDecimal.valueOf(0.25))
-                    .setScale(2, RoundingMode.HALF_UP);
-        } else {
-            // Less than 4 hours → no refund
-            return BigDecimal.ZERO;
-        }
+        return booking.getPayableAmount()
+                .multiply(BigDecimal.valueOf(percent))
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
     }
 
     private void processStripeRefund(Booking booking, BigDecimal refundAmount) {

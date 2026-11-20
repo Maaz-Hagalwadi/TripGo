@@ -1,5 +1,7 @@
 package com.tripgo.backend.service.impl;
 
+import com.tripgo.backend.config.AppTime;
+
 import com.tripgo.backend.dto.request.ApplyPromoRequest;
 import com.tripgo.backend.dto.response.ApplyPromoResponse;
 import com.tripgo.backend.model.entities.Discount;
@@ -23,7 +25,7 @@ public class DiscountService {
                 .findByCodeIgnoreCaseAndActiveTrue(request.getCode())
                 .orElseThrow(() -> new RuntimeException("Invalid or expired promo code"));
 
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(AppTime.ZONE); // promo dates are IST calendar days
         if (discount.getValidFrom() != null && today.isBefore(discount.getValidFrom())) {
             throw new RuntimeException("Promo code is not yet valid");
         }

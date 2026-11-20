@@ -4,6 +4,8 @@ import com.tripgo.backend.dto.request.LoginRequest;
 import com.tripgo.backend.dto.request.RegisterRequest;
 import com.tripgo.backend.dto.response.AuthResponse;
 import com.tripgo.backend.exception.BadRequestException;
+import com.tripgo.backend.model.entities.ReferralReward;
+import com.tripgo.backend.repository.ReferralRewardRepository;
 import com.tripgo.backend.exception.ResourceNotFoundException;
 import com.tripgo.backend.model.entities.EmailVerificationToken;
 import com.tripgo.backend.model.entities.Operator;
@@ -29,6 +31,7 @@ import com.tripgo.backend.security.service.CustomUserDetails;
 
 
 import java.util.Set;
+import java.util.UUID;
 
 import static com.tripgo.backend.model.enums.OperatorStatus.*;
 
@@ -44,6 +47,7 @@ public class AuthenticationService {
     private final RefreshTokenService refreshTokenService;
     private final EmailVerificationService emailVerificationService;
     private final EmailService emailService;
+    private final ReferralRewardRepository referralRewardRepository;
 
     @Value("${app.jwt.access-token-expiration}")
     private long accessTokenExpirationMs;
@@ -141,8 +145,21 @@ public class AuthenticationService {
             throw new BadRequestException("Phone already in use");
         }
 
+        // Validate referral code before creating the user so the error surfaces cleanly
+        User referrer = null;
+        if (request.getReferralCode() != null && !request.getReferralCode().isBlank()) {
+            referrer = userRepository.findByReferralCode(request.getReferralCode().trim().toUpperCase())
+                    .orElseThrow(() -> new BadRequestException("referralCode: Invalid referral code"));
+        }
+
         Role userRole = roleRepository.findByName(RoleType.ROLE_USER)
                 .orElseThrow(() -> new BadRequestException("ROLE_USER not found"));
+
+        // Generate a unique 8-char referral code for the new user
+        String newCode;
+        do {
+            newCode = UUID.randomUUID().toString().replace("-", "").substring(0, 8).toUpperCase();
+        } while (userRepository.findByReferralCode(newCode).isPresent());
 
         User user = User.builder()
                 .firstName(request.getFirstName())
@@ -152,9 +169,18 @@ public class AuthenticationService {
                 .password(passwordEncoder.encode(request.getPassword()))
                 .roles(Set.of(userRole))
                 .isEmailVerified(false)
+                .referralCode(newCode)
+                .referredBy(referrer != null ? referrer.getId() : null)
                 .build();
 
         userRepository.save(user);
+
+        if (referrer != null) {
+            referralRewardRepository.save(ReferralReward.builder()
+                    .referrer(referrer)
+                    .referred(user)
+                    .build());
+        }
 
         EmailVerificationToken token =
                 emailVerificationService.createToken(user);

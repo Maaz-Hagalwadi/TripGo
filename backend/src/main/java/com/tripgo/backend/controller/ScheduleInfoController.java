@@ -1,5 +1,7 @@
 package com.tripgo.backend.controller;
 
+import com.tripgo.backend.service.impl.RefundPolicy;
+
 import com.tripgo.backend.model.entities.*;
 import com.tripgo.backend.repository.*;
 import com.tripgo.backend.security.service.CustomUserDetails;
@@ -171,12 +173,13 @@ public class ScheduleInfoController {
         result.put("delayMinutes", schedule.getDelayMinutes() != null ? schedule.getDelayMinutes() : 0);
         result.put("actualDepartureTime", schedule.getActualDepartureTime() != null ? schedule.getActualDepartureTime().toString() : null);
         result.put("actualArrivalTime", schedule.getActualArrivalTime() != null ? schedule.getActualArrivalTime().toString() : null);
+        result.put("operatorContactPhone", bus.getOperator() != null ? bus.getOperator().getContactPhone() : null);
         return ResponseEntity.ok(result);
     }
 
     private Map<String, Object> buildPolicyResponse(SchedulePolicy policy) {
         List<Map<String, Object>> cancellationSlabs = (policy != null && policy.getCancellationSlabs() != null)
-                ? policy.getCancellationSlabs() : defaultCancellationSlabs();
+                ? policy.getCancellationSlabs() : RefundPolicy.DEFAULT_SLABS;
 
         List<Map<String, Object>> restStops = (policy != null && policy.getRestStops() != null)
                 ? policy.getRestStops() : List.of();
@@ -206,15 +209,6 @@ public class ScheduleInfoController {
             return (List<Map<String, Object>>) list;
         }
         return List.of();
-    }
-
-    private List<Map<String, Object>> defaultCancellationSlabs() {
-        return List.of(
-                Map.of("hoursBeforeDeparture", 24, "refundPercent", 100, "label", "Before 24 hrs"),
-                Map.of("hoursBeforeDeparture", 12, "refundPercent", 50, "label", "12-24 hrs before"),
-                Map.of("hoursBeforeDeparture", 4, "refundPercent", 25, "label", "4-12 hrs before"),
-                Map.of("hoursBeforeDeparture", 0, "refundPercent", 0, "label", "Less than 4 hrs")
-        );
     }
 
     private String getIconForAmenity(String code) {

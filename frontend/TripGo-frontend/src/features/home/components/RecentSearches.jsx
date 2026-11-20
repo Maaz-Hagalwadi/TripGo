@@ -5,7 +5,22 @@ import { localDateString } from '../../../shared/utils/date';
 
 const toDisplayCity = (value) => String(value).trim().toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
-const RecentSearches = ({ className = '', style }) => {
+// variant: 'dark' for the navy landing hero, 'light' for white cards (dashboard)
+const STYLES = {
+  dark: {
+    chip: 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-[#FDBA74]/50',
+    text: 'text-white',
+    remove: 'text-slate-500 hover:text-white hover:bg-white/10',
+  },
+  light: {
+    chip: 'bg-slate-50 border-slate-200 hover:bg-white hover:border-[#FF8A65]/60',
+    text: 'text-slate-800',
+    remove: 'text-slate-400 hover:text-slate-800 hover:bg-slate-100',
+  },
+};
+
+const RecentSearches = ({ className = '', style, variant = 'dark' }) => {
+  const theme = STYLES[variant];
   const navigate = useNavigate();
   const [searches, setSearches] = useState(getRecentSearches);
 
@@ -35,19 +50,19 @@ const RecentSearches = ({ className = '', style }) => {
         return (
           <div
             key={`${s.from}-${s.to}`}
-            className="group flex items-center rounded-full bg-white/5 border border-white/10 hover:bg-white/10 hover:border-[#FDBA74]/50 transition-colors"
+            className={`group flex items-center rounded-full border transition-colors ${theme.chip}`}
           >
             <button
               onClick={() => navigate('/search-results', { state: { from: s.from, to: s.to, date } })}
-              className="pl-3 pr-1 py-1.5 text-xs font-semibold text-white"
+              className={`pl-3 pr-1 py-1.5 text-xs font-semibold ${theme.text}`}
             >
-              {toDisplayCity(s.from)} <span className="text-[#FDBA74]">→</span> {toDisplayCity(s.to)}
+              {toDisplayCity(s.from)} <span className={variant === 'dark' ? 'text-[#FDBA74]' : 'text-[#FF8A65]'}>→</span> {toDisplayCity(s.to)}
               <span className="text-slate-400 font-medium"> · {dateLabel(date)}</span>
             </button>
             <button
               onClick={() => setSearches(removeRecentSearch(s))}
               aria-label={`Remove ${s.from} to ${s.to} from recent searches`}
-              className="w-6 h-6 mr-1 rounded-full flex items-center justify-center text-slate-500 hover:text-white hover:bg-white/10 transition-colors"
+              className={`w-6 h-6 mr-1 rounded-full flex items-center justify-center transition-colors ${theme.remove}`}
             >
               <span className="material-symbols-outlined text-sm">close</span>
             </button>

@@ -1,6 +1,9 @@
 package com.tripgo.backend.controller;
 
 import com.tripgo.backend.dto.response.AdminUserResponse;
+import com.tripgo.backend.exception.BadRequestException;
+import com.tripgo.backend.model.enums.RoleType;
+import com.tripgo.backend.security.service.RefreshTokenService;
 import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +20,7 @@ import java.util.UUID;
 public class AdminUserController {
 
     private final UserRepository userRepository;
+    private final RefreshTokenService refreshTokenService;
 
     @GetMapping
     public List<AdminUserResponse> listUsers() {
@@ -33,8 +37,12 @@ public class AdminUserController {
     @PostMapping("/{id}/suspend")
     public ResponseEntity<?> suspendUser(@PathVariable UUID id) {
         return userRepository.findById(id).map(u -> {
+            if (u.getRoles().stream().anyMatch(r -> r.getName() == RoleType.ROLE_ADMIN)) {
+                throw new BadRequestException("Admin accounts can't be suspended");
+            }
             u.setSuspended(true);
             userRepository.save(u);
+            refreshTokenService.revokeAllForUser(u); // signs them out everywhere
             return ResponseEntity.ok(toResponse(u));
         }).orElse(ResponseEntity.notFound().build());
     }
