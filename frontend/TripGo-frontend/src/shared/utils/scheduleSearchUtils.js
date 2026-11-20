@@ -82,28 +82,59 @@ export const toLocalYmd = (value) => {
   return `${year}-${month}-${day}`;
 };
 
-export const toUtcYmd = (value) => {
-  const date = value instanceof Date ? value : new Date(value);
+// TripGo runs in India: trip times and travel dates are shown and compared in IST (UTC+05:30, no DST)
+// whatever the device's zone — operators enter schedules in IST and the backend projects them in IST.
+// Shifting an instant by the offset lets the getUTC* getters read its IST fields.
+export const TRIP_TIME_ZONE = 'Asia/Kolkata';
+const IST_OFFSET_MS = 330 * 60000;
+const istFields = (date) => new Date(date.getTime() + IST_OFFSET_MS);
+const toDate = (value) => (value instanceof Date ? value : new Date(value));
+
+export const toIstYmd = (value) => {
+  const date = toDate(value);
   if (Number.isNaN(date.getTime())) return '';
-  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`;
+  const ist = istFields(date);
+  return `${ist.getUTCFullYear()}-${pad(ist.getUTCMonth() + 1)}-${pad(ist.getUTCDate())}`;
 };
 
-export const formatUtcTime = (value) => {
-  const date = value instanceof Date ? value : new Date(value);
+/** Hour of day (0-23) in IST. */
+export const getIstHours = (value) => istFields(toDate(value)).getUTCHours();
+
+/** The instant at which `timeSource`'s IST time of day falls on travel date `ymd` (YYYY-MM-DD). */
+export const onTravelDate = (ymd, timeSource) => {
+  const time = istFields(toDate(timeSource));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(ymd || '')) || Number.isNaN(time.getTime())) return null;
+  return new Date(Date.UTC(
+    Number(ymd.slice(0, 4)), Number(ymd.slice(5, 7)) - 1, Number(ymd.slice(8, 10)),
+    time.getUTCHours(), time.getUTCMinutes(), time.getUTCSeconds(), time.getUTCMilliseconds(),
+  ) - IST_OFFSET_MS);
+};
+
+/** Whole IST calendar days from `from` to `to` (0 = same day, 1 = next day). */
+export const istDayDiff = (from, to) => {
+  const a = toIstYmd(from);
+  const b = toIstYmd(to);
+  if (!a || !b) return 0;
+  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
+};
+
+export const formatIstTime = (value) => {
+  const date = toDate(value);
   if (Number.isNaN(date.getTime())) return '--';
-  let hours = date.getUTCHours();
-  const minutes = pad(date.getUTCMinutes());
+  const ist = istFields(date);
+  let hours = ist.getUTCHours();
+  const minutes = pad(ist.getUTCMinutes());
   const suffix = hours >= 12 ? 'PM' : 'AM';
   hours = hours % 12 || 12;
   return `${pad(hours)}:${minutes} ${suffix}`;
 };
 
-export const formatUtcDateTime = (value) => {
-  const date = value instanceof Date ? value : new Date(value);
+export const formatIstDateTime = (value) => {
+  const date = toDate(value);
   if (Number.isNaN(date.getTime())) return '--';
-  const day = pad(date.getUTCDate());
+  const ist = istFields(date);
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${day} ${months[date.getUTCMonth()]} ${date.getUTCFullYear()}, ${formatUtcTime(date)}`;
+  return `${pad(ist.getUTCDate())} ${months[ist.getUTCMonth()]} ${ist.getUTCFullYear()}, ${formatIstTime(date)}`;
 };
 
 const parseSearchDate = (searchDate) => {
@@ -118,25 +149,13 @@ export const projectScheduleToSearchDate = (bus, searchDate) => {
   const frequency = normalizeStatus(bus?.frequency || bus?.scheduleFrequency || 'ONCE');
   if (!['DAILY', 'WEEKDAYS', 'WEEKENDS', 'WEEKLY'].includes(frequency)) return bus;
 
-  const targetDate = parseSearchDate(searchDate);
   const departure = new Date(bus?.departureTime);
   const arrival = new Date(bus?.arrivalTime);
-  if (!targetDate || Number.isNaN(departure.getTime()) || Number.isNaN(arrival.getTime())) return bus;
-
-  const projectedDeparture = new Date(Date.UTC(
-    targetDate.getUTCFullYear(),
-    targetDate.getUTCMonth(),
-    targetDate.getUTCDate(),
-    departure.getUTCHours(),
-    departure.getUTCMinutes(),
-    departure.getUTCSeconds(),
-    departure.getUTCMilliseconds()
-  ));
+  const projectedDeparture = onTravelDate(searchDate, departure);
+  if (!projectedDeparture || Number.isNaN(arrival.getTime())) return bus;
 
   const durationMs = arrival.getTime() - departure.getTime();
-  const projectedArrival = Number.isFinite(durationMs)
-    ? new Date(projectedDeparture.getTime() + Math.max(durationMs, 0))
-    : arrival;
+  const projectedArrival = new Date(projectedDeparture.getTime() + Math.max(durationMs, 0));
 
   return {
     ...bus,
@@ -153,8 +172,8 @@ const matchesFrequency = (bus, searchDate) => {
   const frequency = normalizeStatus(bus?.frequency || bus?.scheduleFrequency || 'ONCE');
   const weekday = scheduleDate.getUTCDay();
   const templateDeparture = new Date(bus?.departureTime);
-  const templateWeekday = Number.isNaN(templateDeparture.getTime()) ? weekday : templateDeparture.getUTCDay();
-  const templateDate = toUtcYmd(templateDeparture);
+  const templateWeekday = Number.isNaN(templateDeparture.getTime()) ? weekday : istFields(templateDeparture).getUTCDay();
+  const templateDate = toIstYmd(templateDeparture);
 
   if (frequency === 'DAILY') return true;
   if (frequency === 'WEEKDAYS') return weekday >= 1 && weekday <= 5;
@@ -169,9 +188,7 @@ export const shouldShowBusForSearch = (bus, searchDate, now = new Date()) => {
   if (getTripStatusValue(bus) === 'COMPLETED') return false;
   if (!matchesFrequency(bus, searchDate)) return false;
   if (searchDate) {
-    const todayLocalYmd = toLocalYmd(now);
-    const todayUtcYmd = toUtcYmd(now);
-    if ((searchDate === todayLocalYmd || searchDate === todayUtcYmd) && departure.getTime() <= now.getTime()) return false;
+    if (searchDate === toIstYmd(now) && departure.getTime() <= now.getTime()) return false;
   }
   return true;
 };

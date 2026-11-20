@@ -50,4 +50,5 @@ export const ROUTES = {
   TERMS: '/terms',
   PRIVACY: '/privacy',
   REFUND_POLICY: '/refund-policy',
+  SHARED_TRIP: '/trip/:token',
 };

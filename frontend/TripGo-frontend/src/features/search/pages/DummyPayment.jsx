@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 import { toast } from 'sonner';
@@ -7,6 +7,9 @@ import UserLayout from '../../../shared/components/UserLayout';
 import { ROUTES } from '../../../shared/constants/routes';
 import { STRIPE_PUBLISHABLE_KEY } from '../../../config/env';
 import { confirmBookingPayment, createPaymentIntent } from '../../../api/paymentService';
+import { formatIstTime } from '../../../shared/utils/scheduleSearchUtils';
+import CheckoutHeader from '../components/CheckoutHeader';
+import { formatTripDay } from '../utils/checkout';
 
 const stripePromise = STRIPE_PUBLISHABLE_KEY ? loadStripe(STRIPE_PUBLISHABLE_KEY) : null;
 const PAYMENT_STORAGE_KEY = 'tripgo_pending_payment';
@@ -24,6 +27,18 @@ const BRAND_STYLES = {
 };
 const getCardBrand = (brand) => BRAND_STYLES[brand?.toLowerCase()] || { label: (brand || 'CARD').toUpperCase().slice(0, 4), bg: 'from-slate-700 to-slate-500' };
 const PAYMENT_INTENT_CACHE_KEY = 'tripgo_payment_intent_cache';
+
+// One create-intent request per seat lock: StrictMode (and quick remounts) run the init effect twice,
+// and two concurrent requests used to create two bookings for the same seats.
+const inFlightIntents = new Map();
+const createIntentOnce = (key, payload) => {
+  if (!inFlightIntents.has(key)) {
+    inFlightIntents.set(key, createPaymentIntent(payload).finally(() => {
+      setTimeout(() => inFlightIntents.delete(key), 0);
+    }));
+  }
+  return inFlightIntents.get(key);
+};
 const PAYMENT_FLOW_STORAGE_KEY = 'tripgo_payment_flow_state';
 
 const readCachedIntent = () => {
@@ -62,7 +77,7 @@ const writeStoredPaymentFlow = (value) => {
 
 const InlineLoader = ({ label }) => (
   <div className="flex items-center gap-3 text-sm text-slate-500">
-    <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#002046]/30 border-t-[#002046]" />
+    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/25 border-t-primary" />
     <span>{label}</span>
   </div>
 );
@@ -70,7 +85,7 @@ const InlineLoader = ({ label }) => (
 const CenterScreenLoader = ({ label }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
     <div className="flex flex-col items-center gap-4 rounded-2xl bg-white px-8 py-7 shadow-2xl ring-1 ring-slate-200">
-      <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-[#002046]/20 border-t-[#002046]" />
+      <div className="h-10 w-10 animate-spin rounded-full border-[3px] border-primary/20 border-t-primary" />
       <p className="text-sm font-semibold text-slate-700">{label}</p>
     </div>
   </div>
@@ -207,6 +222,7 @@ const CheckoutForm = ({ booking, paymentMeta, payableAmount, lockSecondsLeft, sa
         const nextPaymentMeta = {
           ...paymentMeta,
           paymentIntentId: succeededPaymentIntent.id,
+          paid: true,
         };
         localStorage.setItem(PAYMENT_STORAGE_KEY, JSON.stringify(nextPaymentMeta));
         sessionStorage.removeItem(PAYMENT_INTENT_CACHE_KEY);
@@ -247,7 +263,7 @@ const CheckoutForm = ({ booking, paymentMeta, payableAmount, lockSecondsLeft, sa
       const pi = result.paymentIntent;
       if (pi?.status === 'succeeded' && paymentMeta?.bookingId) {
         await confirmBookingPayment(paymentMeta.bookingId, pi.id);
-        localStorage.setItem(PAYMENT_STORAGE_KEY, JSON.stringify({ ...paymentMeta, paymentIntentId: pi.id }));
+        localStorage.setItem(PAYMENT_STORAGE_KEY, JSON.stringify({ ...paymentMeta, paymentIntentId: pi.id, paid: true }));
         sessionStorage.removeItem(PAYMENT_INTENT_CACHE_KEY);
         navigate(`${ROUTES.PAYMENT_SUCCESS}?payment_intent=${encodeURIComponent(pi.id)}&redirect_status=succeeded`, { replace: true });
       } else {
@@ -262,96 +278,73 @@ const CheckoutForm = ({ booking, paymentMeta, payableAmount, lockSecondsLeft, sa
   };
 
   const usingSavedCard = selectedSource !== 'new';
+  const expired = lockSecondsLeft <= 0;
+  const payLabel = submitting ? 'Processing…' : `Pay ₹${Number(payableAmount).toLocaleString('en-IN')}`;
+  const payButtonClass = 'w-full flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 text-base font-black text-white hover:bg-[#102A4C] transition-colors disabled:cursor-not-allowed disabled:opacity-50';
 
   return (
     <div className="space-y-4">
-      {submitting ? <CenterScreenLoader label="Processing your payment..." /> : null}
+      {submitting ? <CenterScreenLoader label="Processing your payment… don’t close this page" /> : null}
 
-      {/* Saved cards section */}
       {savedCards?.length > 0 && (
-        <div className="rounded-xl bg-white ring-1 ring-slate-200 overflow-hidden shadow-sm">
-          <p className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-100">Saved Cards</p>
-          <div className="divide-y divide-slate-100">
-            {savedCards.map(card => {
-              const brand = getCardBrand(card.brand);
-              const expiry = `${String(card.exp_month).padStart(2, '0')}/${String(card.exp_year).slice(-2)}`;
-              const selected = selectedSource === card.id;
-              return (
-                <button
-                  key={card.id}
-                  type="button"
-                  onClick={() => setSelectedSource(card.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors ${selected ? 'bg-[#002046]/[0.04]' : 'hover:bg-slate-50'}`}
-                >
-                  <div className={`w-12 h-8 rounded-lg bg-gradient-to-br ${brand.bg} flex items-center justify-center flex-shrink-0`}>
-                    <span className="text-[9px] font-black text-white tracking-wider">{brand.label}</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-slate-900">•••• {card.last4}</p>
-                    <p className="text-xs text-slate-500">{card.name} · {expiry}</p>
-                  </div>
-                  <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors ${selected ? 'border-[#002046] bg-[#002046]' : 'border-slate-300'}`}>
-                    {selected && <div className="w-full h-full rounded-full scale-50 bg-white" />}
-                  </div>
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              onClick={() => setSelectedSource('new')}
-              className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors ${!usingSavedCard ? 'bg-[#002046]/[0.04]' : 'hover:bg-slate-50'}`}
-            >
-              <div className="w-12 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
-                <span className="material-symbols-outlined text-slate-500 text-base">add_card</span>
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-slate-900">Use a new card</p>
-              </div>
-              <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors ${!usingSavedCard ? 'border-[#002046] bg-[#002046]' : 'border-slate-300'}`}>
-                {!usingSavedCard && <div className="w-full h-full rounded-full scale-50 bg-white" />}
-              </div>
-            </button>
-          </div>
+        <div className="space-y-2" role="radiogroup" aria-label="Payment method">
+          {[...savedCards.map((card) => ({ id: card.id, card })), { id: 'new' }].map(({ id, card }) => {
+            const selected = selectedSource === id;
+            const brand = card ? getCardBrand(card.brand) : null;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={selected}
+                onClick={() => setSelectedSource(id)}
+                className={`w-full flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+                  selected ? 'border-primary bg-primary/[0.04] ring-1 ring-primary' : 'border-slate-200 hover:border-[#FF8A65]'
+                }`}
+              >
+                {card ? (
+                  <span className={`w-11 h-7 flex-shrink-0 rounded-md bg-gradient-to-br ${brand.bg} flex items-center justify-center text-[9px] font-black tracking-wider text-white`}>{brand.label}</span>
+                ) : (
+                  <span className="w-11 h-7 flex-shrink-0 rounded-md bg-slate-100 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[18px] text-slate-500">add_card</span>
+                  </span>
+                )}
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-bold text-slate-900">{card ? `•••• ${card.last4}` : 'Another card, UPI or wallet'}</span>
+                  {card && <span className="block text-xs text-slate-500">{card.name} · {String(card.exp_month).padStart(2, '0')}/{String(card.exp_year).slice(-2)}</span>}
+                </span>
+                <span className={`w-4 h-4 flex-shrink-0 rounded-full border-2 ${selected ? 'border-primary bg-primary shadow-[inset_0_0_0_3px_white]' : 'border-slate-300'}`} />
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {/* Stripe PaymentElement — only for new card */}
       {!usingSavedCard && (
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="rounded-xl bg-white ring-1 ring-slate-200 p-5 shadow-sm">
-            <PaymentElement
-              onReady={() => { setPaymentElementReady(true); setError(''); }}
-              onLoaderStart={() => setPaymentElementReady(false)}
-              onLoadError={(loadError) => {
-                setPaymentElementReady(false);
-                setError(loadError?.error?.message || 'Failed to load the payment form. Please refresh and try again.');
-              }}
-            />
-          </div>
-          {error ? <p className="text-sm text-red-500">{error}</p> : null}
-          <button
-            type="submit"
-            disabled={!stripe || !elements || !paymentElementReady || submitting || lockSecondsLeft <= 0}
-            className="w-auto min-w-[200px] mx-auto rounded-xl bg-[#002046] px-6 py-3 text-sm font-black text-white hover:bg-[#003a80] transition-colors disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-2"
-          >
-            <span className="material-symbols-outlined text-lg">payments</span>
-            {submitting ? 'Processing payment...' : `Pay ₹${payableAmount}`}
+          <PaymentElement
+            options={{ layout: { type: 'tabs', defaultCollapsed: false } }}
+            onReady={() => { setPaymentElementReady(true); setError(''); }}
+            onLoaderStart={() => setPaymentElementReady(false)}
+            onLoadError={(loadError) => {
+              setPaymentElementReady(false);
+              setError(loadError?.error?.message || 'Failed to load the payment form. Please refresh and try again.');
+            }}
+          />
+          {error ? <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</p> : null}
+          <button type="submit" disabled={!stripe || !elements || !paymentElementReady || submitting || expired} className={payButtonClass}>
+            <span className="material-symbols-outlined text-[20px]">lock</span>
+            {payLabel}
           </button>
         </form>
       )}
 
-      {/* Pay with saved card */}
       {usingSavedCard && (
         <div className="space-y-3">
-          {error ? <p className="text-sm text-red-500">{error}</p> : null}
-          <button
-            type="button"
-            onClick={handleSavedCardPayment}
-            disabled={submitting || lockSecondsLeft <= 0}
-            className="w-auto min-w-[200px] mx-auto rounded-xl bg-[#002046] px-6 py-3 text-sm font-black text-white hover:bg-[#003a80] transition-colors disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-2"
-          >
-            <span className="material-symbols-outlined text-lg">credit_card</span>
-            {submitting ? 'Processing payment...' : `Pay ₹${payableAmount}`}
+          {error ? <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">{error}</p> : null}
+          <button type="button" onClick={handleSavedCardPayment} disabled={submitting || expired} className={payButtonClass}>
+            <span className="material-symbols-outlined text-[20px]">lock</span>
+            {payLabel}
           </button>
         </div>
       )}
@@ -362,7 +355,8 @@ const CheckoutForm = ({ booking, paymentMeta, payableAmount, lockSecondsLeft, sa
 const DummyPayment = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const booking = location.state?.bus ? location.state : (readStoredPaymentFlow() || {});
+  // Stable across renders: the effects below key off it (a fresh object each render re-ran payment setup)
+  const booking = useMemo(() => (location.state?.bus ? location.state : (readStoredPaymentFlow() || {})), [location.state]);
   const savedCards = loadSavedCards();
   const [clientSecret, setClientSecret] = useState('');
   const [paymentMeta, setPaymentMeta] = useState(null);
@@ -377,18 +371,24 @@ const DummyPayment = () => {
   });
 
   const seatCount = Math.max(booking?.selectedSeats?.length || 1, 1);
-  const { perSeatBase, perSeatGst, perSeatTotal } = useMemo(
-    () => deriveFareBreakdown(booking?.selectedFare),
-    [booking?.selectedFare]
-  );
+  // Seats can be different types (seater / lower / upper berth), so fares are summed seat by seat
+  const { sumBase, sumGst, sumTotal } = useMemo(() => {
+    const seatFares = Array.isArray(booking?.seatFares) && booking.seatFares.length === seatCount
+      ? booking.seatFares
+      : Array.from({ length: seatCount }, () => booking?.selectedFare);
+    return seatFares.map(deriveFareBreakdown).reduce((acc, f) => ({
+      sumBase: acc.sumBase + f.perSeatBase,
+      sumGst: acc.sumGst + f.perSeatGst,
+      sumTotal: acc.sumTotal + f.perSeatTotal,
+    }), { sumBase: 0, sumGst: 0, sumTotal: 0 });
+  }, [booking?.seatFares, booking?.selectedFare, seatCount]);
 
   const promoResult = booking?.promoResult || null;
   const discountAmount = promoResult ? Math.round(Number(promoResult.discountAmount || 0)) : 0;
 
-  const totalFare = useMemo(() => perSeatTotal * seatCount, [perSeatTotal, seatCount]);
-  const gstAmount = useMemo(() => perSeatGst * seatCount, [perSeatGst, seatCount]);
-  const totalAmount = useMemo(() => (gstAmount > 0 ? perSeatBase * seatCount : totalFare), [gstAmount, perSeatBase, seatCount, totalFare]);
-  const grossAmount = useMemo(() => (gstAmount > 0 ? totalAmount + gstAmount : totalFare), [gstAmount, totalAmount, totalFare]);
+  const gstAmount = sumGst;
+  const totalAmount = gstAmount > 0 ? sumBase : sumTotal;
+  const grossAmount = gstAmount > 0 ? totalAmount + gstAmount : sumTotal;
   const payableAmount = useMemo(() => Math.max(0, grossAmount - discountAmount), [grossAmount, discountAmount]);
 
   useEffect(() => {
@@ -444,7 +444,7 @@ const DummyPayment = () => {
           return;
         }
 
-        const response = await createPaymentIntent(payload);
+        const response = await createIntentOnce(`${booking.lockToken}:${payableAmount}`, payload);
         if (!isMounted) return;
 
         const nextMeta = {
@@ -484,215 +484,173 @@ const DummyPayment = () => {
   if (!booking?.bus) {
     return (
       <UserLayout activeItem="search" title="Payment" showHeaderSearch={false}>
-        <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm p-6">
-          <p className="mb-4 text-sm text-slate-600">Payment details are missing. Please complete seat selection first.</p>
-          <button onClick={() => navigate(ROUTES.SEARCH_RESULTS)} className="rounded-xl bg-[#002046] px-4 py-2 text-sm font-bold text-white hover:bg-[#003a80] transition-colors">Back to Search</button>
-        </div>
+        <section className="rounded-2xl bg-white border border-slate-200/80 p-10 text-center">
+          <span className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-[#FDBA74]/20 flex items-center justify-center">
+            <span className="material-symbols-outlined text-3xl text-orange-600">receipt_long</span>
+          </span>
+          <h2 className="text-lg font-black text-slate-900">Nothing to pay for yet</h2>
+          <p className="mt-1 text-sm text-slate-500">Pick a bus and your seats first.</p>
+          <button onClick={() => navigate(ROUTES.SEARCH_RESULTS)} className="mt-5 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-[#102A4C] transition-colors">
+            Search buses
+          </button>
+        </section>
       </UserLayout>
     );
   }
 
-  const lockTimerDisplay = lockSecondsLeft > 0
-    ? `${Math.floor(lockSecondsLeft / 60).toString().padStart(2, '0')}:${String(lockSecondsLeft % 60).padStart(2, '0')}`
-    : 'Expired';
+  const { searchParams = {}, bus } = booking;
+  const passengers = Array.isArray(booking.passengers) ? booking.passengers : [];
+  const expired = lockSecondsLeft <= 0;
+  const backToBooking = () => navigate(ROUTES.BOOKING, { state: booking });
+  const genderShort = { MALE: 'M', FEMALE: 'F', OTHER: 'O' };
 
   return (
     <UserLayout activeItem="search" title="Payment" showHeaderSearch={false}>
-      {creatingIntent ? <CenterScreenLoader label="Fetching payment details..." /> : null}
       <div className="space-y-5">
+        <CheckoutHeader
+          from={searchParams.from}
+          to={searchParams.to}
+          departure={bus.departureTime}
+          arrival={bus.arrivalTime}
+          busName={bus.busName}
+          step={3}
+          onStepClick={backToBooking}
+          onBack={backToBooking}
+          secondsLeft={lockSecondsLeft}
+        />
 
-        {/* Header — navy gradient */}
-        <div className="rounded-2xl bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-5 py-5 text-white shadow-sm relative overflow-hidden">
-          <div className="absolute -top-3 -right-3 text-7xl opacity-10 select-none">★</div>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-[10px] font-semibold opacity-60 uppercase tracking-widest mb-1">Secure Checkout</p>
-              <h1 className="text-2xl font-black">Complete your booking</h1>
-              <p className="mt-1 text-sm opacity-70 max-w-md">
-                Your seats are reserved for a short time. Finish payment now to confirm this trip.
+        {expired && (
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl bg-red-50 border border-red-200 px-5 py-4">
+            <span className="material-symbols-outlined text-red-600">timer_off</span>
+            <div className="flex-1">
+              <p className="font-bold text-red-800">Your seat hold has expired</p>
+              <p className="text-sm text-red-700">The seats were released. Pick them again to continue — you haven’t been charged.</p>
+            </div>
+            <button onClick={backToBooking} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-700 transition-colors">
+              Pick seats again
+            </button>
+          </div>
+        )}
+
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start">
+          {/* Payment */}
+          <section className="order-2 lg:order-1 rounded-2xl bg-white border border-slate-200/80 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5">
+              <div className="flex items-center gap-3">
+                <span className="w-9 h-9 rounded-xl bg-[#FDBA74]/20 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[20px] text-orange-600">credit_card</span>
+                </span>
+                <div>
+                  <h2 className="font-black text-slate-900">Pay securely</h2>
+                  <p className="text-xs text-slate-500">Cards, UPI and wallets</p>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-bold text-green-700">
+                <span className="material-symbols-outlined text-[14px]">verified_user</span>
+                Encrypted · Powered by Stripe
+              </span>
+            </div>
+
+            <div className="p-5">
+              {creatingIntent ? (
+                <div className="space-y-3" aria-label="Preparing payment options">
+                  <div className="h-11 rounded-xl bg-slate-100 animate-pulse" />
+                  <div className="h-11 rounded-xl bg-slate-100 animate-pulse" />
+                  <div className="h-11 w-2/3 rounded-xl bg-slate-100 animate-pulse" />
+                  <InlineLoader label="Preparing your payment options…" />
+                </div>
+              ) : intentError ? (
+                <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3">
+                  <p className="text-sm font-bold text-red-800">We couldn’t start the payment</p>
+                  <p className="text-sm text-red-700">{intentError}</p>
+                  <button onClick={() => window.location.reload()} className="mt-2 text-sm font-bold text-red-700 underline">Try again</button>
+                </div>
+              ) : clientSecret && stripePromise ? (
+                <Elements
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret,
+                    appearance: {
+                      theme: 'stripe',
+                      variables: { colorPrimary: '#0B1F3A', borderRadius: '12px', fontFamily: 'inherit', colorText: '#0f172a' },
+                    },
+                  }}
+                >
+                  <CheckoutForm
+                    booking={booking}
+                    paymentMeta={paymentMeta}
+                    payableAmount={payableAmount}
+                    lockSecondsLeft={lockSecondsLeft}
+                    savedCards={savedCards}
+                    clientSecret={clientSecret}
+                  />
+                </Elements>
+              ) : (
+                <p className="text-sm text-slate-500">The payment form isn’t available right now. Please refresh the page.</p>
+              )}
+
+              <p className="mt-4 text-center text-xs text-slate-400">
+                By paying you agree to TripGo’s{' '}
+                <Link to={ROUTES.TERMS} className="font-semibold text-slate-500 hover:text-primary underline-offset-2 hover:underline">Terms</Link> and{' '}
+                <Link to={ROUTES.REFUND_POLICY} className="font-semibold text-slate-500 hover:text-primary underline-offset-2 hover:underline">Refund policy</Link>.
               </p>
             </div>
-            <div className="rounded-xl bg-white/10 px-5 py-4 text-right flex-shrink-0 self-start sm:self-auto">
-              <p className="text-[10px] font-semibold opacity-60 uppercase tracking-widest mb-1">Amount to pay</p>
-              <p className="text-3xl font-black">₹{payableAmount}</p>
-            </div>
-          </div>
-        </div>
+          </section>
 
-        {/* Main grid */}
-        <div className="grid gap-5 lg:grid-cols-[1.4fr_0.85fr]">
-
-          {/* Left — Payment details */}
-          <div className="order-2 lg:order-1 rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-            {/* Card header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#002046]/[0.08] flex items-center justify-center flex-shrink-0">
-                  <span className="material-symbols-outlined text-[#002046] text-lg">credit_card</span>
+          {/* Trip + fare summary */}
+          <aside className="order-1 lg:order-2 lg:sticky lg:top-4 rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-dashed border-slate-200">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{formatTripDay(bus.departureTime)}</p>
+              <div className="mt-2 flex items-center gap-3">
+                <div className="min-w-0">
+                  <p className="text-lg font-black text-slate-900">{formatIstTime(bus.departureTime)}</p>
+                  <p className="text-xs text-slate-500 truncate">{booking.boardingPoint?.name || searchParams.from}</p>
                 </div>
-                <div>
-                  <p className="text-sm font-black text-slate-900">Payment Details</p>
-                  <p className="text-xs text-slate-400 mt-0.5">Choose how you want to pay</p>
+                <div className="flex-1 flex items-center gap-1 text-slate-300" aria-hidden="true">
+                  <span className="h-px flex-1 bg-slate-200" />
+                  <span className="material-symbols-outlined text-[18px] text-[#FF8A65]">directions_bus</span>
+                  <span className="h-px flex-1 bg-slate-200" />
+                </div>
+                <div className="min-w-0 text-right">
+                  <p className="text-lg font-black text-slate-900">{formatIstTime(bus.arrivalTime)}</p>
+                  <p className="text-xs text-slate-500 truncate">{booking.droppingPoint?.name || searchParams.to}</p>
                 </div>
               </div>
-              <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200">
-                <span className="material-symbols-outlined text-sm">lock</span>
-                Encrypted payment
-              </span>
+              <p className="mt-3 text-xs text-slate-500">{bus.busName}</p>
             </div>
 
-            <div className="p-5 space-y-5">
-              <p className="text-sm text-slate-500">Choose your preferred payment method below. Your reserved seats stay held while the timer is running.</p>
-
-              {/* Trip + Seats info tiles */}
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-4">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">Trip</p>
-                  <p className="text-sm font-bold text-slate-900">{booking?.searchParams?.from} to {booking?.searchParams?.to}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{booking?.bus?.busName}</p>
-                </div>
-                <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-4">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">Seats</p>
-                  <p className="text-sm font-bold text-slate-900">{(booking?.selectedSeats || []).join(', ')}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{booking?.selectedType || 'Seat type not selected'}</p>
-                </div>
-                <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-4">
-                  <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mb-1.5">Payment method</p>
-                  <p className="text-sm font-bold text-slate-900">Card, UPI or wallets</p>
-                  <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                    <span className="material-symbols-outlined text-sm text-[#002046]">payments</span>
-                    Stripe secured
-                  </p>
+            {passengers.length > 0 && (
+              <div className="p-5 border-b border-dashed border-slate-200">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Travellers</p>
+                <div className="space-y-1.5">
+                  {passengers.map((p) => (
+                    <div key={p.seatNumber} className="flex items-center justify-between gap-2 text-sm">
+                      <span className="truncate font-semibold text-slate-800">
+                        {p.name}
+                        <span className="ml-1.5 font-normal text-slate-400">{[genderShort[p.gender], p.age].filter(Boolean).join(', ')}</span>
+                      </span>
+                      <span className="flex-shrink-0 rounded-md bg-primary px-2 py-0.5 text-xs font-black text-white">{p.seatNumber}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
+            )}
 
-              {/* Payment form */}
-              <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-5">
-                {creatingIntent ? (
-                  <InlineLoader label="Preparing your payment options..." />
-                ) : intentError ? (
-                  <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 ring-1 ring-red-200">
-                    {intentError}
-                  </div>
-                ) : clientSecret && stripePromise ? (
-                  <Elements stripe={stripePromise} options={{ clientSecret }}>
-                    <CheckoutForm
-                      booking={booking}
-                      paymentMeta={paymentMeta}
-                      payableAmount={payableAmount}
-                      lockSecondsLeft={lockSecondsLeft}
-                      savedCards={savedCards}
-                      clientSecret={clientSecret}
-                    />
-                  </Elements>
-                ) : (
-                  <p className="text-sm text-slate-500">Payment form unavailable. Please try again.</p>
-                )}
+            <div className="p-5 space-y-2 text-sm">
+              <div className="flex justify-between text-slate-500"><span>Base fare ({seatCount} seat{seatCount > 1 ? 's' : ''})</span><span>₹{totalAmount.toLocaleString('en-IN')}</span></div>
+              {gstAmount > 0 && <div className="flex justify-between text-slate-500"><span>GST</span><span>₹{gstAmount.toLocaleString('en-IN')}</span></div>}
+              {discountAmount > 0 && (
+                <div className="flex justify-between text-green-700"><span>Promo ({promoResult.code})</span><span>−₹{discountAmount.toLocaleString('en-IN')}</span></div>
+              )}
+              <div className="flex items-end justify-between border-t border-slate-100 pt-3">
+                <span className="font-bold text-slate-900">Amount to pay</span>
+                <span className="text-2xl font-black text-slate-900">₹{payableAmount.toLocaleString('en-IN')}</span>
               </div>
-
-              {/* Booking reference */}
               {paymentMeta?.bookingCode && (
-                <div className="flex items-center gap-3 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 ring-1 ring-emerald-200">
-                  <span className="material-symbols-outlined text-base">confirmation_number</span>
-                  Booking reference reserved: <span className="font-black ml-1">{paymentMeta.bookingCode}</span>
-                </div>
+                <p className="pt-1 text-xs text-slate-400">Booking reference <span className="font-mono font-bold text-slate-600">{paymentMeta.bookingCode}</span></p>
               )}
             </div>
-          </div>
-
-          {/* Right — Fare summary */}
-          <div className="order-1 lg:order-2 rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-            {/* Card header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#002046]/[0.08] flex items-center justify-center flex-shrink-0">
-                  <span className="material-symbols-outlined text-[#002046] text-lg">receipt_long</span>
-                </div>
-                <p className="text-sm font-black text-slate-900">Fare Summary</p>
-              </div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#002046]/[0.07] px-2.5 py-1 text-xs font-semibold text-[#002046]">
-                {(booking?.selectedSeats || []).length || 0} seats
-              </span>
-            </div>
-
-            <div className="p-5 space-y-3">
-              {/* Fare rows */}
-              {[
-                { label: 'Seat count', value: booking?.selectedSeats?.length || 0 },
-                { label: 'Base fare', value: `₹${totalAmount}` },
-                { label: 'GST', value: `₹${gstAmount}` },
-              ].map(row => (
-                <div key={row.label} className="flex items-center justify-between rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3 text-sm">
-                  <span className="text-slate-500">{row.label}</span>
-                  <span className="font-bold text-slate-900">{row.value}</span>
-                </div>
-              ))}
-
-              {/* Subtotal before discount */}
-              {discountAmount > 0 && (
-                <div className="flex items-center justify-between rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-3 text-sm">
-                  <span className="text-slate-500">Subtotal</span>
-                  <span className="font-bold text-slate-900">₹{grossAmount}</span>
-                </div>
-              )}
-
-              {/* Promo discount row */}
-              {discountAmount > 0 && (
-                <div className="flex items-center justify-between rounded-xl bg-emerald-50 ring-1 ring-emerald-200 px-4 py-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-base text-emerald-600">local_offer</span>
-                    <span className="text-emerald-700 font-semibold">Promo ({promoResult.code})</span>
-                  </div>
-                  <span className="font-bold text-emerald-700">−₹{discountAmount}</span>
-                </div>
-              )}
-
-              {/* Total payable — navy gradient */}
-              <div className="rounded-xl bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-4 py-4 text-white">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-sm font-semibold opacity-80">Total payable</span>
-                    {discountAmount > 0 && (
-                      <p className="text-[11px] opacity-60 mt-0.5">After ₹{discountAmount} discount</p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    {discountAmount > 0 && (
-                      <p className="text-sm line-through opacity-50">₹{grossAmount}</p>
-                    )}
-                    <span className="text-2xl font-black">₹{payableAmount}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Seat lock timer */}
-              <div className={`flex items-center justify-between rounded-xl px-4 py-3.5 ring-1 ${lockSecondsLeft > 0 ? 'bg-amber-50 ring-amber-200' : 'bg-red-50 ring-red-200'}`}>
-                <div className="flex items-center gap-2">
-                  <span className={`material-symbols-outlined text-base ${lockSecondsLeft > 0 ? 'text-amber-600' : 'text-red-500'}`}>timer</span>
-                  <span className={`text-sm font-semibold ${lockSecondsLeft > 0 ? 'text-amber-700' : 'text-red-600'}`}>Seat lock timer</span>
-                </div>
-                <span className={`text-xl font-black ${lockSecondsLeft > 0 ? 'text-amber-700' : 'text-red-600'}`}>{lockTimerDisplay}</span>
-              </div>
-
-              {/* After payment */}
-              <div className="rounded-xl bg-slate-50 ring-1 ring-slate-200 px-4 py-4">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="material-symbols-outlined text-base text-emerald-600">check_circle</span>
-                  <p className="text-sm font-semibold text-slate-900">After payment</p>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed">You will see your booking confirmation as soon as the payment is processed.</p>
-              </div>
-
-              {/* Back button */}
-              <button
-                onClick={() => navigate(ROUTES.BOOKING, { state: booking })}
-                className="w-full rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"
-              >
-                <span className="material-symbols-outlined text-base">arrow_back</span>
-                Back to booking
-              </button>
-            </div>
-          </div>
+          </aside>
         </div>
       </div>
     </UserLayout>

@@ -1,212 +1,226 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import UserLayout from '../../../shared/components/UserLayout';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ROUTES } from '../../../shared/constants/routes';
 import { submitSupportTicket } from '../../../api/userService';
 
-const SUPPORT_EMAIL = 'support@tripgo.com';
-const SUPPORT_PHONE = '+91 80 4567 1234';
+// Must match the backend's SUPPORT_EMAIL (where tickets from this form are delivered)
+const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL || 'support@tripgo.com';
+const MESSAGE_MIN = 20;
+const MESSAGE_MAX = 1000;
 
 const FAQS = [
   {
     q: 'How do I cancel a booking and get a refund?',
-    a: 'Go to My Bookings, select your booking, and click Cancel. Refund eligibility depends on how far in advance you cancel: 75% refund for 24h+, 50% for 12–24h, 25% for 4–12h, and no refund within 4 hours of departure.',
+    a: 'Go to My bookings and click Cancel on the trip. Your refund follows that bus’s cancellation policy — the earlier you cancel, the more you get back. You’ll see the exact rules and your estimated refund before you confirm. Refunds go back to your original payment method within 5–7 business days.',
+  },
+  {
+    q: 'Can I change my travel date?',
+    a: 'If the operator allows it, use Change date on the booking in My bookings — no need to cancel and rebook. Date changes close a set number of hours before departure (shown on the button), and the operator may charge a fee.',
   },
   {
     q: 'How do I download or view my ticket?',
-    a: 'Open My Bookings, find your confirmed booking, and use the View Ticket or Download Ticket button. Tickets are available as PDF. If the PDF isn\'t ready yet, a text summary will be provided.',
+    a: 'Open My bookings and use Download ticket or View on your booking. Just show the QR code on your phone when boarding — no printout needed.',
   },
   {
-    q: 'Why is my seat showing as unavailable?',
-    a: 'Seats can be temporarily locked by other passengers during the booking process. If seats appear unavailable, refresh the page and try again. Contact support if the issue persists.',
+    q: 'Why is a seat showing as unavailable?',
+    a: 'Seats are held for 15 minutes while another traveller completes payment. If the seat you want is held, try again in a few minutes or pick another seat.',
   },
   {
-    q: 'How do I modify my trip search?',
-    a: 'On the Search Results page, you can update the From, To, and Date fields at the top and click Search to run a new query. You cannot modify a confirmed booking — you would need to cancel and rebook.',
+    q: 'My payment was deducted but the booking shows pending — what should I do?',
+    a: 'Payments usually confirm within a minute or two. If your booking still shows Payment pending after 15 minutes, send us a message below with your booking ID so we can check it.',
   },
   {
-    q: 'Can I update my profile name or phone number?',
-    a: 'Yes — go to Settings and click Edit Profile. You can update your first name, last name, and phone number. Email changes are not supported currently.',
-  },
-  {
-    q: 'My payment was deducted but booking shows pending — what should I do?',
-    a: 'Payments are confirmed within a few minutes. If your booking still shows Pending after 15 minutes, please contact support with your booking ID and payment reference for manual verification.',
+    q: 'Can I update my name or phone number?',
+    a: 'Yes — go to Settings and click Edit profile. Your email address can’t be changed.',
   },
   {
     q: 'How do I rate a completed trip?',
-    a: 'Navigate to Ratings & Reviews from the sidebar. Completed trips that haven\'t been rated will appear under the Pending tab. Click the trip card and use the Give Review button to submit your rating.',
+    a: 'Open Ratings from the sidebar. Trips waiting for your review appear under To rate — tap the stars to leave a rating and an optional review.',
   },
 ];
 
-const CATEGORIES = ['Booking Issue', 'Payment & Refund', 'Cancellation', 'Ticket Download', 'Account & Profile', 'Technical Issue', 'Other'];
+const CATEGORIES = ['Booking issue', 'Payment & refund', 'Cancellation', 'Date change', 'Ticket', 'Account & profile', 'Technical problem', 'Other'];
 
-const FaqItem = ({ q, a }) => {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="border-b border-slate-100 last:border-0">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left hover:bg-slate-50/60 transition-colors"
-      >
-        <span className="text-sm font-semibold text-slate-900">{q}</span>
-        <span className={`material-symbols-outlined text-slate-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>
-      </button>
-      {open && (
-        <div className="px-5 pb-4">
-          <p className="text-sm text-slate-500 leading-relaxed">{a}</p>
-        </div>
-      )}
-    </div>
-  );
-};
+const QUICK_LINKS = [
+  { icon: 'confirmation_number', title: 'Manage a booking', sub: 'Download tickets, change date or cancel', to: ROUTES.USER_BOOKINGS },
+  { icon: 'currency_exchange', title: 'Refund & cancellation policy', sub: 'How refunds are calculated', to: ROUTES.REFUND_POLICY },
+  { icon: 'manage_accounts', title: 'Account settings', sub: 'Profile, password and saved travellers', to: ROUTES.USER_SETTINGS },
+];
+
+const inputCls = 'w-full rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none focus:bg-white focus:border-[#FF8A65] focus:ring-4 focus:ring-[#FDBA74]/25 transition-all';
+
+const FaqItem = ({ q, a, open, onToggle, id }) => (
+  <div className={`border-b border-slate-100 last:border-0 transition-colors ${open ? 'bg-[#FFF7F2]' : ''}`}>
+    <button type="button" onClick={onToggle} aria-expanded={open} aria-controls={`${id}-panel`}
+      className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left">
+      <span className={`text-sm font-semibold ${open ? 'text-primary' : 'text-slate-800'}`}>{q}</span>
+      <span className={`material-symbols-outlined flex-shrink-0 ${open ? 'text-[#FF8A65]' : 'text-slate-400'}`}>{open ? 'remove' : 'add'}</span>
+    </button>
+    {open && <p id={`${id}-panel`} className="px-5 pb-4 pr-12 text-sm text-slate-600 leading-relaxed">{a}</p>}
+  </div>
+);
 
 const UserSupport = () => {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
-
   const [form, setForm] = useState({ subject: '', category: '', message: '' });
+  const [errors, setErrors] = useState({});
   const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [openFaq, setOpenFaq] = useState(0);
 
   useEffect(() => {
     if (loading) return;
     if (!user || user.role !== 'USER') navigate(ROUTES.HOME);
   }, [user, loading, navigate]);
 
+  const set = (key) => (e) => {
+    setForm((p) => ({ ...p, [key]: e.target.value }));
+    setErrors((p) => ({ ...p, [key]: '' }));
+  };
+
   const copyEmail = async () => {
     try {
       await navigator.clipboard.writeText(SUPPORT_EMAIL);
-      toast.success('Email copied to clipboard');
+      toast.success('Email address copied');
     } catch {
-      toast.error('Could not copy email');
+      toast.error(`Couldn’t copy — the address is ${SUPPORT_EMAIL}`);
     }
   };
 
-  const handleSend = async () => {
-    if (!form.subject.trim()) return toast.error('Please enter a subject');
-    if (!form.category) return toast.error('Please select a category');
-    if (!form.message.trim() || form.message.trim().length < 20) return toast.error('Message must be at least 20 characters');
+  const handleSend = async (e) => {
+    e.preventDefault();
+    const next = {};
+    if (!form.subject.trim()) next.subject = 'Add a short subject';
+    if (!form.category) next.category = 'Choose a category';
+    if (form.message.trim().length < MESSAGE_MIN) next.message = `Please describe the issue in at least ${MESSAGE_MIN} characters`;
+    setErrors(next);
+    if (Object.keys(next).length) return;
 
     setSending(true);
-    const t = toast.loading('Sending your message...');
     try {
       await submitSupportTicket({ subject: form.subject.trim(), category: form.category, message: form.message.trim() });
-      toast.success("Message sent! We'll reply within 24 hours.", { id: t });
+      setSent(true);
       setForm({ subject: '', category: '', message: '' });
-    } catch (e) {
-      toast.error(e.message || 'Failed to send message. Please try again.', { id: t });
+    } catch (err) {
+      toast.error(err.message || 'We couldn’t send your message. Please try again.');
     } finally {
       setSending(false);
     }
   };
 
   return (
-    <UserLayout activeItem="support" title="Support">
-      <div className="space-y-5">
+    <UserLayout activeItem="support" title="Support" showHeaderTitle={false} showHeaderSearch={false}>
+      <div className="space-y-6">
 
         <div>
-          <h1 className="text-2xl font-black text-slate-900">Support</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Get help with bookings, payments, and your account</p>
+          <h1 className="text-2xl md:text-3xl font-black text-slate-900">How can we help?</h1>
+          <p className="text-sm text-slate-500 mt-1">Most questions are answered below. If not, send us a message and we’ll reply by email.</p>
         </div>
 
-        {/* Contact channels */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div className="rounded-2xl bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] p-5 text-white shadow-sm relative overflow-hidden">
-            <div className="absolute -top-2 -right-2 text-5xl opacity-10 select-none">★</div>
-            <p className="text-[10px] font-semibold opacity-60 uppercase tracking-wider mb-2">Email Support</p>
-            <p className="text-base font-bold">{SUPPORT_EMAIL}</p>
-            <p className="text-xs opacity-50 mt-1 mb-4">Typical response within 24 hours</p>
-            <button
-              onClick={copyEmail}
-              className="flex items-center gap-1.5 rounded-xl bg-white/15 hover:bg-white/25 px-4 py-2 text-xs font-bold transition-colors"
-            >
-              <span className="material-symbols-outlined text-sm">content_copy</span>
-              Copy Email
-            </button>
-          </div>
-
-          <div className="rounded-2xl bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] p-5 text-white shadow-sm relative overflow-hidden">
-            <div className="absolute -top-2 -right-2 text-5xl opacity-10 select-none">★</div>
-            <p className="text-[10px] font-semibold opacity-60 uppercase tracking-wider mb-2">Phone Support</p>
-            <p className="text-base font-bold">{SUPPORT_PHONE}</p>
-            <p className="text-xs opacity-50 mt-1 mb-4">Mon–Sat, 9 AM – 8 PM IST</p>
-            <a
-              href={`tel:${SUPPORT_PHONE.replace(/\s+/g, '')}`}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-white/15 hover:bg-white/25 px-4 py-2 text-xs font-bold transition-colors"
-            >
-              <span className="material-symbols-outlined text-sm">call</span>
-              Call Now
-            </a>
-          </div>
-        </div>
-
-        {/* Send a message */}
-        <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100">
-            <h2 className="text-base font-bold text-slate-900">Send a Message</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Describe your issue and we'll get back to you</p>
-          </div>
-          <div className="p-5 space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Subject *</label>
-                <input
-                  type="text"
-                  value={form.subject}
-                  onChange={(e) => setForm((p) => ({ ...p, subject: e.target.value }))}
-                  placeholder="Brief summary of your issue"
-                  className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40"
-                />
+        {/* Quick links */}
+        <div className="grid gap-3 sm:grid-cols-3">
+          {QUICK_LINKS.map((l) => (
+            <Link key={l.title} to={l.to} className="group flex items-center gap-3 rounded-2xl bg-white border border-slate-200/80 p-4 shadow-sm hover:border-[#FDBA74] transition-colors">
+              <span className="w-10 h-10 flex-shrink-0 rounded-xl bg-[#FDBA74]/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-[20px] text-orange-600">{l.icon}</span>
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-slate-900">{l.title}</p>
+                <p className="text-xs text-slate-500 truncate">{l.sub}</p>
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Category *</label>
-                <select
-                  value={form.category}
-                  onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
-                  className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40 appearance-none"
-                >
-                  <option value="">Select a category</option>
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
+              <span className="material-symbols-outlined text-slate-300 group-hover:text-[#FF8A65]">chevron_right</span>
+            </Link>
+          ))}
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr] items-start">
+
+          {/* FAQ */}
+          <section className="rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100">
+              <h2 className="text-base font-black text-slate-900">Frequently asked questions</h2>
+            </div>
+            {FAQS.map((faq, i) => (
+              <FaqItem key={faq.q} id={`support-faq-${i}`} q={faq.q} a={faq.a} open={openFaq === i} onToggle={() => setOpenFaq(openFaq === i ? -1 : i)} />
+            ))}
+          </section>
+
+          <div className="space-y-6">
+            {/* Message form */}
+            <section className="rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100">
+                <h2 className="text-base font-black text-slate-900">Send us a message</h2>
+                <p className="text-xs text-slate-500 mt-0.5">We’ll reply to {user?.email || 'your email'}, usually within 24 hours.</p>
               </div>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1.5">Message *</label>
-              <textarea
-                rows={5}
-                value={form.message}
-                onChange={(e) => setForm((p) => ({ ...p, message: e.target.value }))}
-                placeholder="Describe your issue in detail. Include your booking ID if relevant."
-                className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40 resize-none"
-              />
-              <p className="text-[10px] text-slate-400 mt-1 ml-1">{form.message.length} / 1000</p>
-            </div>
-            <div className="flex justify-end">
-              <button
-                onClick={handleSend}
-                disabled={sending}
-                className="flex items-center gap-2 rounded-2xl bg-[#002046] px-6 py-3 text-sm font-bold text-white hover:bg-[#003a80] disabled:opacity-60 transition-colors"
-              >
-                <span className="material-symbols-outlined text-base">send</span>
-                {sending ? 'Sending...' : 'Send Message'}
-              </button>
-            </div>
+
+              {sent ? (
+                <div className="p-8 text-center">
+                  <span className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-green-50 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-3xl text-green-600">mark_email_read</span>
+                  </span>
+                  <p className="font-black text-slate-900">Message sent</p>
+                  <p className="mt-1 text-sm text-slate-500">Thanks — we’ll get back to you by email.</p>
+                  <button onClick={() => setSent(false)} className="mt-5 text-sm font-bold text-primary hover:text-[#FF8A65] transition-colors">
+                    Send another message
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleSend} className="p-5 space-y-4" noValidate>
+                  <div>
+                    <label htmlFor="support-category" className="block text-sm font-semibold text-slate-900 mb-1.5">Topic</label>
+                    <select id="support-category" value={form.category} onChange={set('category')} className={`${inputCls} ${errors.category ? 'border-red-500' : ''}`}>
+                      <option value="">Choose a topic</option>
+                      {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    {errors.category && <p className="mt-1 text-xs text-red-600">{errors.category}</p>}
+                  </div>
+                  <div>
+                    <label htmlFor="support-subject" className="block text-sm font-semibold text-slate-900 mb-1.5">Subject</label>
+                    <input id="support-subject" type="text" maxLength={120} value={form.subject} onChange={set('subject')}
+                      placeholder="e.g. Refund not received for TG-8F3K2Q" className={`${inputCls} ${errors.subject ? 'border-red-500' : ''}`} />
+                    {errors.subject && <p className="mt-1 text-xs text-red-600">{errors.subject}</p>}
+                  </div>
+                  <div>
+                    <label htmlFor="support-message" className="block text-sm font-semibold text-slate-900 mb-1.5">Message</label>
+                    <textarea id="support-message" rows={5} maxLength={MESSAGE_MAX} value={form.message} onChange={set('message')}
+                      placeholder="What happened? Include your booking ID if it’s about a trip."
+                      className={`${inputCls} resize-none ${errors.message ? 'border-red-500' : ''}`} />
+                    <div className="mt-1 flex justify-between gap-2">
+                      <p className="text-xs text-red-600">{errors.message}</p>
+                      <p className="text-xs text-slate-400 flex-shrink-0">{form.message.length} / {MESSAGE_MAX}</p>
+                    </div>
+                  </div>
+                  <button type="submit" disabled={sending}
+                    className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-white hover:bg-[#102A4C] disabled:opacity-60 transition-colors">
+                    <span className="material-symbols-outlined text-[18px]">send</span>
+                    {sending ? 'Sending...' : 'Send message'}
+                  </button>
+                </form>
+              )}
+            </section>
+
+            {/* Email */}
+            <section className="rounded-2xl bg-primary p-5 text-white relative overflow-hidden">
+              <div className="absolute -bottom-16 -right-10 w-48 h-48 rounded-full bg-[#FF8A65]/20 blur-3xl" aria-hidden="true" />
+              <div className="relative flex items-center gap-4">
+                <span className="w-11 h-11 flex-shrink-0 rounded-xl bg-white/10 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[#FDBA74]">mail</span>
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-slate-300">Prefer email?</p>
+                  <a href={`mailto:${SUPPORT_EMAIL}`} className="block font-bold truncate hover:text-[#FDBA74] transition-colors">{SUPPORT_EMAIL}</a>
+                </div>
+                <button onClick={copyEmail} aria-label="Copy email address" className="w-9 h-9 flex-shrink-0 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                  <span className="material-symbols-outlined text-[18px]">content_copy</span>
+                </button>
+              </div>
+            </section>
           </div>
         </div>
-
-        {/* FAQ accordion */}
-        <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100">
-            <h2 className="text-base font-bold text-slate-900">Frequently Asked Questions</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Quick answers to common questions</p>
-          </div>
-          <div>
-            {FAQS.map((faq) => <FaqItem key={faq.q} q={faq.q} a={faq.a} />)}
-          </div>
-        </div>
-
       </div>
     </UserLayout>
   );

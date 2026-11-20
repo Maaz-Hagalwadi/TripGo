@@ -1,248 +1,201 @@
-import { useCallback, useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import AdminLayout from '../shared/components/AdminLayout';
-import { useAuth } from '../shared/contexts/AuthContext';
 import { getAuditLogs } from '../api/adminAnalyticsService';
-import { ROUTES } from '../shared/constants/routes';
+import {
+  Card, EmptyState, FilterTabs, PageHeader, Pagination, SearchInput, SkeletonRows, StatusPill,
+} from '../features/admin/components/AdminUI';
+import { headerButton } from '../features/admin/components/adminStyles';
+import VisitorsPanel from '../features/admin/components/VisitorsPanel';
 
-const ACTION_COLORS = {
-  APPROVE:  'bg-emerald-50 text-emerald-700',
-  REJECT:   'bg-rose-50 text-rose-700',
-  SUSPEND:  'bg-orange-50 text-orange-700',
-  RESTORE:  'bg-sky-50 text-sky-700',
-  CREATE:   'bg-blue-50 text-blue-700',
-  UPDATE:   'bg-indigo-50 text-indigo-700',
-  DELETE:   'bg-red-50 text-red-700',
-  TOGGLE:   'bg-violet-50 text-violet-700',
-  ASSIGN:   'bg-teal-50 text-teal-700',
-  START:    'bg-cyan-50 text-cyan-700',
-  COMPLETE: 'bg-emerald-50 text-emerald-700',
-  CANCEL:   'bg-amber-50 text-amber-700',
+const PAGE_SIZE = 50;
+const SELECT = 'rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-slate-700 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15';
+
+// Values come from AuditLoggingAspect: entity = controller name, action = derived from the method name
+const ENTITIES = ['AUTH', 'BOOKING', 'PAYMENT', 'OPERATOR', 'BUS', 'USER', 'DISCOUNT', 'REVIEW', 'RATING', 'ROUTE', 'SAVED_ROUTES', 'NOTIFICATION'];
+const ACTIONS = ['LOGIN', 'REGISTER', 'REFRESH', 'CREATE', 'UPDATE', 'DELETE', 'APPROVE', 'REJECT', 'SUSPEND', 'RESTORE', 'TOGGLE', 'CANCEL', 'LOCK', 'CONFIRMBOOKINGAFTERPAYMENT', 'APPLYPROMO', 'RESETPASSWORD', 'FORGOTPASSWORD', 'SENDOTP', 'SUBMITRATING'];
+const ACTION_LABELS = {
+  CONFIRMBOOKINGAFTERPAYMENT: 'Confirm booking', APPLYPROMO: 'Apply promo', RESETPASSWORD: 'Reset password',
+  FORGOTPASSWORD: 'Forgot password', SENDOTP: 'Send OTP', SUBMITRATING: 'Submit rating', MARKREAD: 'Mark read',
+  UNSAVEROUTE: 'Unsave route', REFRESH: 'Token refresh',
+};
+const ACTION_TONE = {
+  APPROVE: 'green', RESTORE: 'green', CREATE: 'blue', REGISTER: 'blue', UPDATE: 'blue', TOGGLE: 'blue',
+  REJECT: 'red', DELETE: 'red', SUSPEND: 'amber', CANCEL: 'amber', LOGIN: 'slate', REFRESH: 'slate',
 };
 
-const ActionBadge = ({ action }) => {
-  const cls = ACTION_COLORS[action] || 'bg-slate-100 text-slate-600';
-  return (
-    <span className={`inline-flex items-center rounded-lg px-2 py-0.5 text-[10px] font-bold ${cls}`}>
-      {action}
-    </span>
-  );
-};
+const titleCase = (s) => String(s || '').toLowerCase().replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+const actionLabel = (a) => ACTION_LABELS[a] || titleCase(a);
+const when = (value) => new Date(value).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' });
+const whenFull = (value) => new Date(value).toLocaleString('en-IN', { dateStyle: 'full', timeStyle: 'medium', timeZone: 'Asia/Kolkata' });
+const cleanIp = (ip) => (ip === '0:0:0:0:0:0:0:1' || ip === '::1' ? 'localhost' : ip || '—');
 
-const StatusDot = ({ status }) => (
-  <span className={`inline-flex items-center gap-1 text-xs font-semibold ${status === 'FAILED' ? 'text-rose-600' : 'text-emerald-600'}`}>
-    <span className={`w-1.5 h-1.5 rounded-full ${status === 'FAILED' ? 'bg-rose-500' : 'bg-emerald-500'}`} />
-    {status}
-  </span>
-);
-
-const ALL_ACTIONS = ['', 'APPROVE', 'REJECT', 'SUSPEND', 'RESTORE', 'CREATE', 'UPDATE', 'DELETE', 'TOGGLE', 'ASSIGN', 'CANCEL'];
-const ALL_ENTITIES = ['', 'BUS', 'OPERATOR', 'USER', 'DISCOUNT', 'ROUTE', 'SAVED_ROUTE', 'BOOKING'];
-
-const AdminAuditLogs = () => {
-  const navigate = useNavigate();
-  const { user, loading } = useAuth();
-
-  const [logs, setLogs]           = useState([]);
-  const [totalElements, setTotal] = useState(0);
-  const [totalPages, setPages]    = useState(0);
-  const [busy, setBusy]           = useState(true);
-
-  const [page,       setPage]       = useState(0);
-  const [action,     setAction]     = useState('');
+const ActivityLog = ({ reloadRef }) => {
+  const [logs, setLogs] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [action, setAction] = useState('');
   const [entityType, setEntityType] = useState('');
-  const [actorEmail, setActorEmail] = useState('');
+  const [status, setStatus] = useState('ALL');
   const [emailInput, setEmailInput] = useState('');
+  const [actorEmail, setActorEmail] = useState('');
+  const [expanded, setExpanded] = useState(null);
 
+  // Search as you type, without a request per keystroke
   useEffect(() => {
-    if (loading) return;
-    if (!user || user.role !== 'ADMIN') navigate(ROUTES.HOME);
-  }, [user, loading, navigate]);
+    const t = setTimeout(() => { setActorEmail(emailInput.trim()); setPage(0); }, 350);
+    return () => clearTimeout(t);
+  }, [emailInput]);
 
-  const fetchLogs = useCallback(async () => {
+  const load = useCallback(async () => {
+    setLoading(true);
     try {
-      setBusy(true);
-      const res = await getAuditLogs({ page, size: 50, action: action || undefined, entityType: entityType || undefined, actorEmail: actorEmail || undefined });
+      const res = await getAuditLogs({ page, size: PAGE_SIZE, action: action || undefined, entityType: entityType || undefined, actorEmail: actorEmail || undefined });
       setLogs(res?.content || []);
-      setTotal(res?.totalElements || 0);
-      setPages(res?.totalPages || 0);
+      setTotal(Number(res?.totalElements || 0));
     } catch (e) {
-      toast.error(e.message || 'Failed to load audit logs');
+      toast.error(e.message || 'Couldn’t load audit logs');
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
   }, [page, action, entityType, actorEmail]);
 
-  useEffect(() => { fetchLogs(); }, [fetchLogs]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { reloadRef.current = { load, loading }; });
 
-  const applyEmail = (e) => {
-    if (e.key === 'Enter') { setActorEmail(emailInput); setPage(0); }
-  };
+  // The API filters by action/entity/actor; success vs failure is filtered within the page
+  const visible = status === 'ALL' ? logs : logs.filter((l) => (status === 'FAILED' ? l.status === 'FAILED' : l.status !== 'FAILED'));
+  const failedOnPage = logs.filter((l) => l.status === 'FAILED').length;
+  const hasFilters = action || entityType || actorEmail || status !== 'ALL';
+  const options = (known, key) => [...new Set([...known, ...logs.map((l) => l[key]).filter(Boolean)])];
 
-  const resetFilters = () => {
-    setAction('');
-    setEntityType('');
-    setActorEmail('');
-    setEmailInput('');
-    setPage(0);
-  };
-
-  const hasFilters = action || entityType || actorEmail;
+  const reset = () => { setAction(''); setEntityType(''); setEmailInput(''); setActorEmail(''); setStatus('ALL'); setPage(0); };
 
   return (
-    <AdminLayout activeItem="audit-logs" title="Audit Logs">
-      <div className="space-y-4">
-
-        {/* Header */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900">Audit Logs</h1>
-            <p className="text-sm text-slate-500 mt-0.5">All mutating actions performed on the platform</p>
-          </div>
-          <button
-            onClick={fetchLogs}
-            disabled={busy}
-            className="flex items-center gap-2 rounded-2xl bg-[#002046] text-white px-4 py-2.5 text-sm font-bold hover:bg-[#003a80] transition-colors disabled:opacity-60"
-          >
-            {busy
-              ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-              : <span className="material-symbols-outlined text-base">refresh</span>
-            }
-            Refresh
-          </button>
-        </div>
-
-        {/* Filters */}
-        <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm px-4 py-3 flex flex-wrap items-center gap-3">
-          <select
-            value={action}
-            onChange={e => { setAction(e.target.value); setPage(0); }}
-            className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 outline-none ring-1 ring-slate-200 focus:ring-[#002046] cursor-pointer"
-          >
-            <option value="">All actions</option>
-            {ALL_ACTIONS.filter(Boolean).map(a => <option key={a} value={a}>{a}</option>)}
-          </select>
-
-          <select
-            value={entityType}
-            onChange={e => { setEntityType(e.target.value); setPage(0); }}
-            className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600 outline-none ring-1 ring-slate-200 focus:ring-[#002046] cursor-pointer"
-          >
-            <option value="">All entities</option>
-            {ALL_ENTITIES.filter(Boolean).map(e => <option key={e} value={e}>{e}</option>)}
-          </select>
-
-          <div className="flex items-center gap-1.5 rounded-xl bg-slate-50 ring-1 ring-slate-200 px-3 py-2 flex-1 min-w-[180px]">
-            <span className="material-symbols-outlined text-slate-400 text-sm">search</span>
-            <input
-              value={emailInput}
-              onChange={e => setEmailInput(e.target.value)}
-              onKeyDown={applyEmail}
-              placeholder="Search actor email… (Enter)"
-              className="flex-1 bg-transparent text-xs text-slate-700 outline-none placeholder:text-slate-400"
+      <div className="space-y-5">
+        <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <select value={entityType} onChange={(e) => { setEntityType(e.target.value); setPage(0); }} className={SELECT} aria-label="Area">
+              <option value="">All areas</option>
+              {options(ENTITIES, 'entityType').map((v) => <option key={v} value={v}>{titleCase(v)}</option>)}
+            </select>
+            <select value={action} onChange={(e) => { setAction(e.target.value); setPage(0); }} className={SELECT} aria-label="Action">
+              <option value="">All actions</option>
+              {options(ACTIONS, 'action').map((v) => <option key={v} value={v}>{actionLabel(v)}</option>)}
+            </select>
+            <FilterTabs
+              options={[{ value: 'ALL', label: 'All' }, { value: 'SUCCESS', label: 'Succeeded' }, { value: 'FAILED', label: 'Failed', count: failedOnPage || null }]}
+              value={status}
+              onChange={setStatus}
+              label="Result"
             />
+            {hasFilters && <button onClick={reset} className="px-2 text-sm font-bold text-primary hover:text-[#FF8A65]">Clear filters</button>}
           </div>
-
-          {hasFilters && (
-            <button onClick={resetFilters} className="text-xs font-semibold text-slate-500 hover:text-rose-600 flex items-center gap-1 transition-colors">
-              <span className="material-symbols-outlined text-sm">close</span>
-              Clear
-            </button>
-          )}
-
-          <p className="text-xs text-slate-400 ml-auto">{totalElements.toLocaleString()} entries</p>
+          <SearchInput value={emailInput} onChange={setEmailInput} placeholder="Search by who did it (email)" className="xl:ml-auto xl:w-80" />
         </div>
 
-        {/* Table */}
-        <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-          {busy ? (
-            <div className="py-16 flex items-center justify-center gap-3 text-sm text-slate-500">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#002046]/30 border-t-[#002046]" />
-              Loading logs…
-            </div>
-          ) : logs.length === 0 ? (
-            <div className="py-16 flex flex-col items-center gap-3">
-              <span className="material-symbols-outlined text-4xl text-slate-200">history</span>
-              <p className="text-sm font-semibold text-slate-500">No audit logs found</p>
-              {hasFilters && <p className="text-xs text-slate-400">Try clearing the filters</p>}
-            </div>
+        <Card>
+          {loading ? <SkeletonRows rows={6} /> : visible.length === 0 ? (
+            <EmptyState icon="history" title="No log entries" subtitle={hasFilters ? 'Try clearing a filter.' : 'Actions will appear here as people use TripGo.'} />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-xs">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50/50">
-                    <th className="px-4 py-3.5 text-left font-semibold text-slate-400 uppercase tracking-wider whitespace-nowrap">Time</th>
-                    <th className="px-4 py-3.5 text-left font-semibold text-slate-400 uppercase tracking-wider">Actor</th>
-                    <th className="px-4 py-3.5 text-left font-semibold text-slate-400 uppercase tracking-wider">Role</th>
-                    <th className="px-4 py-3.5 text-left font-semibold text-slate-400 uppercase tracking-wider">Action</th>
-                    <th className="px-4 py-3.5 text-left font-semibold text-slate-400 uppercase tracking-wider hidden md:table-cell">Entity</th>
-                    <th className="px-4 py-3.5 text-left font-semibold text-slate-400 uppercase tracking-wider hidden lg:table-cell">Entity ID</th>
-                    <th className="px-4 py-3.5 text-left font-semibold text-slate-400 uppercase tracking-wider hidden xl:table-cell">Details</th>
-                    <th className="px-4 py-3.5 text-left font-semibold text-slate-400 uppercase tracking-wider">Status</th>
+                  <tr className="border-b border-slate-100 text-left text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    <th className="px-5 py-3 whitespace-nowrap">When</th>
+                    <th className="px-5 py-3">Who</th>
+                    <th className="px-5 py-3">What</th>
+                    <th className="px-5 py-3 hidden lg:table-cell">Request</th>
+                    <th className="px-5 py-3">Result</th>
+                    <th className="w-10" />
                   </tr>
                 </thead>
-                <tbody>
-                  {logs.map(log => (
-                    <tr key={log.id} className={`border-b border-slate-50 hover:bg-slate-50/60 transition-colors ${log.status === 'FAILED' ? 'bg-rose-50/30' : ''}`}>
-                      <td className="px-4 py-3 whitespace-nowrap text-slate-500">
-                        {new Date(log.createdAt).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      </td>
-                      <td className="px-4 py-3 font-medium text-slate-800 max-w-[160px] truncate">
-                        {log.actorEmail || '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        {log.actorRole ? (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">{log.actorRole}</span>
-                        ) : '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <ActionBadge action={log.action} />
-                      </td>
-                      <td className="px-4 py-3 hidden md:table-cell text-slate-600 font-medium">
-                        {log.entityType || '—'}
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell text-slate-400 font-mono text-[10px] max-w-[120px] truncate" title={log.entityId}>
-                        {log.entityId ? log.entityId.slice(0, 8) + '…' : '—'}
-                      </td>
-                      <td className="px-4 py-3 hidden xl:table-cell text-slate-400 max-w-[180px] truncate" title={log.details}>
-                        {log.details || '—'}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusDot status={log.status} />
-                      </td>
-                    </tr>
-                  ))}
+                <tbody className="divide-y divide-slate-100">
+                  {visible.map((log) => {
+                    const open = expanded === log.id;
+                    const failed = log.status === 'FAILED';
+                    return (
+                      <Fragment key={log.id}>
+                        <tr onClick={() => setExpanded(open ? null : log.id)} className={`cursor-pointer ${failed ? 'bg-red-50/40 hover:bg-red-50/70' : 'hover:bg-slate-50/60'}`}>
+                          <td className="px-5 py-3 whitespace-nowrap text-slate-500" title={whenFull(log.createdAt)}>{when(log.createdAt)}</td>
+                          <td className="px-5 py-3">
+                            <p className="font-semibold text-slate-800 truncate max-w-[220px]">{log.actorEmail || <span className="font-normal text-slate-400">Not signed in</span>}</p>
+                            {log.actorRole && <p className="text-xs text-slate-400">{titleCase(String(log.actorRole).replace('ROLE_', ''))}</p>}
+                          </td>
+                          <td className="px-5 py-3">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <StatusPill tone={ACTION_TONE[log.action] || 'slate'}>{actionLabel(log.action)}</StatusPill>
+                              <span className="text-xs font-semibold text-slate-500">{titleCase(log.entityType)}</span>
+                            </div>
+                          </td>
+                          <td className="px-5 py-3 hidden lg:table-cell">
+                            <code className="text-xs text-slate-500 truncate block max-w-[320px]">{log.details || '—'}</code>
+                          </td>
+                          <td className="px-5 py-3">{failed ? <StatusPill tone="red">Failed</StatusPill> : <StatusPill tone="green">OK</StatusPill>}</td>
+                          <td className="pr-4 text-slate-400">
+                            <span className={`material-symbols-outlined text-[20px] transition-transform ${open ? 'rotate-180' : ''}`}>expand_more</span>
+                          </td>
+                        </tr>
+                        {open && (
+                          <tr className="bg-slate-50/70">
+                            <td colSpan={6} className="px-5 py-4">
+                              <dl className="grid gap-x-8 gap-y-3 text-xs sm:grid-cols-2 xl:grid-cols-4">
+                                {[
+                                  ['Time', whenFull(log.createdAt)],
+                                  ['Request', log.details || '—'],
+                                  ['Record ID', log.entityId || '—'],
+                                  ['IP address', cleanIp(log.ipAddress)],
+                                ].map(([k, v]) => (
+                                  <div key={k} className="min-w-0">
+                                    <dt className="font-bold uppercase tracking-wider text-slate-400">{k}</dt>
+                                    <dd className="mt-0.5 break-all font-mono text-slate-700">{v}</dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
+          <Pagination page={page} total={total} pageSize={PAGE_SIZE} onChange={(p) => { setPage(p); setExpanded(null); }} />
+        </Card>
+        {status !== 'ALL' && (
+          <p className="px-1 text-xs text-slate-500">The result filter applies to the {PAGE_SIZE} entries on this page.</p>
+        )}
+      </div>
+  );
+};
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="border-t border-slate-100 px-4 py-3.5 flex items-center justify-between gap-4">
-              <p className="text-xs text-slate-400">
-                Page {page + 1} of {totalPages} · {totalElements.toLocaleString()} entries
-              </p>
-              <div className="flex items-center gap-1">
-                <button onClick={() => setPage(0)} disabled={page === 0} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30 transition-colors">
-                  <span className="material-symbols-outlined text-sm">first_page</span>
-                </button>
-                <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30 transition-colors">
-                  <span className="material-symbols-outlined text-sm">chevron_left</span>
-                </button>
-                <span className="px-3 py-1 text-xs font-semibold text-slate-600">{page + 1}</span>
-                <button onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30 transition-colors">
-                  <span className="material-symbols-outlined text-sm">chevron_right</span>
-                </button>
-                <button onClick={() => setPage(totalPages - 1)} disabled={page >= totalPages - 1} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30 transition-colors">
-                  <span className="material-symbols-outlined text-sm">last_page</span>
-                </button>
-              </div>
-            </div>
+const VIEWS = [{ value: 'activity', label: 'Activity' }, { value: 'visitors', label: 'Visitors' }];
+
+const AdminAuditLogs = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view = searchParams.get('view') === 'visitors' ? 'visitors' : 'activity';
+  const reloadRef = useRef({ load: () => {}, loading: false });
+
+  return (
+    <AdminLayout activeItem="audit-logs" title="Audit logs">
+      <div className="space-y-5">
+        <PageHeader
+          title="Audit logs"
+          subtitle={view === 'activity' ? 'Every change made through TripGo, newest first · times in IST' : 'Who visits TripGo, which pages they open and where they came from'}
+          actions={view === 'activity' && (
+            <button onClick={() => reloadRef.current.load()} className={headerButton}>
+              <span className="material-symbols-outlined text-[18px]">refresh</span>Refresh
+            </button>
           )}
+        />
+        <div className="flex">
+          <FilterTabs options={VIEWS} value={view} onChange={(v) => setSearchParams(v === 'activity' ? {} : { view: v })} label="Audit view" />
         </div>
-
+        {view === 'activity' ? <ActivityLog reloadRef={reloadRef} /> : <VisitorsPanel />}
       </div>
     </AdminLayout>
   );

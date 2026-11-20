@@ -24,6 +24,7 @@ public class AvailabilityService {
 
         return new SearchResponse(
                 schedule.getId(),
+                bus.getId(),
                 bus.getName(),
                 bus.getBusCode(),
                 bus.getBusType() != null ? bus.getBusType().toString() : "STANDARD",

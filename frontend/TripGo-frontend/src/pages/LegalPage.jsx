@@ -105,7 +105,8 @@ const PAGES = {
       {
         h: 'Cookies and local storage',
         p: [
-          'We use your browser’s storage to keep you signed in and to remember preferences such as your recent searches. [List any analytics or third-party cookies if you add them.]',
+          'We use your browser’s storage to keep you signed in and to remember preferences such as your recent searches.',
+          'To understand how TripGo is used, we record the pages you visit, the site or link that brought you here, and your screen size. This is tied to a random visitor ID stored in your browser and, when you’re signed in, to your account. We don’t store your IP address. We skip this if your browser sends “Do Not Track”, and we delete visit records after 180 days.',
         ],
       },
     ],

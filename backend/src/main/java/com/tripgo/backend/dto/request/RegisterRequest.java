@@ -34,4 +34,6 @@ public class RegisterRequest {
     )
     private String password;
 
+    private String referralCode;
+
 }

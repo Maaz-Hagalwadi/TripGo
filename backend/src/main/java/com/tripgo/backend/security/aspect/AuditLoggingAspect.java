@@ -30,6 +30,7 @@ public class AuditLoggingAspect {
     );
 
     @Around("within(com.tripgo.backend.controller..*) && " +
+            "!within(com.tripgo.backend.controller.AnalyticsController) && " +
             "(@annotation(org.springframework.web.bind.annotation.PostMapping)   || " +
             " @annotation(org.springframework.web.bind.annotation.PutMapping)    || " +
             " @annotation(org.springframework.web.bind.annotation.PatchMapping)  || " +

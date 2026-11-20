@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import VisitTracker from './shared/components/VisitTracker';
 import { Toaster } from 'sonner';
 import { AuthProvider } from './shared/contexts/AuthContext';
 import { ThemeProvider } from './shared/contexts/ThemeContext';
@@ -49,6 +50,7 @@ const PaymentSuccess = lazy(() => import('./features/search/pages/PaymentSuccess
 const CompleteProfile = lazy(() => import('./features/auth/pages/CompleteProfile'));
 const OperatorHowItWorks = lazy(() => import('./pages/OperatorHowItWorks'));
 const LegalPage = lazy(() => import('./pages/LegalPage'));
+const SharedTrip = lazy(() => import('./pages/SharedTrip'));
 const AdminOperatorAction = lazy(() => import('./pages/AdminOperatorAction'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const AdminReviews = lazy(() => import('./pages/AdminReviews'));
@@ -68,6 +70,7 @@ function App() {
     <AuthProvider>
       <Toaster position="top-right" richColors theme="dark" closeButton />
       <Router>
+        <VisitTracker />
         <Suspense fallback={<TripGoLoader />}>
         <Routes>
           {/* Public routes */}
@@ -86,6 +89,7 @@ function App() {
           <Route path={ROUTES.TERMS} element={<LegalPage type="terms" />} />
           <Route path={ROUTES.PRIVACY} element={<LegalPage type="privacy" />} />
           <Route path={ROUTES.REFUND_POLICY} element={<LegalPage type="refund" />} />
+          <Route path={ROUTES.SHARED_TRIP} element={<SharedTrip />} />
 
           {/* Admin route — protected, ADMIN role only */}
           <Route path={ROUTES.ADMIN_OPERATOR_ACTION} element={

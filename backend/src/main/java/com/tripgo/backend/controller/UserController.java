@@ -3,6 +3,7 @@ package com.tripgo.backend.controller;
 import com.tripgo.backend.dto.request.ChangePasswordRequest;
 import com.tripgo.backend.dto.request.UpdateProfileRequest;
 import com.tripgo.backend.dto.response.UserProfileResponse;
+import com.tripgo.backend.exception.BadRequestException;
 import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.repository.RefreshTokenRepository;
 import com.tripgo.backend.repository.UserRepository;
@@ -46,7 +47,7 @@ public class UserController {
 
         if (request.getPhone() != null && !request.getPhone().equals(user.getPhone())
                 && userRepository.existsByPhone(request.getPhone())) {
-            throw new RuntimeException("Phone number already in use");
+            throw new BadRequestException("Phone already in use");
         }
 
         user.setFirstName(request.getFirstName());
@@ -84,14 +85,20 @@ public class UserController {
 
     @PostMapping("/change-password")
     public ResponseEntity<Void> changePassword(
-            @RequestBody ChangePasswordRequest request,
+            @Valid @RequestBody ChangePasswordRequest request,
             Authentication authentication) {
 
         CustomUserDetails userDetails = (CustomUserDetails) authentication.getPrincipal();
         User user = userDetails.getUser();
 
+        if (user.getPassword() == null) {
+            throw new BadRequestException("This account signs in with Google and has no password to change.");
+        }
         if (!passwordEncoder.matches(request.getOldPassword(), user.getPassword())) {
-            throw new RuntimeException("Old password is incorrect");
+            throw new BadRequestException("Current password is incorrect");
+        }
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            throw new BadRequestException("New password must be different from your current one");
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));

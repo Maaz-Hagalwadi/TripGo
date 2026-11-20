@@ -209,7 +209,7 @@ const SearchBar = ({
   /* ── Hero desktop: single segmented bar (From | To | Date | Search) ── */
   if (isHero && !isMobile) {
     const segment = 'relative flex-1 min-w-0 flex items-center gap-3 px-6 cursor-text hover:bg-slate-50 transition-colors';
-    const segLabel = (err) => `block text-[11px] font-bold uppercase tracking-wider ${err ? 'text-red-500' : 'text-slate-400'}`;
+    const segLabel = (err) => `block text-[11px] font-bold uppercase tracking-wider whitespace-nowrap truncate ${err ? 'text-red-500' : 'text-slate-400'}`;
     const cityInput = 'w-full bg-transparent border-0 p-0 text-lg font-bold text-[#002046] placeholder-slate-300 placeholder:font-semibold focus:ring-0 focus:outline-none truncate';
     const formattedDate = formData.date
       ? new Date(`${formData.date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
@@ -276,11 +276,11 @@ const SearchBar = ({
         <div className="w-px bg-slate-200 my-4" />
 
         {/* Date */}
-        <div className={`${segment} cursor-pointer`} onClick={() => heroDateRef.current?.showPicker?.()}>
+        <div className={`${segment} flex-[1.4] pr-4 cursor-pointer`} onClick={() => heroDateRef.current?.showPicker?.()}>
           <span className="material-symbols-outlined text-2xl text-slate-400">calendar_month</span>
           <div className="min-w-0 flex-1">
             <span className={segLabel(errors.date)}>{errors.date || 'Date of journey'}</span>
-            <span className="block text-lg font-bold text-[#002046] truncate">{formattedDate}</span>
+            <span className="block text-lg font-bold text-[#002046] whitespace-nowrap">{formattedDate}</span>
           </div>
           {showQuickDates && (
             <div className="flex gap-1.5 flex-shrink-0">
@@ -304,7 +304,7 @@ const SearchBar = ({
 
         {/* Search */}
         <button onClick={handleSearch}
-          className="flex-shrink-0 flex items-center gap-2 px-8 rounded-r-2xl bg-gradient-to-r from-[#FDBA74] to-[#FF8A65] hover:brightness-105 text-[#002046] font-extrabold text-base uppercase tracking-wide transition-all">
+          className="flex-shrink-0 flex items-center gap-2 px-6 xl:px-8 rounded-r-2xl bg-gradient-to-r from-[#FDBA74] to-[#FF8A65] hover:brightness-105 text-[#002046] font-extrabold text-base uppercase tracking-wide transition-all">
           <span className="material-symbols-outlined text-[22px]">{submitIcon}</span>
           {submitLabel}
         </button>

@@ -1,5 +1,7 @@
 package com.tripgo.backend.controller;
 
+import com.tripgo.backend.config.AppTime;
+
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.model.Event;
 import com.stripe.model.PaymentIntent;
@@ -12,13 +14,19 @@ import com.tripgo.backend.model.enums.PaymentStatus;
 import com.tripgo.backend.model.enums.TicketStatus;
 import com.tripgo.backend.repository.*;
 import com.tripgo.backend.security.service.CustomUserDetails;
+import com.tripgo.backend.dto.response.FareResult;
+import com.tripgo.backend.exception.BadRequestException;
+import com.tripgo.backend.model.entities.BookingSeat;
+import com.tripgo.backend.model.entities.RouteSegment;
 import com.tripgo.backend.service.impl.EmailService;
 import com.tripgo.backend.service.impl.NotificationService;
+import com.tripgo.backend.service.impl.SeatAvailabilityService;
 import com.tripgo.backend.service.impl.SeatLockService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -40,9 +48,17 @@ public class PaymentController {
     private final SeatRepository seatRepository;
     private final BookingSeatRepository bookingSeatRepository;
     private final PassengerRepository passengerRepository;
+    private final RouteSegmentRepository routeSegmentRepository;
+    private final SeatAvailabilityService seatAvailabilityService;
     private final EmailService emailService;
     private final NotificationService notificationService;
     private final com.tripgo.backend.repository.UserRepository userRepository;
+    private final com.tripgo.backend.service.impl.WalletService walletService;
+
+    // Premium benefits (zero cancellation fees, priority seats/support) are not implemented yet,
+    // so new memberships stay closed until they are. Re-enable with PREMIUM_SALES_ENABLED=true.
+    @Value("${app.premium.sales-enabled:false}")
+    private boolean premiumSalesEnabled;
 
     @Value("${stripe.webhook-secret}")
     private String webhookSecret;
@@ -63,6 +79,10 @@ public class PaymentController {
     public ResponseEntity<?> createPremiumIntent(
             @RequestBody Map<String, Object> body,
             Authentication auth) {
+        if (!premiumSalesEnabled) {
+            return ResponseEntity.status(503)
+                    .body(Map.of("error", "TripGo Premium is coming soon. New memberships are not open yet."));
+        }
         try {
             User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
             String plan = (String) body.get("plan");
@@ -118,6 +138,8 @@ public class PaymentController {
      *   ]
      * }
      */
+    // Transactional so the seat-lock row lock below is held until this checkout's booking is saved
+    @Transactional
     @PostMapping("/create-intent")
     public ResponseEntity<?> createIntent(
             @RequestBody Map<String, Object> body,
@@ -136,17 +158,14 @@ public class PaymentController {
             UUID lockToken = UUID.fromString((String) body.get("lockToken"));
             String from = (String) body.get("from");
             String to = (String) body.get("to");
-            BigDecimal totalAmount = new BigDecimal(body.get("totalAmount").toString());
-            BigDecimal gstAmount = new BigDecimal(body.get("gstAmount").toString());
-            BigDecimal payableAmount = new BigDecimal(body.get("payableAmount").toString());
 
             RouteSchedule schedule = scheduleRepo.findById(scheduleId)
                     .orElseThrow(() -> new RuntimeException("Schedule not found"));
 
-            // Verify lock is still valid
-            List<SeatLock> locks = lockRepo.findAll().stream()
-                    .filter(l -> l.getLockToken().equals(lockToken)
-                            && l.getExpiresAt().isAfter(Instant.now())
+            // Verify lock is still valid. Locking these rows serialises concurrent requests for the same
+            // checkout (double click, retries, React StrictMode) so only one PENDING booking is created.
+            List<SeatLock> locks = lockRepo.findByLockTokenForUpdate(lockToken).stream()
+                    .filter(l -> l.getExpiresAt().isAfter(Instant.now())
                             && (isGuest
                                 ? l.getLockedBy() == null
                                 : l.getLockedBy() != null && l.getLockedBy().getId().equals(user.getId())))
@@ -166,6 +185,44 @@ public class PaymentController {
                         .body(Map.of("error", "Selected segment does not match the locked seats. Please select seats again."));
             }
 
+            // Compute fare server-side — never trust client-supplied amounts
+            List<RouteSegment> allSegments = routeSegmentRepository.findByRouteOrderBySeq(schedule.getRoute());
+            int fromIdx = indexOfStop(allSegments, from);
+            int toIdx   = indexOfStop(allSegments, to);
+            if (fromIdx == -1 || toIdx == -1 || toIdx <= fromIdx) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "Invalid route segment: " + from + " → " + to));
+            }
+            List<RouteSegment> travelSegments = allSegments.subList(fromIdx, toIdx);
+            Map<UUID, List<com.tripgo.backend.model.entities.Fare>> faresBySegment =
+                    seatAvailabilityService.loadFaresBySegment(travelSegments);
+            Map<String, FareResult> faresByType = seatAvailabilityService.computeFaresByType(
+                    travelSegments, schedule.getBus().getId(), faresBySegment);
+
+            if (faresByType.isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(Map.of("error", "No fares configured for this route segment."));
+            }
+
+            List<Seat> allBusSeats = seatRepository.findByBus(schedule.getBus());
+            Map<String, String> seatTypeByNumber = allBusSeats.stream()
+                    .collect(Collectors.toMap(Seat::getSeatNumber,
+                            s -> s.getSeatType() != null ? s.getSeatType() : "",
+                            (a, b) -> a));
+
+            BigDecimal totalAmount   = BigDecimal.ZERO;
+            BigDecimal gstAmount     = BigDecimal.ZERO;
+            BigDecimal payableAmount = BigDecimal.ZERO;
+
+            for (SeatLock lock : locks) {
+                String seatType = seatTypeByNumber.getOrDefault(lock.getSeatNumber(), "");
+                FareResult fare = faresByType.get(seatType);
+                if (fare == null) fare = faresByType.values().iterator().next();
+                totalAmount   = totalAmount.add(fare.baseFare());
+                gstAmount     = gstAmount.add(fare.gstAmount());
+                payableAmount = payableAmount.add(fare.totalFare());
+            }
+
             // Parse passengers before idempotency check
             List<?> rawPassengers = (List<?>) body.get("passengers");
             List<Map<String, Object>> passengers = rawPassengers.stream()
@@ -178,7 +235,7 @@ public class PaymentController {
                 travelDate = java.time.LocalDate.parse((String) body.get("travelDate"));
             } else {
                 travelDate = java.time.LocalDateTime
-                        .ofInstant(schedule.getDepartureTime(), java.time.ZoneOffset.UTC)
+                        .ofInstant(schedule.getDepartureTime(), AppTime.ZONE)
                         .toLocalDate();
             }
 
@@ -186,9 +243,12 @@ public class PaymentController {
                     .map(p -> String.valueOf(p.get("seatNumber")))
                     .collect(Collectors.toCollection(LinkedHashSet::new));
 
-            // Idempotency: reuse existing PENDING booking + PaymentIntent if still usable (auth users only)
-            if (!isGuest) {
-                List<Booking> existingPending = bookingRepository.findPendingByUserAndScheduleAndTravelDate(user, scheduleId, travelDate)
+            // Idempotency: reuse an existing PENDING booking + PaymentIntent if still usable
+            {
+                List<Booking> candidates = isGuest
+                        ? bookingRepository.findPendingByGuestAndScheduleAndTravelDate(guestEmail, scheduleId, travelDate)
+                        : bookingRepository.findPendingByUserAndScheduleAndTravelDate(user, scheduleId, travelDate);
+                List<Booking> existingPending = candidates
                         .stream()
                         .filter(existing -> {
                             List<BookingSeat> existingSeats = bookingSeatRepository.findByBookingId(existing.getId());
@@ -229,6 +289,51 @@ public class PaymentController {
                         existing.setStatus(BookingStatus.FAILED);
                         bookingRepository.save(existing);
                     }
+                }
+            }
+
+            // ── Ladies-only / beside-woman enforcement ───────────────────────────
+            List<BookingSeat> confirmedSeatsForCheck =
+                    bookingSeatRepository.findConfirmedByScheduleIdAndTravelDate(scheduleId, travelDate);
+
+            Set<String> femaleBookedSeats = confirmedSeatsForCheck.stream()
+                    .filter(bs -> segmentsOverlap(allSegments, bs.getFromStop(), bs.getToStop(), from, to))
+                    .filter(bs -> bs.getPassenger() != null
+                            && "female".equalsIgnoreCase(bs.getPassenger().getGender()))
+                    .map(bs -> bs.getSeatNumber().toUpperCase())
+                    .collect(Collectors.toSet());
+
+            // Seats in the same request don't restrict each other
+            Set<String> requestSeatNums = passengers.stream()
+                    .map(p -> String.valueOf(p.get("seatNumber")).toUpperCase())
+                    .collect(Collectors.toSet());
+
+            // Max column index per deck (0=lower,1=upper) — determines aisle position
+            Map<Integer, Integer> maxColByDeck = new HashMap<>();
+            for (Seat s : allBusSeats) {
+                int[] placed = placeSeat(s.getSeatNumber());
+                if (placed != null) maxColByDeck.merge(placed[0], placed[2], Math::max);
+            }
+
+            Map<String, Seat> seatByNum = allBusSeats.stream()
+                    .collect(Collectors.toMap(s -> s.getSeatNumber().toUpperCase(), s -> s, (a, b) -> a));
+
+            for (Map<String, Object> p : passengers) {
+                String seatNum = String.valueOf(p.get("seatNumber")).toUpperCase();
+                String gender  = p.get("gender") != null ? String.valueOf(p.get("gender")) : "";
+                if ("FEMALE".equalsIgnoreCase(gender)) continue;
+
+                Seat chkSeat = seatByNum.get(seatNum);
+                if (chkSeat != null && Boolean.TRUE.equals(chkSeat.getIsLadiesOnly())) {
+                    throw new BadRequestException("Seat " + seatNum + " is reserved for women only");
+                }
+
+                boolean besideWoman = femaleBookedSeats.stream()
+                        .filter(fs -> !requestSeatNums.contains(fs))
+                        .anyMatch(fs -> areSeatNeighbours(seatNum, fs, maxColByDeck));
+                if (besideWoman) {
+                    throw new BadRequestException(
+                            "Seat " + seatNum + " is next to a woman traveller and can only be booked for a woman");
                 }
             }
 
@@ -284,6 +389,71 @@ public class PaymentController {
                         .fromStop(from)
                         .toStop(to)
                         .build());
+            }
+
+            // ── Wallet credit path ───────────────────────────────────────────────
+            boolean useCredit = Boolean.TRUE.equals(body.get("useCredit")) && user != null;
+            if (useCredit) {
+                BigDecimal balance = walletService.getBalance(user);
+                if (balance.compareTo(payableAmount) >= 0) {
+                    // Full wallet payment — debit and confirm immediately
+                    walletService.debit(user, payableAmount,
+                            "Payment for booking " + booking.getBookingCode(), booking.getId());
+                    paymentRepository.save(Payment.builder()
+                            .booking(booking)
+                            .provider("WALLET")
+                            .providerTransactionId("WALLET-" + booking.getId())
+                            .amount(payableAmount)
+                            .status(PaymentStatus.SUCCESS)
+                            .build());
+                    booking.setStatus(BookingStatus.CONFIRMED);
+                    bookingRepository.save(booking);
+                    createTicketIfAbsent(booking);
+                    lockService.release(lockToken);
+                    if (booking.getUser() != null) {
+                        notificationService.send(booking.getUser(), "BOOKING_CONFIRMED",
+                                "Booking Confirmed!",
+                                "Your booking " + booking.getBookingCode() + " is confirmed. Have a great trip!",
+                                "/bookings");
+                    }
+                    User opUser = userRepository.findByOperator(booking.getOperator()).orElse(null);
+                    if (opUser != null) {
+                        notificationService.send(opUser, "NEW_BOOKING", "New Booking Received",
+                                "Booking " + booking.getBookingCode() + " confirmed on "
+                                        + booking.getRouteSchedule().getBus().getName(),
+                                "/operator/bookings?bookingCode=" + booking.getBookingCode());
+                    }
+                    List<BookingSeat> walletSeats = bookingSeatRepository.findByBookingId(booking.getId());
+                    Map<String, Object> emailDetails = new LinkedHashMap<>();
+                    emailDetails.put("bookingCode", booking.getBookingCode());
+                    emailDetails.put("from", walletSeats.isEmpty() ? "-" : walletSeats.get(0).getFromStop());
+                    emailDetails.put("to", walletSeats.isEmpty() ? "-" : walletSeats.get(0).getToStop());
+                    emailDetails.put("busName", booking.getRouteSchedule().getBus().getName());
+                    emailDetails.put("operatorName", booking.getOperator().getName());
+                    emailDetails.put("departureTime", booking.getRouteSchedule().getDepartureTime().toString());
+                    emailDetails.put("arrivalTime", booking.getRouteSchedule().getArrivalTime().toString());
+                    emailDetails.put("totalAmount", booking.getTotalAmount());
+                    emailDetails.put("gstAmount", booking.getGstAmount());
+                    emailDetails.put("payableAmount", booking.getPayableAmount());
+                    emailDetails.put("passengers", walletSeats.stream().map(s -> {
+                        Map<String, Object> p = new LinkedHashMap<>();
+                        p.put("seatNumber", s.getSeatNumber());
+                        if (s.getPassenger() != null) {
+                            p.put("firstName", s.getPassenger().getFirstName());
+                            p.put("lastName", s.getPassenger().getLastName() != null ? s.getPassenger().getLastName() : "");
+                            p.put("age", s.getPassenger().getAge());
+                            p.put("gender", s.getPassenger().getGender());
+                        }
+                        return p;
+                    }).toList());
+                    emailService.sendBookingConfirmation(booking.getUser(), emailDetails);
+                    emailService.notifyOperatorNewBooking(booking, walletSeats);
+                    return ResponseEntity.ok(Map.of(
+                            "status", "CREDIT_PAID",
+                            "bookingId", booking.getId(),
+                            "bookingCode", booking.getBookingCode()
+                    ));
+                }
             }
 
             // Create Stripe PaymentIntent (amount in paise — multiply by 100)
@@ -471,8 +641,61 @@ public class PaymentController {
         return ResponseEntity.ok(response);
     }
 
+    private boolean segmentsOverlap(List<RouteSegment> segments,
+                                     String bookedFrom, String bookedTo,
+                                     String reqFrom, String reqTo) {
+        int bStart = indexOfStop(segments, bookedFrom);
+        int bEnd   = indexOfStop(segments, bookedTo);
+        int rStart = indexOfStop(segments, reqFrom);
+        int rEnd   = indexOfStop(segments, reqTo);
+        if (bStart == -1 || bEnd == -1 || rStart == -1 || rEnd == -1) return true;
+        return bStart < rEnd && bEnd > rStart;
+    }
+
+    /** Places a seat on its (deck, row, col) grid. Returns int[]{deck,row,col} or null. */
+    private static int[] placeSeat(String seatNum) {
+        if (seatNum == null) return null;
+        seatNum = seatNum.trim().toUpperCase();
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^([LU])(\\d+)$").matcher(seatNum);
+        if (m.matches()) {
+            int pos = Integer.parseInt(m.group(2)) - 1;
+            return new int[]{"U".equals(m.group(1)) ? 1 : 0, pos / 3, pos % 3};
+        }
+        m = java.util.regex.Pattern.compile("^(\\d+)([A-F])$").matcher(seatNum);
+        if (m.matches()) {
+            return new int[]{0, Integer.parseInt(m.group(1)) - 1, m.group(2).charAt(0) - 'A'};
+        }
+        m = java.util.regex.Pattern.compile("^([A-F])(\\d+)$").matcher(seatNum);
+        if (m.matches()) {
+            return new int[]{0, Integer.parseInt(m.group(2)) - 1, m.group(1).charAt(0) - 'A'};
+        }
+        return null;
+    }
+
+    private static boolean areSeatNeighbours(String a, String b, Map<Integer, Integer> maxColByDeck) {
+        int[] pa = placeSeat(a);
+        int[] pb = placeSeat(b);
+        if (pa == null || pb == null) return false;
+        if (pa[0] != pb[0] || pa[1] != pb[1]) return false; // different deck or row
+        if (Math.abs(pa[2] - pb[2]) != 1) return false;     // not adjacent column
+        int totalCols = maxColByDeck.getOrDefault(pa[0], 3) + 1;
+        int aisle = totalCols >= 4 ? totalCols / 2 - 1 : totalCols >= 2 ? 0 : -1;
+        return (pa[2] <= aisle ? 0 : 1) == (pb[2] <= aisle ? 0 : 1);
+    }
+
     private String normalizeValue(String value) {
         return value == null ? "" : value.trim().toLowerCase();
+    }
+
+    private int indexOfStop(List<RouteSegment> segments, String stop) {
+        if (stop == null) return -1;
+        for (int i = 0; i < segments.size(); i++) {
+            if (segments.get(i).getFromStop().equalsIgnoreCase(stop)) return i;
+        }
+        for (int i = 0; i < segments.size(); i++) {
+            if (segments.get(i).getToStop().equalsIgnoreCase(stop)) return i + 1;
+        }
+        return -1;
     }
 
     /**

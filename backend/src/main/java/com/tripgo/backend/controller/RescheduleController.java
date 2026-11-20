@@ -1,5 +1,7 @@
 package com.tripgo.backend.controller;
 
+import com.tripgo.backend.config.AppTime;
+
 import com.tripgo.backend.dto.request.RescheduleRequest;
 import com.tripgo.backend.model.entities.Booking;
 import com.tripgo.backend.model.entities.BookingSeat;
@@ -22,7 +24,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -71,8 +72,8 @@ public class RescheduleController {
 
         // Time-window check against current departure
         RouteSchedule sched = booking.getRouteSchedule();
-        LocalTime deptTime = LocalDateTime.ofInstant(sched.getDepartureTime(), ZoneOffset.UTC).toLocalTime();
-        Instant currentDeparture = booking.getTravelDate().atTime(deptTime).toInstant(ZoneOffset.UTC);
+        LocalTime deptTime = LocalDateTime.ofInstant(sched.getDepartureTime(), AppTime.ZONE).toLocalTime();
+        Instant currentDeparture = booking.getTravelDate().atTime(deptTime).atZone(AppTime.ZONE).toInstant();
         long hoursLeft = Duration.between(Instant.now(), currentDeparture).toHours();
         int minHours = (policy != null && policy.getDateChangeMinHours() != null) ? policy.getDateChangeMinHours() : 12;
 

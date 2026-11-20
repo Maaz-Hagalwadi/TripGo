@@ -1,261 +1,236 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import AdminLayout from '../shared/components/AdminLayout';
 import { useAuth } from '../shared/contexts/AuthContext';
 import { ROUTES } from '../shared/constants/routes';
 import { changePassword, uploadProfilePicture, updateCurrentUser } from '../api/userService';
+import { PASSWORD_RULES, isPasswordValid } from '../shared/utils/passwordRules';
+import { Avatar, Card, PageHeader } from '../features/admin/components/AdminUI';
 
-const INPUT_CLASS = 'w-full rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40 transition-all';
+const INPUT = 'w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:bg-slate-50 disabled:text-slate-500';
+const LABEL = 'mb-1.5 block text-xs font-bold text-slate-600';
+const IMAGE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+const EMPTY_PASSWORDS = { oldPassword: '', newPassword: '', confirmPassword: '' };
 
 const AdminSettings = () => {
   const navigate = useNavigate();
-  const { user, loading, logout, updateUser } = useAuth();
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const { user, logout, updateUser } = useAuth();
   const fileInputRef = useRef(null);
-  const [editModal, setEditModal] = useState({ open: false, firstName: '', lastName: '', phone: '' });
-  const [savingPersonal, setSavingPersonal] = useState(false);
-  const [passwordModal, setPasswordModal] = useState({
-    open: false,
-    oldPassword: '',
-    newPassword: '',
-    confirmPassword: '',
-  });
-  const [changingPassword, setChangingPassword] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [profile, setProfile] = useState({ firstName: '', lastName: '', phone: '' });
+  const [profileError, setProfileError] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [pw, setPw] = useState(EMPTY_PASSWORDS);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [savingPw, setSavingPw] = useState(false);
+  const [showPw, setShowPw] = useState(false);
 
-  useEffect(() => {
-    if (loading) return;
-    if (!user || user.role !== 'ADMIN') navigate(ROUTES.HOME);
-  }, [user, loading, navigate]);
+  const fullName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Admin';
+  // Older API responses don't include hasPassword — assume a password account then
+  const hasPassword = user?.hasPassword !== false;
 
-  const closePasswordModal = () => {
-    setPasswordModal({ open: false, oldPassword: '', newPassword: '', confirmPassword: '' });
-  };
-
-  const handleAvatarChange = async (e) => {
-    const file = e.target.files[0];
+  const onAvatar = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
-    if (!allowed.includes(file.type)) { toast.error('Only JPG, PNG, WebP, or GIF allowed'); return; }
-    if (file.size > 5 * 1024 * 1024) { toast.error('Image must be smaller than 5MB'); return; }
-    setUploadingAvatar(true);
-    const t = toast.loading('Uploading profile picture...');
+    if (!IMAGE_TYPES.includes(file.type)) return toast.error('Use a JPG, PNG, WebP or GIF image');
+    if (file.size > 5 * 1024 * 1024) return toast.error('The image must be smaller than 5 MB');
+    setUploading(true);
     try {
       const result = await uploadProfilePicture(file);
       updateUser({ profilePictureUrl: result.profilePictureUrl });
-      toast.success('Profile picture updated', { id: t });
+      toast.success('Profile photo updated');
     } catch (err) {
-      toast.error(err.message || 'Failed to upload', { id: t });
+      toast.error(err.message || 'Couldn’t upload the photo');
     } finally {
-      setUploadingAvatar(false);
-      e.target.value = '';
+      setUploading(false);
     }
   };
 
-  const openEditModal = () => {
-    setEditModal({ open: true, firstName: user?.firstName || '', lastName: user?.lastName || '', phone: user?.phone || '' });
+  const startEdit = () => {
+    setProfile({ firstName: user?.firstName || '', lastName: user?.lastName || '', phone: user?.phone || '' });
+    setProfileError('');
+    setEditing(true);
   };
 
-  const handleSavePersonal = async () => {
-    if (!editModal.firstName.trim()) return toast.error('First name is required');
-    setSavingPersonal(true);
-    const t = toast.loading('Saving...');
+  const saveProfile = async (e) => {
+    e.preventDefault();
+    const next = { firstName: profile.firstName.trim(), lastName: profile.lastName.trim(), phone: profile.phone.trim() };
+    if (!next.firstName) return setProfileError('First name is required');
+    if (next.phone && !/^\d{10}$/.test(next.phone)) return setProfileError('Enter a 10-digit mobile number, or leave it empty');
+    setSavingProfile(true);
     try {
-      await updateCurrentUser({ firstName: editModal.firstName.trim(), lastName: editModal.lastName.trim(), phone: editModal.phone.trim() });
-      updateUser({ firstName: editModal.firstName.trim(), lastName: editModal.lastName.trim(), phone: editModal.phone.trim() });
-      toast.success('Profile updated', { id: t });
-      setEditModal(p => ({ ...p, open: false }));
-    } catch (e) {
-      toast.error(e.message || 'Failed to update', { id: t });
+      await updateCurrentUser(next);
+      updateUser(next);
+      toast.success('Profile updated');
+      setEditing(false);
+    } catch (err) {
+      setProfileError(err.message || 'Couldn’t save your profile');
     } finally {
-      setSavingPersonal(false);
+      setSavingProfile(false);
     }
   };
 
-  const handleChangePassword = async () => {
-    const oldPassword = passwordModal.oldPassword.trim();
-    const newPassword = passwordModal.newPassword.trim();
-    const confirmPassword = passwordModal.confirmPassword.trim();
-
-    if (!oldPassword) return toast.error('Current password is required');
-    if (!newPassword || newPassword.length < 8) return toast.error('New password must be at least 8 characters');
-    if (newPassword !== confirmPassword) return toast.error('Passwords do not match');
-
-    setChangingPassword(true);
-    const loadingToast = toast.loading('Changing password...');
+  const savePassword = async (e) => {
+    e.preventDefault();
+    // Passwords are sent exactly as typed — spaces are never trimmed
+    if (!pw.oldPassword) return setPwError('Enter your current password');
+    if (!isPasswordValid(pw.newPassword)) return setPwError('Your new password doesn’t meet all the requirements');
+    if (pw.newPassword === pw.oldPassword) return setPwError('Choose a password different from your current one');
+    if (pw.newPassword !== pw.confirmPassword) return setPwError('The new passwords don’t match');
+    setSavingPw(true);
     try {
-      await changePassword(oldPassword, newPassword);
-      toast.success('Password changed successfully', { id: loadingToast });
-      closePasswordModal();
-    } catch (error) {
-      toast.error(error?.message || 'Failed to change password', { id: loadingToast });
+      await changePassword(pw.oldPassword, pw.newPassword);
+      toast.success('Password changed');
+      setPw(EMPTY_PASSWORDS);
+      setPwOpen(false);
+    } catch (err) {
+      setPwError(err.message || 'Couldn’t change your password');
     } finally {
-      setChangingPassword(false);
+      setSavingPw(false);
     }
   };
 
   return (
     <AdminLayout activeItemOverride="settings" title="Settings">
       <div className="space-y-5">
+        <PageHeader title="Settings" subtitle="Your admin profile and sign-in security" />
 
-        {/* Header */}
-        <div className="rounded-2xl bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-5 py-5 text-white shadow-sm relative overflow-hidden">
-          <div className="absolute -top-3 -right-3 text-7xl opacity-10 select-none">★</div>
-          <p className="text-[10px] font-semibold opacity-60 uppercase tracking-widest mb-1">Admin</p>
-          <h1 className="text-2xl font-black">Account Settings</h1>
-          <p className="text-sm opacity-70 mt-1">Manage your admin profile details and account access.</p>
-        </div>
-
-        {/* Profile info */}
-        <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-[#002046]/[0.08] flex items-center justify-center flex-shrink-0">
-                <span className="material-symbols-outlined text-[#002046] text-lg">manage_accounts</span>
-              </div>
-              <p className="text-sm font-black text-slate-900">Admin Account</p>
-            </div>
-            <button onClick={openEditModal} className="flex items-center gap-1.5 rounded-xl bg-[#002046] text-white px-4 py-2 text-sm font-semibold hover:bg-[#003a80] transition-colors">
-              <span className="material-symbols-outlined text-base">edit</span>
-              Edit
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] xl:items-start">
+          <Card title="Profile" icon="badge" action={!editing && (
+            <button onClick={startEdit} className="inline-flex items-center gap-1 text-sm font-bold text-primary hover:text-[#FF8A65]">
+              <span className="material-symbols-outlined text-[18px]">edit</span>Edit
             </button>
-          </div>
-          <div className="px-5 py-5">
-            {/* Avatar */}
-            <div className="flex items-center gap-4 mb-5">
-              <div className="relative flex-shrink-0">
-                {user?.profilePictureUrl ? (
-                  <img src={user.profilePictureUrl} alt="Profile" className="w-20 h-20 rounded-full object-cover ring-2 ring-slate-200" />
-                ) : (
-                  <div className="w-20 h-20 rounded-full bg-[#002046] flex items-center justify-center ring-2 ring-slate-200">
-                    <span className="text-2xl font-black text-white select-none">{(user?.firstName?.[0] || 'A').toUpperCase()}</span>
-                  </div>
-                )}
-                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingAvatar}
-                  className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-white ring-2 ring-slate-200 flex items-center justify-center shadow-sm hover:bg-slate-50 disabled:opacity-60">
-                  {uploadingAvatar
-                    ? <div className="w-3 h-3 rounded-full border border-[#002046]/20 border-t-[#002046] animate-spin" />
-                    : <span className="material-symbols-outlined text-slate-600" style={{ fontSize: '14px' }}>photo_camera</span>}
-                </button>
-                <input ref={fileInputRef} type="file" accept="image/jpeg,image/jpg,image/png,image/webp,image/gif" className="hidden" onChange={handleAvatarChange} />
-              </div>
-              <div>
-                <p className="text-base font-black text-slate-900">{[user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Admin'}</p>
-                <p className="text-sm text-slate-500 mt-0.5">{user?.email || ''}</p>
-                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploadingAvatar}
-                  className="mt-2 text-xs font-semibold text-[#002046] hover:underline disabled:opacity-60">
-                  {uploadingAvatar ? 'Uploading...' : 'Change photo'}
-                </button>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 mb-5">
-              {[
-                { label: 'Full Name', value: [user?.firstName, user?.lastName].filter(Boolean).join(' ') || 'Admin', icon: 'person' },
-                { label: 'Email', value: user?.email || '--', icon: 'mail' },
-                { label: 'Phone', value: user?.phone || '--', icon: 'phone' },
-                { label: 'Role', value: user?.role || 'ADMIN', icon: 'badge' },
-              ].map(({ label, value, icon }) => (
-                <div key={label} className="rounded-xl bg-slate-50 ring-1 ring-slate-200 p-4 flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-[#002046]/[0.07] flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <span className="material-symbols-outlined text-sm text-[#002046]">{icon}</span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">{label}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900 truncate">{value}</p>
-                  </div>
+          )}>
+            <div className="p-5">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <Avatar name={fullName} src={user?.profilePictureUrl} size="w-20 h-20 text-xl" />
+                  <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} aria-label="Change profile photo"
+                    className="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center hover:border-[#FF8A65] disabled:opacity-60">
+                    {uploading
+                      ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary/20 border-t-primary" />
+                      : <span className="material-symbols-outlined text-[16px] text-slate-600">photo_camera</span>}
+                  </button>
+                  <input ref={fileInputRef} type="file" accept={IMAGE_TYPES.join(',')} className="hidden" onChange={onAvatar} />
                 </div>
-              ))}
+                <div className="min-w-0">
+                  <p className="text-lg font-black text-slate-900 truncate">{fullName}</p>
+                  <p className="text-sm text-slate-500 truncate">{user?.email}</p>
+                  <span className="mt-1.5 inline-flex rounded-full bg-[#FDBA74]/25 px-2.5 py-0.5 text-[11px] font-bold text-orange-700">Administrator</span>
+                </div>
+              </div>
+
+              {editing ? (
+                <form onSubmit={saveProfile} className="mt-6 space-y-4" noValidate>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className={LABEL} htmlFor="first">First name</label>
+                      <input id="first" className={INPUT} value={profile.firstName} autoComplete="given-name" onChange={(e) => { setProfile((p) => ({ ...p, firstName: e.target.value })); setProfileError(''); }} />
+                    </div>
+                    <div>
+                      <label className={LABEL} htmlFor="last">Last name</label>
+                      <input id="last" className={INPUT} value={profile.lastName} autoComplete="family-name" onChange={(e) => setProfile((p) => ({ ...p, lastName: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className={LABEL} htmlFor="phone">Mobile number</label>
+                      <input id="phone" className={INPUT} value={profile.phone} inputMode="numeric" autoComplete="tel-national"
+                        onChange={(e) => { setProfile((p) => ({ ...p, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })); setProfileError(''); }} placeholder="10-digit mobile" />
+                    </div>
+                    <div>
+                      <label className={LABEL} htmlFor="email">Email <span className="font-normal text-slate-400">can’t be changed</span></label>
+                      <input id="email" className={INPUT} value={user?.email || ''} disabled />
+                    </div>
+                  </div>
+                  {profileError && <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">{profileError}</p>}
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={() => setEditing(false)} disabled={savingProfile} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">Cancel</button>
+                    <button type="submit" disabled={savingProfile} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-[#102A4C] disabled:opacity-50">{savingProfile ? 'Saving…' : 'Save changes'}</button>
+                  </div>
+                </form>
+              ) : (
+                <dl className="mt-6 grid gap-x-6 gap-y-4 sm:grid-cols-2">
+                  {[['Full name', fullName], ['Email', user?.email || '—'], ['Mobile number', user?.phone || 'Not added'], ['Role', 'Administrator']].map(([k, v]) => (
+                    <div key={k} className="min-w-0">
+                      <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{k}</dt>
+                      <dd className="mt-0.5 text-sm font-semibold text-slate-900 truncate">{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
             </div>
-            <div className="flex flex-wrap gap-3">
-              <button onClick={() => setPasswordModal((prev) => ({ ...prev, open: true }))} className="rounded-xl bg-[#002046] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#003a80] transition-colors">
-                Change Password
-              </button>
-              <button onClick={() => { logout(); navigate(ROUTES.LOGIN); }} className="rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-600 ring-1 ring-red-200 hover:bg-red-100 transition-colors">
-                Logout
-              </button>
-            </div>
+          </Card>
+
+          <div className="space-y-5">
+            <Card title="Sign-in & security" icon="lock">
+              <div className="p-5">
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">Sign-in method</p>
+                    <p className="text-xs text-slate-500">{hasPassword ? 'Email and password' : 'Google account'}</p>
+                  </div>
+                  <span className="material-symbols-outlined text-slate-400">{hasPassword ? 'password' : 'account_circle'}</span>
+                </div>
+
+                {!hasPassword ? (
+                  <p className="mt-4 text-sm text-slate-600">You sign in with Google, so there’s no TripGo password to change. Manage your password in your Google account.</p>
+                ) : !pwOpen ? (
+                  <button onClick={() => { setPwOpen(true); setPwError(''); }} className="mt-4 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 hover:border-[#FF8A65]">
+                    <span className="material-symbols-outlined text-[18px]">key</span>Change password
+                  </button>
+                ) : (
+                  <form onSubmit={savePassword} className="mt-4 space-y-3" noValidate>
+                    {[['oldPassword', 'Current password', 'current-password'], ['newPassword', 'New password', 'new-password'], ['confirmPassword', 'Confirm new password', 'new-password']].map(([key, label, ac]) => (
+                      <div key={key}>
+                        <label className={LABEL} htmlFor={key}>{label}</label>
+                        <input id={key} type={showPw ? 'text' : 'password'} autoComplete={ac} className={INPUT} value={pw[key]}
+                          onChange={(e) => { setPw((p) => ({ ...p, [key]: e.target.value })); setPwError(''); }} />
+                      </div>
+                    ))}
+                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-600 cursor-pointer">
+                      <input type="checkbox" checked={showPw} onChange={(e) => setShowPw(e.target.checked)} className="accent-[#0B1F3A]" />Show passwords
+                    </label>
+                    {pw.newPassword && (
+                      <ul className="grid gap-1 rounded-xl bg-slate-50 px-4 py-3 sm:grid-cols-2">
+                        {PASSWORD_RULES.map((rule) => {
+                          const ok = rule.test(pw.newPassword);
+                          return (
+                            <li key={rule.id} className={`flex items-center gap-1.5 text-xs ${ok ? 'text-green-700' : 'text-slate-500'}`}>
+                              <span className="material-symbols-outlined text-[16px]">{ok ? 'check_circle' : 'radio_button_unchecked'}</span>{rule.label}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                    {pwError && <p className="rounded-xl bg-red-50 px-4 py-2.5 text-sm text-red-700">{pwError}</p>}
+                    <div className="flex justify-end gap-2">
+                      <button type="button" onClick={() => { setPwOpen(false); setPw(EMPTY_PASSWORDS); }} disabled={savingPw} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">Cancel</button>
+                      <button type="submit" disabled={savingPw} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-[#102A4C] disabled:opacity-50">{savingPw ? 'Saving…' : 'Update password'}</button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            </Card>
+
+            <Card>
+              <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+                <div>
+                  <p className="font-bold text-slate-900">Sign out</p>
+                  <p className="text-sm text-slate-500">End your session on this device.</p>
+                </div>
+                <button onClick={() => { logout(); navigate(ROUTES.LOGIN); }} className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 px-4 py-2.5 text-sm font-bold text-red-600 hover:bg-red-50">
+                  <span className="material-symbols-outlined text-[18px]">logout</span>Sign out
+                </button>
+              </div>
+            </Card>
           </div>
         </div>
       </div>
-
-      {/* Edit Profile Modal */}
-      {editModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl ring-1 ring-slate-200/70">
-            <div className="flex items-center justify-between gap-4 mb-5">
-              <h2 className="text-xl font-black text-slate-900">Edit Profile</h2>
-              <button onClick={() => setEditModal(p => ({ ...p, open: false }))} className="rounded-xl bg-slate-100 p-2 text-slate-500 hover:bg-slate-200">
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">First Name *</label>
-                  <input type="text" value={editModal.firstName} onChange={e => setEditModal(p => ({ ...p, firstName: e.target.value }))} placeholder="First name" className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Last Name</label>
-                  <input type="text" value={editModal.lastName} onChange={e => setEditModal(p => ({ ...p, lastName: e.target.value }))} placeholder="Last name" className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phone</label>
-                <input type="tel" value={editModal.phone} onChange={e => setEditModal(p => ({ ...p, phone: e.target.value }))} placeholder="Phone number" className="w-full rounded-2xl bg-slate-50 px-4 py-3 text-sm outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-[#002046]/40" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1.5">Email</label>
-                <input type="email" value={user?.email || ''} disabled className="w-full rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-400 outline-none ring-1 ring-slate-200 cursor-not-allowed" />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setEditModal(p => ({ ...p, open: false }))} className="flex-1 rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-200">Cancel</button>
-              <button onClick={handleSavePersonal} disabled={savingPersonal} className="flex-1 rounded-2xl bg-[#002046] px-4 py-3 text-sm font-bold text-white hover:bg-[#003a80] disabled:opacity-60">
-                {savingPersonal ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Change Password Modal */}
-      {passwordModal.open ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-slate-200">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h3 className="text-lg font-black text-slate-900">Change Password</h3>
-                <p className="text-xs text-slate-500 mt-0.5">Enter your current password and set a new one.</p>
-              </div>
-              <button onClick={closePasswordModal} className="rounded-xl bg-slate-100 p-2 text-slate-500 hover:bg-slate-200 transition-colors">
-                <span className="material-symbols-outlined text-lg">close</span>
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="mb-1 block text-xs text-slate-500">Current Password *</label>
-                <input type="password" value={passwordModal.oldPassword} onChange={(e) => setPasswordModal((prev) => ({ ...prev, oldPassword: e.target.value }))} placeholder="Enter current password" className={INPUT_CLASS} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-slate-500">New Password *</label>
-                <input type="password" value={passwordModal.newPassword} onChange={(e) => setPasswordModal((prev) => ({ ...prev, newPassword: e.target.value }))} placeholder="Enter new password" className={INPUT_CLASS} />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-slate-500">Confirm Password *</label>
-                <input type="password" value={passwordModal.confirmPassword} onChange={(e) => setPasswordModal((prev) => ({ ...prev, confirmPassword: e.target.value }))} placeholder="Confirm new password" className={INPUT_CLASS} />
-              </div>
-            </div>
-            <div className="mt-5 flex gap-3">
-              <button onClick={closePasswordModal} className="flex-1 rounded-xl bg-slate-100 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-200 transition-colors">
-                Cancel
-              </button>
-              <button onClick={handleChangePassword} disabled={changingPassword} className="flex-1 rounded-xl bg-[#002046] py-2.5 text-sm font-bold text-white hover:bg-[#003a80] transition-colors disabled:opacity-60">
-                {changingPassword ? 'Changing...' : 'Change Password'}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </AdminLayout>
   );
 };

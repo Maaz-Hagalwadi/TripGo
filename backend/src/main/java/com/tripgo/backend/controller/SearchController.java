@@ -1,5 +1,7 @@
 package com.tripgo.backend.controller;
 
+import com.tripgo.backend.config.AppTime;
+
 import com.tripgo.backend.dto.response.PopularRouteResponse;
 import com.tripgo.backend.dto.response.SearchResponse;
 import com.tripgo.backend.dto.response.SeatAvailability;
@@ -68,8 +70,8 @@ public class SearchController {
         
         List<RouteSchedule> schedules = scheduleRepo.findByFromAndToAndDate(
                 normalizedFrom, normalizedTo,
-                date.atStartOfDay(java.time.ZoneOffset.UTC).toInstant(),
-                date.plusDays(1).atStartOfDay(java.time.ZoneOffset.UTC).toInstant()
+                date.atStartOfDay(AppTime.ZONE).toInstant(),
+                date.plusDays(1).atStartOfDay(AppTime.ZONE).toInstant()
         );
         
         return schedules.stream()
@@ -80,7 +82,10 @@ public class SearchController {
                 })
                 .map(schedule -> {
                     Instant adjustedDeparture = adjustToDate(schedule.getDepartureTime(), date);
-                    Instant adjustedArrival = adjustToDate(schedule.getArrivalTime(), date);
+                    // Keep the trip duration: projecting the arrival onto the same date separately put
+                    // overnight arrivals (e.g. 20:00 → 01:00) before the departure.
+                    Instant adjustedArrival = adjustedDeparture.plus(
+                            java.time.Duration.between(schedule.getDepartureTime(), schedule.getArrivalTime()));
 
                     RouteSchedule adjustedSchedule = new RouteSchedule();
                     adjustedSchedule.setId(schedule.getId());
@@ -122,9 +127,9 @@ public class SearchController {
     }
     
     private Instant adjustToDate(Instant originalTime, LocalDate targetDate) {
-        java.time.LocalDateTime originalDateTime = java.time.LocalDateTime.ofInstant(originalTime, java.time.ZoneOffset.UTC);
+        java.time.LocalDateTime originalDateTime = java.time.LocalDateTime.ofInstant(originalTime, AppTime.ZONE);
         java.time.LocalTime timeOfDay = originalDateTime.toLocalTime();
-        return targetDate.atTime(timeOfDay).toInstant(java.time.ZoneOffset.UTC);
+        return targetDate.atTime(timeOfDay).atZone(AppTime.ZONE).toInstant();
     }
     
 }

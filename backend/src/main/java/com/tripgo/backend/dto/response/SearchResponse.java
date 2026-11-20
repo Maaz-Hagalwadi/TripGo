@@ -7,6 +7,7 @@ import java.util.UUID;
 
 public record SearchResponse(
         UUID scheduleId,
+        UUID busId,
         String busName,
         String busCode,
         String busType,

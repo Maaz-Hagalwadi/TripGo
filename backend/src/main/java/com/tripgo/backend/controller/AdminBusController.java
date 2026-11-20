@@ -1,7 +1,7 @@
 package com.tripgo.backend.controller;
 
 import com.tripgo.backend.dto.response.AmenityDTO;
-import com.tripgo.backend.dto.response.BusResponse;
+import com.tripgo.backend.dto.response.AdminBusResponse;
 import com.tripgo.backend.model.entities.AmenityMaster;
 import com.tripgo.backend.model.entities.Bus;
 import com.tripgo.backend.repository.BusRepository;
@@ -26,20 +26,20 @@ public class AdminBusController {
     private final com.tripgo.backend.repository.UserRepository userRepository;
 
     @GetMapping
-    public List<BusResponse> listBuses(@RequestParam(required = false) Boolean active) {
+    public List<AdminBusResponse> listBuses(@RequestParam(required = false) Boolean active) {
         List<Bus> buses = active != null ? busRepository.findByActiveWithAmenities(active) : busRepository.findAllWithAmenities();
         return buses.stream().map(this::toResponse).toList();
     }
 
     @GetMapping("/{id}")
-    public BusResponse getBus(@PathVariable UUID id) {
+    public AdminBusResponse getBus(@PathVariable UUID id) {
         Bus bus = busRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Bus not found"));
         return toResponse(bus);
     }
 
     @PostMapping("/{id}/approve")
-    public BusResponse approveBus(@PathVariable UUID id) {
+    public AdminBusResponse approveBus(@PathVariable UUID id) {
         Bus bus = busRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Bus not found"));
         bus.setActive(true);
@@ -54,7 +54,7 @@ public class AdminBusController {
     }
 
     @PostMapping("/{id}/reject")
-    public BusResponse rejectBus(@PathVariable UUID id) {
+    public AdminBusResponse rejectBus(@PathVariable UUID id) {
         Bus bus = busRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Bus not found"));
         bus.setActive(false);
@@ -78,8 +78,8 @@ public class AdminBusController {
         return ResponseEntity.ok("Bus permanently deleted from database");
     }
 
-    private BusResponse toResponse(Bus bus) {
-        return new BusResponse(
+    private AdminBusResponse toResponse(Bus bus) {
+        return new AdminBusResponse(
                 bus.getId(),
                 bus.getName(),
                 bus.getBusCode(),
@@ -92,6 +92,8 @@ public class AdminBusController {
                         .sorted(Comparator.comparing(AmenityMaster::getCode))
                         .map(a -> new AmenityDTO(a.getId(), a.getCode(), a.getDescription()))
                         .toList(),
+                bus.getOperator() != null ? bus.getOperator().getId() : null,
+                bus.getOperator() != null ? bus.getOperator().getName() : null,
                 bus.getCreatedAt(),
                 bus.getUpdatedAt()
         );

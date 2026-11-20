@@ -7,9 +7,15 @@ import UserRescheduleModal from '../components/UserRescheduleModal';
 import BusTrackingMap from '../components/BusTrackingMap';
 import { getMyCompletedTrips, submitTripRating } from '../../../api/reviewService';
 import { ROUTES } from '../../../shared/constants/routes';
-import { formatUtcDateTime } from '../../../shared/utils/scheduleSearchUtils';
+import { formatIstDateTime, formatIstTime, onTravelDate, toIstYmd, TRIP_TIME_ZONE } from '../../../shared/utils/scheduleSearchUtils';
+import { localDateString } from '../../../shared/utils/date';
+import PaginationControls from '../../../shared/components/ui/PaginationControls';
+import { shareTrip } from '../../../shared/utils/shareTrip';
+import { WALLET_ENABLED } from '../../../shared/constants/features';
 
 const PAYMENT_STORAGE_KEY = 'tripgo_pending_payment';
+// Matches BookingExpiryService.PAYMENT_WINDOW: unpaid bookings are cancelled this long after creation
+const PAYMENT_WINDOW_MS = 20 * 60000;
 const REVIEW_PROMPT_STORAGE_KEY = 'tripgo_last_review_prompt';
 const PAGE_SIZE = 10;
 
@@ -23,7 +29,7 @@ const normalizeList = (data) => {
 
 const formatDateTime = (value) => {
   const date = value ? new Date(value) : null;
-  if (!date || Number.isNaN(date.getTime())) return formatUtcDateTime(value);
+  if (!date || Number.isNaN(date.getTime())) return formatIstDateTime(value);
   return new Intl.DateTimeFormat('en-IN', {
     day: '2-digit',
     month: 'short',
@@ -31,6 +37,7 @@ const formatDateTime = (value) => {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
+    timeZone: TRIP_TIME_ZONE,
   }).format(date);
 };
 
@@ -74,8 +81,9 @@ const getPendingPayment = () => {
   }
 };
 
+// The stored checkout is written when the payment page opens; `paid` is set only once Stripe succeeds
 const buildOptimisticBookingFromPendingPayment = (pendingPayment) => {
-  if (!pendingPayment) return null;
+  if (!pendingPayment?.paid) return null;
 
   const bookingState = pendingPayment?.bookingState || {};
   const passengers = Array.isArray(bookingState?.passengers) ? bookingState.passengers : [];
@@ -135,7 +143,7 @@ const getDisplayStatus = (booking, pendingPayment) => {
   const rawStatus = String(booking?.status || 'CONFIRMED').toUpperCase();
   const paymentStatus = String(booking?.paymentStatus || '').toUpperCase();
 
-  if (rawStatus === 'PENDING' && isPendingPaymentMatch(booking, pendingPayment)) {
+  if (rawStatus === 'PENDING' && pendingPayment?.paid && isPendingPaymentMatch(booking, pendingPayment)) {
     return 'PAYMENT_SUCCESSFUL';
   }
 
@@ -146,13 +154,6 @@ const getDisplayStatus = (booking, pendingPayment) => {
   return rawStatus;
 };
 
-
-const getRefundStatusMeta = (refundStatus) => {
-  const upper = String(refundStatus || 'NA').toUpperCase();
-  if (upper === 'PROCESSED') return { label: 'Refund processed', className: 'bg-emerald-50 text-emerald-700' };
-  if (upper === 'PENDING') return { label: 'Refund pending', className: 'bg-amber-50 text-amber-700' };
-  return { label: 'No refund', className: 'bg-slate-100 text-slate-700' };
-};
 
 const RefundTimeline = ({ booking }) => {
   const refundStatus = String(booking?.refundStatus || 'NA').toUpperCase();
@@ -204,10 +205,10 @@ const RefundTimeline = ({ booking }) => {
 
 const getCancelledByLabel = (cancelledBy) => {
   const upper = String(cancelledBy || '').toUpperCase();
-  if (!upper) return '--';
+  if (!upper) return '';
   if (upper === 'USER') return 'You';
   if (upper === 'OPERATOR') return 'The operator';
-  if (upper === 'SYSTEM') return 'Cancelled by System';
+  if (upper === 'SYSTEM') return 'TripGo';
   return upper;
 };
 
@@ -227,30 +228,16 @@ const getTravelDateKey = (booking) => {
   const departureValue = booking?.departureTime || booking?.schedule?.departureTime || booking?.scheduledDepartureTime;
   const departure = departureValue ? new Date(departureValue) : null;
   if (!departure || Number.isNaN(departure.getTime())) return '';
-
-  const year = departure.getFullYear();
-  const month = String(departure.getMonth() + 1).padStart(2, '0');
-  const day = String(departure.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return toIstYmd(departure);
 };
 
 const getResolvedDepartureInstant = (booking) => {
   const departureValue = booking?.departureTime || booking?.schedule?.departureTime || booking?.scheduledDepartureTime;
   const explicitTravelDate = String(booking?.travelDate || '').trim();
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(explicitTravelDate) && departureValue) {
-    const departure = new Date(departureValue);
-    if (!Number.isNaN(departure.getTime())) {
-      return new Date(Date.UTC(
-        Number(explicitTravelDate.slice(0, 4)),
-        Number(explicitTravelDate.slice(5, 7)) - 1,
-        Number(explicitTravelDate.slice(8, 10)),
-        departure.getUTCHours(),
-        departure.getUTCMinutes(),
-        departure.getUTCSeconds(),
-        departure.getUTCMilliseconds()
-      ));
-    }
+  if (explicitTravelDate && departureValue) {
+    const projected = onTravelDate(explicitTravelDate, departureValue);
+    if (projected) return projected;
   }
 
   const fallback = getDepartureValue(booking);
@@ -259,32 +246,37 @@ const getResolvedDepartureInstant = (booking) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-const getTodayDateKey = () => {
-  const today = new Date();
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-};
+const getTodayDateKey = () => toIstYmd(new Date());
 
 const isConfirmedBooking = (booking) => String(booking?.status || '').toUpperCase() === 'CONFIRMED';
-const isPaymentReceivedBooking = (booking) => {
-  const status = String(booking?.__displayStatus || booking?.status || '').toUpperCase();
-  return status === 'PAYMENT_SUCCESSFUL' || status === 'PAYMENT_RECEIVED' || status === 'PENDING';
-};
 
-const calculateUserRefundPreview = (booking) => {
+// Mirrors the backend RefundPolicy: the slab with the highest "hours before departure" that applies wins
+const DEFAULT_REFUND_SLABS = [
+  { hoursBeforeDeparture: 24, refundPercent: 75, label: '24+ hrs before departure' },
+  { hoursBeforeDeparture: 12, refundPercent: 50, label: '12–24 hrs before' },
+  { hoursBeforeDeparture: 4, refundPercent: 25, label: '4–12 hrs before' },
+  { hoursBeforeDeparture: 0, refundPercent: 0, label: 'Less than 4 hrs' },
+];
+
+const getRefundSlabs = (slabs) => (Array.isArray(slabs) && slabs.length ? slabs : DEFAULT_REFUND_SLABS);
+
+const calculateUserRefundPreview = (booking, slabs) => {
   const departureMs = getResolvedDepartureInstant(booking)?.getTime() ?? NaN;
   const totalAmount = Number(booking?.payableAmount ?? booking?.totalAmount ?? booking?.amount ?? 0);
   if (!Number.isFinite(departureMs) || !Number.isFinite(totalAmount)) return { percent: 0, amount: 0 };
   const hoursLeft = (departureMs - Date.now()) / 3600000;
+  let bestHours = -1;
   let percent = 0;
-  if (hoursLeft > 24) percent = 75;
-  else if (hoursLeft > 12) percent = 50;
-  else if (hoursLeft > 4) percent = 25;
+  getRefundSlabs(slabs).forEach((slab) => {
+    const hours = Number(slab?.hoursBeforeDeparture ?? 0);
+    if (hoursLeft >= hours && hours > bestHours) {
+      bestHours = hours;
+      percent = Math.round(Number(slab?.refundPercent ?? 0));
+    }
+  });
+  percent = Math.max(0, Math.min(100, percent));
   return { percent, amount: Math.max(0, Math.round((totalAmount * percent) / 100)) };
 };
-
-const isUpcomingBooking = (booking, todayKey = getTodayDateKey()) => (
-  (isConfirmedBooking(booking) || isPaymentReceivedBooking(booking)) && getTravelDateKey(booking) >= todayKey
-);
 
 const getScheduleId = (booking) => String(
   booking?.scheduleId ||
@@ -293,27 +285,13 @@ const getScheduleId = (booking) => String(
   ''
 ).trim();
 
-const canReschedule = (booking) => {
+const canReschedule = (booking, minHours = 12) => {
   const dept = booking?.departureTime;
   const travelDate = booking?.travelDate;
   if (!dept) return false;
-  const deptInstant = new Date(dept);
-  let actualDeparture;
-  if (travelDate) {
-    actualDeparture = new Date(travelDate + 'T00:00:00.000Z');
-    actualDeparture.setUTCHours(deptInstant.getUTCHours(), deptInstant.getUTCMinutes(), deptInstant.getUTCSeconds(), 0);
-  } else {
-    actualDeparture = deptInstant;
-  }
-  return (actualDeparture.getTime() - Date.now()) / 3600000 >= 12;
+  const actualDeparture = (travelDate && onTravelDate(travelDate, dept)) || new Date(dept);
+  return (actualDeparture.getTime() - Date.now()) / 3600000 >= minHours;
 };
-
-const InlineLoader = ({ label }) => (
-  <div className="inline-flex items-center gap-3 text-sm text-slate-500">
-    <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary/40 border-t-primary" />
-    <span>{label}</span>
-  </div>
-);
 
 const CenterScreenLoader = ({ label }) => (
   <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
@@ -336,7 +314,7 @@ const RatingModal = ({ booking, onClose, onSubmit, submitting }) => {
       <div className="w-full max-w-lg rounded-[28px] bg-white p-6 shadow-2xl ring-1 ring-slate-200/70">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/80">Rate your trip</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-600">Rate your trip</p>
             <h2 className="mt-2 text-2xl font-black text-slate-900">{booking?.from || '--'} to {booking?.to || '--'}</h2>
             <p className="mt-2 text-sm text-slate-500">Share a quick review to help future travelers choose with confidence.</p>
           </div>
@@ -355,7 +333,7 @@ const RatingModal = ({ booking, onClose, onSubmit, submitting }) => {
                 onClick={() => setRating(value)}
                 className="transition-transform hover:scale-110 active:scale-95 p-1"
               >
-                <span className={`material-symbols-outlined text-4xl transition-colors ${rating >= value ? 'text-amber-400' : 'text-slate-300'}`}
+                <span className={`material-symbols-outlined text-4xl transition-colors ${rating >= value ? 'text-[#FF8A65]' : 'text-slate-300'}`}
                   style={{ fontVariationSettings: rating >= value ? "'FILL' 1" : "'FILL' 0" }}>
                   star
                 </span>
@@ -386,7 +364,7 @@ const RatingModal = ({ booking, onClose, onSubmit, submitting }) => {
           <button
             onClick={() => onSubmit({ rating, comment })}
             disabled={submitting}
-            className="flex-1 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-black hover:bg-primary/90 disabled:opacity-60"
+            className="flex-1 rounded-2xl bg-primary px-4 py-3 text-sm font-bold text-white hover:bg-[#102A4C] disabled:opacity-60"
           >
             {submitting ? 'Submitting...' : 'Submit review'}
           </button>
@@ -396,14 +374,15 @@ const RatingModal = ({ booking, onClose, onSubmit, submitting }) => {
   );
 };
 
-const UserCancelModal = ({ booking, reason, setReason, onClose, onConfirm, submitting }) => {
-  const preview = calculateUserRefundPreview(booking);
+const UserCancelModal = ({ booking, slabs, reason, setReason, refundTo, setRefundTo, onClose, onConfirm, submitting }) => {
+  const preview = calculateUserRefundPreview(booking, slabs);
+  const rules = [...getRefundSlabs(slabs)].sort((a, b) => Number(b.hoursBeforeDeparture) - Number(a.hoursBeforeDeparture));
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
       <div className="w-full max-w-xl rounded-[28px] bg-white p-6 shadow-2xl ring-1 ring-slate-200/70">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary/80">Cancel booking</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-500">Cancel booking</p>
             <h2 className="mt-2 text-2xl font-black text-slate-900">{booking?.from || '--'} to {booking?.to || '--'}</h2>
             <p className="mt-2 text-sm text-slate-500">Review the refund policy before cancelling this trip.</p>
           </div>
@@ -412,12 +391,14 @@ const UserCancelModal = ({ booking, reason, setReason, onClose, onConfirm, submi
           </button>
         </div>
         <div className="mt-6 rounded-2xl bg-slate-50 p-4 ring-1 ring-slate-200/70">
-          <p className="text-sm font-semibold text-slate-900">Refund policy</p>
-          <div className="mt-3 space-y-2 text-sm text-slate-600">
-            <p>{'>'} 24 hrs: 75% refund</p>
-            <p>12-24 hrs: 50% refund</p>
-            <p>4-12 hrs: 25% refund</p>
-            <p>{'<'} 4 hrs: No refund</p>
+          <p className="text-sm font-semibold text-slate-900">This bus’s cancellation policy</p>
+          <div className="mt-3 space-y-1.5 text-sm text-slate-600">
+            {rules.map((slab) => (
+              <p key={`${slab.hoursBeforeDeparture}-${slab.refundPercent}`} className="flex justify-between gap-4">
+                <span>{slab.label || `${slab.hoursBeforeDeparture}+ hrs before departure`}</span>
+                <span className="font-semibold text-slate-900">{Number(slab.refundPercent) > 0 ? `${slab.refundPercent}% refund` : 'No refund'}</span>
+              </p>
+            ))}
           </div>
           <div className="mt-4 rounded-2xl bg-white px-4 py-3 ring-1 ring-slate-200/70">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Estimated refund</p>
@@ -425,6 +406,27 @@ const UserCancelModal = ({ booking, reason, setReason, onClose, onConfirm, submi
             <p className="mt-1 text-sm text-slate-500">{preview.percent}% refund based on current departure window.</p>
           </div>
         </div>
+        {WALLET_ENABLED && preview.amount > 0 && (
+          <fieldset className="mt-5">
+            <legend className="mb-2 text-sm font-semibold text-slate-900">Where should we send your refund?</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[
+                { id: 'CREDIT', title: 'TripGo credit', sub: 'Instant · use on your next booking', icon: 'bolt' },
+                { id: 'ORIGINAL', title: 'Original payment', sub: '5–7 business days', icon: 'credit_card' },
+              ].map((opt) => (
+                <label key={opt.id} className={`flex items-start gap-3 rounded-2xl border p-3 cursor-pointer transition-colors ${refundTo === opt.id ? 'border-[#FF8A65] bg-[#FFF7F2]' : 'border-slate-200 hover:border-slate-300'}`}>
+                  <input type="radio" name="refundTo" value={opt.id} checked={refundTo === opt.id} onChange={() => setRefundTo(opt.id)} className="mt-1 text-primary focus:ring-[#FDBA74]" />
+                  <span>
+                    <span className="flex items-center gap-1 text-sm font-bold text-slate-900">
+                      <span className="material-symbols-outlined text-[16px] text-orange-600">{opt.icon}</span>{opt.title}
+                    </span>
+                    <span className="text-xs text-slate-500">{opt.sub}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
         <div className="mt-5">
           <label className="mb-2 block text-sm font-semibold text-slate-900">Cancellation reason</label>
           <textarea
@@ -518,23 +520,6 @@ const getBookingBusName = (booking) => (
   booking?.schedule?.bus?.name ||
   ''
 );
-
-const getBookingScheduleLabel = (booking) => {
-  const departureValue = booking?.travelDate || booking?.departureTime || booking?.schedule?.departureTime || booking?.scheduledDepartureTime;
-  const arrivalValue = booking?.arrivalTime || booking?.schedule?.arrivalTime || booking?.scheduledArrivalTime;
-  const scheduleCode = booking?.scheduleCode || booking?.schedule?.scheduleCode || booking?.scheduleId || booking?.schedule?.id;
-
-  if (departureValue && arrivalValue) {
-    return `${formatDateTime(departureValue)} to ${formatDateTime(arrivalValue)}`;
-  }
-  if (departureValue) {
-    return formatDateTime(departureValue);
-  }
-  if (scheduleCode) {
-    return `Schedule ${scheduleCode}`;
-  }
-  return '--';
-};
 
 const toTitleCase = (value) => String(value || '')
   .trim()
@@ -703,6 +688,56 @@ const FilterModal = ({ open, filters, onChange, onApply, onReset, onClose }) => 
   );
 };
 
+const TABS = [
+  { id: 'upcoming', label: 'Upcoming' },
+  { id: 'completed', label: 'Completed' },
+  { id: 'cancelled', label: 'Cancelled' },
+  { id: 'all', label: 'All' },
+];
+
+const STATUS_META = {
+  CONFIRMED: { label: 'Confirmed', cls: 'bg-green-50 text-green-700', dot: 'bg-green-500' },
+  PAYMENT_SUCCESSFUL: { label: 'Paid', cls: 'bg-green-50 text-green-700', dot: 'bg-green-500' },
+  PAYMENT_RECEIVED: { label: 'Payment received', cls: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
+  PENDING: { label: 'Payment pending', cls: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500' },
+  COMPLETED: { label: 'Completed', cls: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
+  CANCELLED: { label: 'Cancelled', cls: 'bg-red-50 text-red-700', dot: 'bg-red-500' },
+  FAILED: { label: 'Payment not completed', cls: 'bg-slate-100 text-slate-600', dot: 'bg-slate-400' },
+};
+
+const isUnpaidStatus = (upper) => upper === 'FAILED' || upper === 'EXPIRED';
+
+// Trip times are shown in IST across TripGo (see scheduleSearchUtils)
+const formatTripDate = (d) => (d ? d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: TRIP_TIME_ZONE }) : '—');
+const formatTripTime = (d) => (d ? formatIstTime(d) : '');
+
+const shiftYmd = (ymd, days) => {
+  const d = new Date(`${ymd}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+const ActionButton = ({ icon, label, onClick, tone = 'default', disabled, title }) => {
+  const tones = {
+    primary: 'bg-primary text-white border-primary hover:bg-[#102A4C]',
+    default: 'bg-white text-slate-700 border-slate-200 hover:border-[#FF8A65] hover:text-primary',
+    danger: 'bg-white text-red-600 border-red-200 hover:bg-red-50',
+    accent: 'bg-[#FFF7F2] text-orange-700 border-[#FDBA74]/60 hover:bg-[#FDBA74]/20',
+  };
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${tones[tone]}`}
+    >
+      <span className="material-symbols-outlined text-[16px]">{icon}</span>
+      {label}
+    </button>
+  );
+};
+
 const UserBookings = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -711,29 +746,25 @@ const UserBookings = () => {
   const [completedTrips, setCompletedTrips] = useState([]);
   const [reviewModalBooking, setReviewModalBooking] = useState(null);
   const [submittingReview, setSubmittingReview] = useState(false);
-  const [tripTab, setTripTab] = useState('all');
+  const [tripTab, setTripTab] = useState('upcoming');
   const [cancelModalBooking, setCancelModalBooking] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
+  const [refundTo, setRefundTo] = useState('ORIGINAL');
   const [cancellingBookingId, setCancellingBookingId] = useState('');
   const [rescheduleModalBooking, setRescheduleModalBooking] = useState(null);
   const [policyMap, setPolicyMap] = useState({});
   const [page, setPage] = useState(0);
-  const [selectedBookings, setSelectedBookings] = useState(new Set());
-  const [viewMode, setViewMode] = useState(() => window.innerWidth < 768 ? 'grid' : 'list');
   const [filterOpen, setFilterOpen] = useState(false);
   const [pendingFilters, setPendingFilters] = useState(EMPTY_FILTERS);
   const [activeFilters, setActiveFilters] = useState(EMPTY_FILTERS);
-  const [trackingScheduleId, setTrackingScheduleId] = useState(null);
-  const [trackingRouteFrom, setTrackingRouteFrom] = useState('');
-  const [trackingRouteTo, setTrackingRouteTo] = useState('');
+  const [tracking, setTracking] = useState(null);
   const pendingPayment = useMemo(() => getPendingPayment(), []);
 
   const fetchBookings = async () => {
     try {
       setLoading(true);
       const data = await getMyBookings();
-      const normalized = normalizeList(data).sort((a, b) => getBookingTimestamp(b) - getBookingTimestamp(a));
-      setBookings(normalized);
+      setBookings(normalizeList(data).sort((a, b) => getBookingTimestamp(b) - getBookingTimestamp(a)));
     } catch (error) {
       toast.error(error?.message || 'Failed to load your bookings.');
       setBookings([]);
@@ -744,8 +775,7 @@ const UserBookings = () => {
 
   const fetchCompletedTrips = async () => {
     try {
-      const data = await getMyCompletedTrips();
-      setCompletedTrips(normalizeList(data));
+      setCompletedTrips(normalizeList(await getMyCompletedTrips()));
     } catch {
       setCompletedTrips([]);
     }
@@ -753,9 +783,6 @@ const UserBookings = () => {
 
   useEffect(() => {
     fetchBookings();
-  }, []);
-
-  useEffect(() => {
     fetchCompletedTrips();
   }, []);
 
@@ -766,12 +793,13 @@ const UserBookings = () => {
       try {
         const p = await getSchedulePolicies(sid);
         setPolicyMap((prev) => ({ ...prev, [sid]: p }));
-      } catch {}
+      } catch {
+        // policy unavailable — reschedule stays hidden for this booking
+      }
     });
   }, [bookings]);
 
   const latestBooking = location.state?.latestBooking;
-  const hasFreshBooking = Boolean(latestBooking);
 
   const visibleBookings = useMemo(() => {
     const optimisticPendingBooking = buildOptimisticBookingFromPendingPayment(pendingPayment);
@@ -783,43 +811,29 @@ const UserBookings = () => {
       ...bookings,
       ...(!latestBooking && optimisticPendingBooking && !hasPendingBookingInApi ? [optimisticPendingBooking] : []),
     ];
-    const dedupedById = [];
+    const deduped = [];
     const seenIds = new Set();
-
     merged.forEach((item) => {
       const identity = getBookingIdentity(item);
       if (!identity || !seenIds.has(identity)) {
         if (identity) seenIds.add(identity);
-        dedupedById.push(item);
+        deduped.push(item);
       }
     });
 
+    // Collapse optimistic/duplicate rows of the same trip, keeping the most advanced status
     const collapsedByTrip = new Map();
-
-    dedupedById.forEach((item) => {
+    deduped.forEach((item) => {
       const displayStatus = getDisplayStatus(item, pendingPayment);
       const { routeFrom, routeTo } = getBookingRouteSegment(item);
-      const seats = extractSeats(item).join(',');
-      const amount = Number(item?.payableAmount ?? item?.totalAmount ?? item?.amount ?? 0);
-      const passengerCount = extractPassengers(item).length || extractSeats(item).length || 1;
       const tripKey = [
-        routeFrom,
-        routeTo,
-        seats,
-        amount,
-        passengerCount,
+        routeFrom, routeTo, extractSeats(item).join(','),
+        Number(item?.payableAmount ?? item?.totalAmount ?? item?.amount ?? 0),
+        extractPassengers(item).length || extractSeats(item).length || 1,
         getTimestampMinuteBucket(item),
       ].join('|');
-
       const existing = collapsedByTrip.get(tripKey);
-      if (!existing) {
-        collapsedByTrip.set(tripKey, { ...item, __displayStatus: displayStatus });
-        return;
-      }
-
-      const existingRank = getStatusRank(existing.__displayStatus || existing.status);
-      const nextRank = getStatusRank(displayStatus);
-      if (nextRank > existingRank) {
+      if (!existing || getStatusRank(displayStatus) > getStatusRank(existing.__displayStatus || existing.status)) {
         collapsedByTrip.set(tripKey, { ...item, __displayStatus: displayStatus });
       }
     });
@@ -827,79 +841,70 @@ const UserBookings = () => {
     return [...collapsedByTrip.values()].sort((a, b) => getBookingTimestamp(b) - getBookingTimestamp(a));
   }, [bookings, latestBooking, pendingPayment]);
 
-  const normalizedCompletedTrips = useMemo(
-    () => normalizeList(completedTrips)
-      .map((trip) => ({
-        ...trip,
-        status: 'COMPLETED',
-        __displayStatus: 'COMPLETED',
-      }))
-      .sort((a, b) => getBookingTimestamp(b) - getBookingTimestamp(a)),
-    [completedTrips]
-  );
-
   const reviewableByScheduleId = useMemo(() => {
     const map = new Map();
-    normalizedCompletedTrips.forEach((trip) => {
+    normalizeList(completedTrips).forEach((trip) => {
       const key = String(trip?.scheduleId || '').trim();
       if (key) map.set(key, trip);
     });
     return map;
-  }, [normalizedCompletedTrips]);
+  }, [completedTrips]);
 
-  const todayDateKey = useMemo(() => getTodayDateKey(), []);
-  const upcomingBookings = useMemo(
-    () => visibleBookings.filter((booking) => isUpcomingBooking(booking, todayDateKey)),
-    [todayDateKey, visibleBookings]
-  );
-  const cancelledBookings = useMemo(
-    () => visibleBookings.filter((booking) => String(booking?.status || '').toUpperCase() === 'CANCELLED'),
-    [visibleBookings]
-  );
+  const now = Date.now();
+  const departureOf = (b) => getResolvedDepartureInstant(b);
+
+  /** 'upcoming' | 'completed' | 'cancelled' | 'pending' */
+  const groupOf = (b) => {
+    const upper = String(b?.__displayStatus || b?.status || '').toUpperCase();
+    if (upper === 'CANCELLED' || isUnpaidStatus(upper)) return 'cancelled';
+    if (upper === 'PENDING' || upper === 'PAYMENT_RECEIVED') return 'pending';
+    if (upper === 'COMPLETED') return 'completed';
+    const dep = departureOf(b);
+    if (dep && dep.getTime() < now - 6 * 3600000) return 'completed';
+    if (reviewableByScheduleId.has(getScheduleId(b)) && dep && dep.getTime() < now) return 'completed';
+    return 'upcoming';
+  };
+
+  const grouped = useMemo(() => {
+    const g = { upcoming: [], completed: [], cancelled: [], pending: [] };
+    visibleBookings.forEach((b) => g[groupOf(b)].push(b));
+    g.upcoming.sort((a, b) => (departureOf(a)?.getTime() ?? 0) - (departureOf(b)?.getTime() ?? 0));
+    return g;
+  }, [visibleBookings, reviewableByScheduleId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tabbedBookings = useMemo(() => {
     if (tripTab === 'all') return visibleBookings;
-    if (tripTab === 'completed') return normalizedCompletedTrips;
-    if (tripTab === 'cancelled') return cancelledBookings;
-    return upcomingBookings;
-  }, [cancelledBookings, normalizedCompletedTrips, tripTab, upcomingBookings, visibleBookings]);
+    if (tripTab === 'upcoming') return [...grouped.pending, ...grouped.upcoming];
+    return grouped[tripTab];
+  }, [tripTab, visibleBookings, grouped]);
 
-  const totalSpend = useMemo(
-    () => visibleBookings.reduce((sum, b) => sum + Number(b?.payableAmount ?? b?.totalAmount ?? b?.amount ?? 0), 0),
-    [visibleBookings]
+  const tabCount = (id) => (id === 'all' ? visibleBookings.length : id === 'upcoming' ? grouped.upcoming.length + grouped.pending.length : grouped[id].length);
+
+  // What was actually spent: paid trips, minus any refunds on cancelled ones
+  const totalSpend = useMemo(() => visibleBookings.reduce((sum, b) => {
+    const paid = Number(b?.payableAmount ?? b?.totalAmount ?? b?.amount ?? 0);
+    const upper = String(b?.__displayStatus || b?.status || '').toUpperCase();
+    if (upper === 'PENDING' || isUnpaidStatus(upper)) return sum;
+    if (upper === 'CANCELLED') return sum + Math.max(0, paid - Number(b?.refundAmount ?? 0));
+    return sum + paid;
+  }, 0), [visibleBookings]);
+
+  const activeFilterCount = (
+    activeFilters.statuses.length + (activeFilters.dateFrom ? 1 : 0) + (activeFilters.dateTo ? 1 : 0) +
+    (activeFilters.minFare ? 1 : 0) + (activeFilters.maxFare ? 1 : 0)
   );
 
-  const toggleSelect = (id) => {
-    setSelectedBookings((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const activeFilterCount = useMemo(() => (
-    activeFilters.statuses.length +
-    (activeFilters.dateFrom ? 1 : 0) +
-    (activeFilters.dateTo ? 1 : 0) +
-    (activeFilters.minFare ? 1 : 0) +
-    (activeFilters.maxFare ? 1 : 0)
-  ), [activeFilters]);
-
   const filteredBookings = useMemo(() => {
-    const hasFilters = activeFilterCount > 0;
-    if (!hasFilters) return tabbedBookings;
+    if (activeFilterCount === 0) return tabbedBookings;
     return tabbedBookings.filter((booking) => {
-      const displayStatus = booking?.__displayStatus || getDisplayStatus(booking, pendingPayment);
-      const upper = String(displayStatus).toUpperCase();
+      const group = groupOf(booking);
       if (activeFilters.statuses.length > 0) {
-        const matched = activeFilters.statuses.some((s) => {
-          if (s === 'confirmed') return ['CONFIRMED', 'PAYMENT_SUCCESSFUL'].includes(upper);
-          if (s === 'completed') return upper === 'COMPLETED';
-          if (s === 'cancelled') return upper === 'CANCELLED';
-          if (s === 'pending') return ['PENDING', 'PAYMENT_RECEIVED'].includes(upper);
-          return false;
-        });
+        const matched = activeFilters.statuses.some((s) => (
+          (s === 'confirmed' && group === 'upcoming') ||
+          (s === 'completed' && group === 'completed') ||
+          (s === 'cancelled' && group === 'cancelled') ||
+          (s === 'pending' && group === 'pending')
+        ));
         if (!matched) return false;
       }
       const travelDate = getTravelDateKey(booking);
@@ -910,26 +915,12 @@ const UserBookings = () => {
       if (activeFilters.maxFare && amount > Number(activeFilters.maxFare)) return false;
       return true;
     });
-  }, [tabbedBookings, activeFilters, activeFilterCount, pendingPayment]);
+  }, [tabbedBookings, activeFilters, activeFilterCount]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const viewTicket = async (booking) => {
     const rawId = String(booking?.bookingId || booking?.id || booking?.publicBookingId || booking?.bookingCode || '').trim();
-    if (rawId) {
-      const success = await viewTicketFromApi(rawId);
-      if (success) return;
-    }
-    const bookingId = toDisplayBookingId(booking);
-    const { routeFrom, routeTo } = getBookingRouteSegment(booking);
-    const seats = extractSeats(booking);
-    const passengers = extractPassengers(booking);
-    const passengerLines = passengers.length
-      ? passengers.map((p, i) => `${i + 1}. ${[toTitleCase(p?.firstName), toTitleCase(p?.lastName)].filter(Boolean).join(' ') || 'Traveler'} | Seat: ${p?.seatNumber || '--'}`).join('\n')
-      : 'Passenger details not available';
-    const text = ['TripGo Ticket', '', `Booking ID: ${bookingId}`, `Route: ${routeFrom} → ${routeTo}`, `Status: ${booking?.status || 'CONFIRMED'}`, `Amount: ₹${Number(booking?.payableAmount ?? booking?.totalAmount ?? booking?.amount ?? 0)}`, `Seats: ${seats.length ? seats.join(', ') : '--'}`, '', 'Passengers', passengerLines].join('\n');
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    window.open(url, '_blank');
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    if (rawId && await viewTicketFromApi(rawId)) return;
+    toast.error('Your ticket isn’t ready to view yet. Try downloading it, or check again in a moment.');
   };
 
   const totalPages = Math.max(1, Math.ceil(filteredBookings.length / PAGE_SIZE));
@@ -938,630 +929,367 @@ const UserBookings = () => {
     [page, filteredBookings]
   );
 
-  useEffect(() => {
-    setPage(0);
-  }, [tripTab, activeFilters]);
+  useEffect(() => { setPage(0); }, [tripTab, activeFilters]);
+  useEffect(() => { if (page >= totalPages) setPage(Math.max(totalPages - 1, 0)); }, [page, totalPages]);
 
-  useEffect(() => {
-    if (page >= totalPages) {
-      setPage(Math.max(totalPages - 1, 0));
-    }
-  }, [page, totalPages]);
-
-  const gridActionBooking = viewMode === 'grid' && selectedBookings.size > 0
-    ? paginatedBookings.find((b, i) => selectedBookings.has(toDisplayBookingId(b) || String(i))) ?? null
-    : null;
-
-  const listActionBooking = viewMode === 'list' && selectedBookings.size === 1
-    ? paginatedBookings.find((b, i) => selectedBookings.has(toDisplayBookingId(b) || String(i))) ?? null
-    : null;
-
-  const listActionMeta = listActionBooking ? (() => {
-    const b = listActionBooking;
-    const scheduleId = getScheduleId(b);
-    const reviewableTrip = reviewableByScheduleId.get(scheduleId);
-    const displayStatus = b?.__displayStatus || getDisplayStatus(b, pendingPayment);
-    const upper = String(displayStatus).toUpperCase();
-    const { routeFrom, routeTo } = getBookingRouteSegment(b);
-    const canRateTrip = (tripTab === 'completed' || tripTab === 'all') && reviewableTrip && !reviewableTrip.alreadyRated;
-    const canCancelBooking = (tripTab === 'upcoming' || tripTab === 'all') && isConfirmedBooking(b);
-    const canChangDate = policyMap[scheduleId]?.dateChange?.allowed !== false;
-    return { b, scheduleId, reviewableTrip, upper, routeFrom, routeTo, canRateTrip, canCancelBooking, canChangDate };
-  })() : null;
-
+  // Prompt a review right after returning from a just-completed trip
   useEffect(() => {
     if (!latestBooking) return;
-
     const scheduleId = getScheduleId(latestBooking);
     const reviewableTrip = reviewableByScheduleId.get(scheduleId);
     if (!scheduleId || !reviewableTrip || reviewableTrip.alreadyRated) return;
-
     try {
-      const lastPromptedScheduleId = localStorage.getItem(REVIEW_PROMPT_STORAGE_KEY);
-      if (lastPromptedScheduleId === scheduleId) return;
+      if (localStorage.getItem(REVIEW_PROMPT_STORAGE_KEY) === scheduleId) return;
       localStorage.setItem(REVIEW_PROMPT_STORAGE_KEY, scheduleId);
     } catch {
       // ignore storage errors
     }
-
-    setReviewModalBooking({
-      ...latestBooking,
-      from: latestBooking?.from || reviewableTrip?.from,
-      to: latestBooking?.to || reviewableTrip?.to,
-      scheduleId,
-    });
+    setReviewModalBooking({ ...latestBooking, from: latestBooking?.from || reviewableTrip?.from, to: latestBooking?.to || reviewableTrip?.to, scheduleId });
   }, [latestBooking, reviewableByScheduleId]);
 
-  const isConfirmedAndToday = (booking) => {
-    const upper = String(booking?.status || '').toUpperCase();
-    if (!['CONFIRMED', 'PAYMENT_SUCCESSFUL'].includes(upper)) return false;
-    const travelDate = getTravelDateKey(booking);
-    if (!travelDate) return false;
-    const today = getTodayDateKey();
-    return travelDate >= today;
-  };
+  const emptyCopy = {
+    upcoming: ['No upcoming trips', 'Your next journey will show up here once you book.'],
+    completed: ['No completed trips yet', 'Trips appear here after you travel — then you can rate them.'],
+    cancelled: ['No cancelled bookings', 'Cancelled trips appear here with their refund status.'],
+    all: ['No bookings yet', 'Search for a bus and book your first trip.'],
+  }[tripTab];
+
+  const stats = [
+    { label: 'Upcoming', value: grouped.upcoming.length, icon: 'event_upcoming', tone: 'text-green-600 bg-green-50' },
+    { label: 'Completed', value: grouped.completed.length, icon: 'check_circle', tone: 'text-slate-600 bg-slate-100' },
+    { label: 'Cancelled', value: grouped.cancelled.length, icon: 'cancel', tone: 'text-red-500 bg-red-50' },
+    { label: 'Spent on trips', value: `₹${Math.round(totalSpend).toLocaleString('en-IN')}`, icon: 'payments', tone: 'text-orange-600 bg-[#FDBA74]/20' },
+  ];
 
   return (
     <>
-    {trackingScheduleId && (
-      <BusTrackingMap
-        scheduleId={trackingScheduleId}
-        routeFrom={trackingRouteFrom}
-        routeTo={trackingRouteTo}
-        onClose={() => setTrackingScheduleId(null)}
-      />
-    )}
-    <UserLayout activeItem="bookings" title="My Bookings">
-      <div className="space-y-5">
-
-        {/* Page header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-black text-slate-900">My Bookings</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Track and manage all your bus trips</p>
-          </div>
-          {hasFreshBooking && (
-            <div className="rounded-2xl bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 ring-1 ring-emerald-200 flex items-center gap-2">
-              <span className="material-symbols-outlined text-base">check_circle</span>
-              Booking confirmed
-            </div>
-          )}
-        </div>
-
-        {/* Bento widgets */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="rounded-2xl bg-white ring-1 ring-slate-200 p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Total Spend</p>
-              <div className="w-9 h-9 rounded-xl bg-[#002046]/8 flex items-center justify-center">
-                <span className="material-symbols-outlined text-base text-[#002046]">payments</span>
-              </div>
-            </div>
-            <p className="text-3xl font-black text-slate-900">₹{totalSpend.toLocaleString()}</p>
-            <p className="text-xs text-slate-400 mt-1.5">across {visibleBookings.length} booking{visibleBookings.length !== 1 ? 's' : ''}</p>
-          </div>
-
-          <div className="rounded-2xl bg-white ring-1 ring-slate-200 p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Trips Overview</p>
-              <div className="w-9 h-9 rounded-xl bg-sky-50 flex items-center justify-center">
-                <span className="material-symbols-outlined text-base text-sky-600">route</span>
-              </div>
-            </div>
-            <div className="space-y-3">
-              {[
-                { label: 'Upcoming', count: upcomingBookings.length, dot: 'bg-emerald-500' },
-                { label: 'Completed', count: normalizedCompletedTrips.length, dot: 'bg-sky-500' },
-                { label: 'Cancelled', count: cancelledBookings.length, dot: 'bg-rose-500' },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${item.dot}`} />
-                    <span className="text-sm text-slate-500">{item.label}</span>
-                  </div>
-                  <span className="text-sm font-bold text-slate-900">{item.count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] p-5 text-white shadow-sm relative overflow-hidden">
-            <div className="absolute -top-2 -right-2 text-5xl opacity-10 select-none">★</div>
-            <p className="text-[10px] font-semibold opacity-60 uppercase tracking-wider mb-2">TripGo Premium</p>
-            <h3 className="text-lg font-black leading-snug">Priority seats &amp; zero cancellation fees</h3>
-            <p className="text-xs opacity-50 mt-1.5 mb-5">Upgrade for exclusive benefits on every trip</p>
-            <button onClick={() => navigate(ROUTES.USER_PREMIUM)} className="rounded-xl bg-white/15 hover:bg-white/25 px-4 py-2 text-xs font-bold transition-colors">
-              Upgrade now →
-            </button>
-          </div>
-        </div>
-
-        {/* Tab filter + view toggle */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-1 rounded-2xl bg-white p-1.5 ring-1 ring-slate-200 shadow-sm flex-wrap">
-            {[
-              { id: 'all', label: 'All', count: visibleBookings.length },
-              { id: 'upcoming', label: 'Upcoming', count: upcomingBookings.length },
-              { id: 'completed', label: 'Completed', count: normalizedCompletedTrips.length },
-              { id: 'cancelled', label: 'Cancelled', count: cancelledBookings.length },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setTripTab(tab.id)}
-                className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all whitespace-nowrap ${tripTab === tab.id ? 'bg-[#002046] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-              >
-                {tab.label}
-                <span className={`ml-1.5 text-xs ${tripTab === tab.id ? 'opacity-60' : 'opacity-40'}`}>({tab.count})</span>
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => { setPendingFilters(activeFilters); setFilterOpen(true); }}
-              className={`relative flex items-center gap-1.5 rounded-2xl px-4 py-2.5 text-sm font-semibold transition-all ring-1 shadow-sm ${activeFilterCount > 0 ? 'bg-[#002046] text-white ring-[#002046]' : 'bg-white text-slate-600 ring-slate-200 hover:text-slate-900'}`}
-            >
-              <span className="material-symbols-outlined text-base">tune</span>
-              Filter
-              {activeFilterCount > 0 && (
-                <span className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-[10px] font-black text-[#002046]">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
-            <div className="flex items-center gap-1 rounded-2xl bg-white p-1.5 ring-1 ring-slate-200 shadow-sm">
-              {[
-                { id: 'list', icon: 'view_list', label: 'List' },
-                { id: 'grid', icon: 'grid_view', label: 'Grid' },
-              ].map((mode) => (
-                <button
-                  key={mode.id}
-                  type="button"
-                  onClick={() => setViewMode(mode.id)}
-                  className={`rounded-xl px-3 py-2 text-sm font-semibold transition-all flex items-center gap-1.5 ${viewMode === mode.id ? 'bg-[#002046] text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-                >
-                  <span className="material-symbols-outlined text-base">{mode.icon}</span>
-                  {mode.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Grid selection action bar */}
-        {gridActionBooking && (() => {
-          const { routeFrom: selFrom, routeTo: selTo } = getBookingRouteSegment(gridActionBooking);
-          const selCanCancel = (tripTab === 'upcoming' || tripTab === 'all') && isConfirmedBooking(gridActionBooking);
-          return (
-            <div className="flex items-center gap-3 bg-white ring-1 ring-slate-200 rounded-2xl px-5 py-3 shadow-sm">
-              <span className="material-symbols-outlined text-base text-slate-400 flex-shrink-0">confirmation_number</span>
-              <span className="text-sm font-bold text-slate-800 truncate flex-1">{selFrom} → {selTo}</span>
-              <button onClick={() => viewTicket(gridActionBooking)} className="flex items-center gap-1.5 rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 transition-colors whitespace-nowrap">
-                <span className="material-symbols-outlined text-base">visibility</span>
-                View Ticket
-              </button>
-              <button onClick={() => downloadTicket(gridActionBooking)} className="flex items-center gap-1.5 rounded-xl bg-[#002046] px-4 py-2 text-sm font-semibold text-white hover:bg-[#001533] transition-colors whitespace-nowrap">
-                <span className="material-symbols-outlined text-base">download</span>
-                Download Ticket
-              </button>
-              <button onClick={() => setSelectedBookings(new Set())} className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center flex-shrink-0 transition-colors">
-                <span className="material-symbols-outlined text-sm text-slate-500">close</span>
-              </button>
-            </div>
-          );
-        })()}
-
-        {/* Table card */}
-        <div className="rounded-2xl bg-white ring-1 ring-slate-200 overflow-hidden shadow-sm">
-          {loading ? (
-            <div className="p-10 flex justify-center">
-              <InlineLoader label="Loading your bookings..." />
-            </div>
-          ) : tabbedBookings.length === 0 ? (
-            <div className="p-12 text-center">
-              <span className="material-symbols-outlined text-5xl text-slate-300">
-                {tripTab === 'completed' ? 'task_alt' : tripTab === 'cancelled' ? 'event_busy' : 'confirmation_number'}
-              </span>
-              <h2 className="mt-4 text-lg font-bold text-slate-900">
-                {tripTab === 'completed' ? 'No completed trips yet' : tripTab === 'cancelled' ? 'No cancelled bookings' : tripTab === 'all' ? 'No bookings yet' : 'No upcoming bookings'}
-              </h2>
-              <p className="mt-2 text-sm text-slate-500 max-w-sm mx-auto">
-                {tripTab === 'completed'
-                  ? 'Completed trips will appear here once the backend auto-completes them.'
-                  : tripTab === 'cancelled'
-                    ? 'Cancelled trips will appear here with refund status.'
-                    : 'Search for a route and complete payment to create your first trip.'}
-              </p>
-              {(tripTab === 'upcoming' || tripTab === 'all') && (
-                <button
-                  onClick={() => navigate(ROUTES.DASHBOARD)}
-                  className="mt-5 rounded-2xl bg-[#002046] px-6 py-3 text-sm font-bold text-white hover:bg-[#001533] transition-colors"
-                >
-                  Search buses
-                </button>
-              )}
-            </div>
-          ) : viewMode === 'grid' ? (
-            <>
-              <div className="p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {paginatedBookings.map((booking, index) => {
-                  const bookingId = toDisplayBookingId(booking) || `TG-${index + 1}`;
-                  const { routeFrom, routeTo } = getBookingRouteSegment(booking);
-                  const amount = Number(booking?.payableAmount ?? booking?.totalAmount ?? booking?.amount ?? 0);
-                  const busName = getBookingBusName(booking);
-                  const scheduleLabel = getBookingScheduleLabel(booking);
-                  const displayStatus = booking?.__displayStatus || getDisplayStatus(booking, pendingPayment);
-
-                  const upper = String(displayStatus).toUpperCase();
-                  const dotClass = ['CONFIRMED', 'PAYMENT_SUCCESSFUL'].includes(upper) ? 'bg-emerald-500'
-                    : upper === 'COMPLETED' ? 'bg-sky-500'
-                    : upper === 'CANCELLED' ? 'bg-rose-500' : 'bg-amber-500';
-                  const statusBadgeClass = ['CONFIRMED', 'PAYMENT_SUCCESSFUL'].includes(upper) ? 'bg-emerald-50 text-emerald-700'
-                    : upper === 'COMPLETED' ? 'bg-sky-50 text-sky-700'
-                    : upper === 'CANCELLED' ? 'bg-rose-50 text-rose-700' : 'bg-amber-50 text-amber-700';
-                  const statusLabel = upper === 'PAYMENT_SUCCESSFUL' ? 'Paid'
-                    : upper === 'PAYMENT_RECEIVED' ? 'Received' : toTitleCase(displayStatus);
-                  const gridCanCancel = (tripTab === 'upcoming' || tripTab === 'all') && isConfirmedBooking(booking);
-                  const { routeFrom: gFrom, routeTo: gTo } = getBookingRouteSegment(booking);
-                  const isGridSelected = selectedBookings.has(bookingId);
-                  const isCancelledGrid = upper === 'CANCELLED';
-                  const canTrack = isConfirmedAndToday(booking);
-                  const gridScheduleId = getScheduleId(booking);
-
-                  return (
-                    <div key={`${bookingId}-${index}`} onClick={() => toggleSelect(bookingId)} className={`rounded-xl ring-1 p-4 hover:shadow-md transition-all cursor-pointer ${isGridSelected ? 'bg-slate-50 ring-[#002046]/40 shadow-sm' : 'bg-white ring-slate-200'}`}>
-                      <div className="flex items-start justify-between gap-2 mb-3">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-bold text-slate-900 text-sm truncate">{routeFrom} → {routeTo}</p>
-                          <p className="text-xs text-slate-400 mt-0.5 truncate">{busName || bookingId}</p>
-                          {isCancelledGrid && <RefundTimeline booking={booking} />}
-                        </div>
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold flex-shrink-0 ${statusBadgeClass}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />
-                          {statusLabel}
-                        </span>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-[11px] text-slate-400 truncate max-w-[130px]">{scheduleLabel !== '--' ? scheduleLabel : bookingId}</p>
-                          <p className="text-base font-black text-slate-900 mt-0.5">₹{amount.toLocaleString()}</p>
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <button onClick={(e) => { e.stopPropagation(); viewTicket(booking); }} title="View Ticket" className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200 transition-colors">
-                            <span className="material-symbols-outlined text-sm">visibility</span>
-                          </button>
-                          <button onClick={(e) => { e.stopPropagation(); downloadTicket(booking); }} title="Download Ticket" className="w-8 h-8 rounded-lg bg-[#002046] text-white flex items-center justify-center hover:bg-[#001533] transition-colors">
-                            <span className="material-symbols-outlined text-sm">download</span>
-                          </button>
-                          {gridCanCancel && policyMap[getScheduleId(booking)]?.dateChange?.allowed !== false && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setRescheduleModalBooking({ ...booking, from: gFrom, to: gTo, scheduleId: getScheduleId(booking) }); }}
-                              disabled={!canReschedule(booking)}
-                              title={!canReschedule(booking) ? 'Rescheduling window has closed. Must reschedule at least 12 hours before departure.' : 'Reschedule'}
-                              className="w-8 h-8 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 flex items-center justify-center hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-50"
-                            >
-                              <span className="material-symbols-outlined text-sm">edit_calendar</span>
-                            </button>
-                          )}
-                          {gridCanCancel && (
-                            <button onClick={(e) => { e.stopPropagation(); setCancelModalBooking({ ...booking, from: gFrom, to: gTo }); setCancelReason(''); }} className="flex items-center gap-1 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 px-2 h-8 text-xs font-semibold hover:bg-rose-100 transition-colors whitespace-nowrap">
-                              Cancel
-                            </button>
-                          )}
-                          {upper === 'COMPLETED' && (
-                            <button onClick={(e) => { e.stopPropagation(); navigate(ROUTES.SEARCH_RESULTS, { state: { from: gFrom, to: gTo, date: new Date(Date.now() + 86400000).toISOString().split('T')[0] } }); }} title="Book again" className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center hover:bg-emerald-100 transition-colors">
-                              <span className="material-symbols-outlined text-sm">refresh</span>
-                            </button>
-                          )}
-                          {canTrack && gridScheduleId && (
-                            <button onClick={(e) => { e.stopPropagation(); setTrackingScheduleId(gridScheduleId); setTrackingRouteFrom(gFrom); setTrackingRouteTo(gTo); }} title="Track bus" className="w-8 h-8 rounded-lg bg-sky-50 border border-sky-200 text-sky-700 flex items-center justify-center hover:bg-sky-100 transition-colors">
-                              <span className="material-symbols-outlined text-sm">location_on</span>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="border-t border-slate-100 px-5 py-3.5 flex items-center justify-between gap-4">
-                <p className="text-sm text-slate-400">
-                  Showing {(page * PAGE_SIZE) + 1}–{Math.min(filteredBookings.length, (page + 1) * PAGE_SIZE)} of {filteredBookings.length}{activeFilterCount > 0 ? ' (filtered)' : ''}
-                </p>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30 transition-colors">
-                    <span className="material-symbols-outlined text-sm">chevron_left</span>
-                  </button>
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const pageNum = totalPages <= 5 ? i : Math.max(0, Math.min(totalPages - 5, page - 2)) + i;
-                    return (
-                      <button key={pageNum} onClick={() => setPage(pageNum)} className={`w-8 h-8 rounded-lg text-sm font-semibold transition-colors ${page === pageNum ? 'bg-[#002046] text-white' : 'text-slate-500 hover:bg-slate-100'}`}>{pageNum + 1}</button>
-                    );
-                  })}
-                  <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30 transition-colors">
-                    <span className="material-symbols-outlined text-sm">chevron_right</span>
-                  </button>
-                </div>
-              </div>
-            </>
-          ) : (
-            <>
-              {selectedBookings.size > 0 && (
-                <div className="flex items-center gap-2 bg-[#f5f7fb] px-5 py-3 border-b border-slate-200 flex-wrap">
-                  <span className="text-xs font-semibold text-slate-500 mr-1">{selectedBookings.size} selected</span>
-                  {listActionBooking && (
-                    <button
-                      onClick={() => viewTicket(listActionBooking)}
-                      className="flex items-center gap-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-1.5 text-xs font-semibold transition-colors whitespace-nowrap"
-                    >
-                      <span className="material-symbols-outlined text-sm">visibility</span>
-                      View Ticket
-                    </button>
-                  )}
-                  <button
-                    onClick={async () => {
-                      for (const booking of paginatedBookings) {
-                        const id = toDisplayBookingId(booking) || '';
-                        if (selectedBookings.has(id)) await downloadTicket(booking);
-                      }
-                    }}
-                    className="flex items-center gap-1.5 rounded-lg bg-[#0B1F3A] text-white px-3 py-1.5 text-xs font-bold hover:bg-[#102A4C] transition-colors whitespace-nowrap"
-                  >
-                    <span className="material-symbols-outlined text-sm">download</span>
-                    Download
-                  </button>
-                  {listActionMeta?.canCancelBooking && listActionMeta.canChangDate && (
-                    <button
-                      onClick={() => setRescheduleModalBooking({ ...listActionMeta.b, from: listActionMeta.routeFrom, to: listActionMeta.routeTo, scheduleId: listActionMeta.scheduleId })}
-                      disabled={!canReschedule(listActionMeta.b)}
-                      title={!canReschedule(listActionMeta.b) ? 'Rescheduling window has closed.' : 'Reschedule'}
-                      className="flex items-center gap-1.5 rounded-lg bg-white border border-blue-200 text-blue-700 px-3 py-1.5 text-xs font-semibold hover:bg-blue-50 transition-colors whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <span className="material-symbols-outlined text-sm">edit_calendar</span>
-                      Reschedule
-                    </button>
-                  )}
-                  {listActionMeta?.canRateTrip && (
-                    <button
-                      onClick={() => setReviewModalBooking({ ...listActionMeta.b, scheduleId: listActionMeta.scheduleId, from: listActionMeta.routeFrom, to: listActionMeta.routeTo })}
-                      className="flex items-center gap-1.5 rounded-lg bg-white border border-amber-200 text-amber-600 px-3 py-1.5 text-xs font-semibold hover:bg-amber-50 transition-colors whitespace-nowrap"
-                    >
-                      <span className="material-symbols-outlined text-sm">star</span>
-                      Rate Trip
-                    </button>
-                  )}
-                  {listActionMeta && String(listActionMeta.b?.status || '').toUpperCase() === 'COMPLETED' && (
-                    <button
-                      onClick={() => navigate(ROUTES.SEARCH_RESULTS, { state: { from: listActionMeta.routeFrom, to: listActionMeta.routeTo, date: new Date(Date.now() + 86400000).toISOString().split('T')[0] } })}
-                      className="flex items-center gap-1.5 rounded-lg bg-white border border-emerald-200 text-emerald-700 px-3 py-1.5 text-xs font-semibold hover:bg-emerald-50 transition-colors whitespace-nowrap"
-                    >
-                      <span className="material-symbols-outlined text-sm">refresh</span>
-                      Book Again
-                    </button>
-                  )}
-                  {listActionMeta && isConfirmedAndToday(listActionMeta.b) && listActionMeta.scheduleId && (
-                    <button
-                      onClick={() => { setTrackingScheduleId(listActionMeta.scheduleId); setTrackingRouteFrom(listActionMeta.routeFrom); setTrackingRouteTo(listActionMeta.routeTo); }}
-                      className="flex items-center gap-1.5 rounded-lg bg-white border border-sky-200 text-sky-700 px-3 py-1.5 text-xs font-semibold hover:bg-sky-50 transition-colors whitespace-nowrap"
-                    >
-                      <span className="material-symbols-outlined text-sm">location_on</span>
-                      Track Bus
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setSelectedBookings(new Set())}
-                    className="ml-auto flex items-center gap-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-slate-500 px-3 py-1.5 text-xs font-semibold transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-sm">close</span>
-                  </button>
-                </div>
-              )}
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-[#0B1F3A]">
-                      <th className="w-12 px-4 py-3.5 text-center border-r border-white/10">
-                        <input
-                          type="checkbox"
-                          checked={selectedBookings.size === paginatedBookings.length && paginatedBookings.length > 0}
-                          onChange={() => {
-                            if (selectedBookings.size === paginatedBookings.length && paginatedBookings.length > 0) {
-                              setSelectedBookings(new Set());
-                            } else {
-                              setSelectedBookings(new Set(paginatedBookings.map((b, i) => toDisplayBookingId(b) || String(i))));
-                            }
-                          }}
-                          className="rounded border-white/30 accent-white cursor-pointer"
-                        />
-                      </th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10">Booking ID</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10">Status</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10">Trip</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10 hidden md:table-cell">Date</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10 hidden lg:table-cell">Bus Type</th>
-                      <th className="px-4 py-3.5 text-left text-[11px] font-semibold text-white/80 uppercase tracking-wider border-r border-white/10">Fare</th>
-                      <th className="px-4 py-3.5 text-right text-[11px] font-semibold text-white/80 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {paginatedBookings.map((booking, index) => {
-                      const bookingId = toDisplayBookingId(booking) || `TG-${index + 1}`;
-                      const { routeFrom, routeTo } = getBookingRouteSegment(booking);
-                      const seats = extractSeats(booking);
-                      const passengers = extractPassengers(booking);
-                      const amount = Number(booking?.payableAmount ?? booking?.totalAmount ?? booking?.amount ?? 0);
-                      const busName = getBookingBusName(booking);
-                      const scheduleLabel = getBookingScheduleLabel(booking);
-                      const scheduleId = getScheduleId(booking);
-                      const reviewableTrip = reviewableByScheduleId.get(scheduleId);
-                      const displayStatus = booking?.__displayStatus || getDisplayStatus(booking, pendingPayment);
-                      const canRateTrip = (tripTab === 'completed' || tripTab === 'all') && reviewableTrip && !reviewableTrip.alreadyRated;
-                      const canCancelBooking = (tripTab === 'upcoming' || tripTab === 'all') && isConfirmedBooking(booking);
-                      const isCancelled = String(booking?.status || '').toUpperCase() === 'CANCELLED';
-                      const busType = booking?.selectedType || booking?.busType || booking?.bus?.type || 'Standard';
-                      const isSelected = selectedBookings.has(bookingId);
-
-                      const upper = String(displayStatus).toUpperCase();
-                      const dotClass = ['CONFIRMED', 'PAYMENT_SUCCESSFUL'].includes(upper) ? 'bg-emerald-500'
-                        : upper === 'COMPLETED' ? 'bg-sky-500'
-                        : upper === 'CANCELLED' ? 'bg-rose-500' : 'bg-amber-500';
-                      const statusBadgeClass = ['CONFIRMED', 'PAYMENT_SUCCESSFUL'].includes(upper)
-                        ? 'border border-emerald-400 text-emerald-700 bg-emerald-50'
-                        : upper === 'COMPLETED' ? 'border border-sky-400 text-sky-700 bg-sky-50'
-                        : upper === 'CANCELLED' ? 'border border-rose-400 text-rose-700 bg-rose-50'
-                        : 'border border-amber-400 text-amber-700 bg-amber-50';
-                      const statusLabel = upper === 'PAYMENT_SUCCESSFUL' ? 'Paid'
-                        : upper === 'PAYMENT_RECEIVED' ? 'Received' : toTitleCase(displayStatus);
-
-                      return (
-                        <tr key={`${bookingId}-${index}`} className={`group transition-colors ${isSelected ? 'bg-blue-50/60' : 'hover:bg-slate-50'}`}>
-                          <td className="px-4 py-4 text-center">
-                            <input type="checkbox" checked={isSelected} onChange={() => toggleSelect(bookingId)} className="rounded border-slate-300 accent-[#002046] cursor-pointer" />
-                          </td>
-                          <td className="px-4 py-4">
-                            <span className="text-sm font-mono font-semibold text-[#0B1F3A]">{bookingId}</span>
-                          </td>
-                          <td className="px-4 py-4">
-                            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${statusBadgeClass}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotClass}`} />
-                              {statusLabel}
-                            </span>
-                            {isCancelled && <p className="text-[10px] text-rose-400 mt-1 whitespace-nowrap">by {getCancelledByLabel(booking?.cancelledBy)}</p>}
-                          </td>
-                          <td className="px-4 py-4 min-w-[180px]">
-                            <p className="text-sm font-bold text-slate-900">{routeFrom} → {routeTo}</p>
-                            <p className="text-xs text-slate-400 mt-0.5 truncate max-w-[200px]">
-                              {busName || '—'}{seats.length > 0 ? ` · Seat ${seats.join(', ')}` : ''}
-                            </p>
-                            {isCancelled && <RefundTimeline booking={booking} />}
-                          </td>
-                          <td className="px-4 py-4 hidden md:table-cell">
-                            <p className="text-sm text-slate-600 whitespace-nowrap max-w-[160px] truncate">{scheduleLabel !== '--' ? scheduleLabel : '—'}</p>
-                            <p className="text-xs text-slate-400 mt-0.5">{passengers.length || seats.length || 1} pax</p>
-                          </td>
-                          <td className="px-4 py-4 hidden lg:table-cell">
-                            <span className="text-sm text-slate-500 capitalize">{String(busType).toLowerCase()}</span>
-                          </td>
-                          <td className="px-4 py-4">
-                            <span className="text-sm font-bold text-slate-900">₹{amount.toLocaleString()}</span>
-                          </td>
-                          <td className="px-4 py-4">
-                            <div className="flex items-center justify-end gap-1">
-                              <button onClick={() => viewTicket(booking)} title="View Ticket" className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center hover:bg-slate-200 transition-colors">
-                                <span className="material-symbols-outlined text-sm">visibility</span>
-                              </button>
-                              <button onClick={() => downloadTicket(booking)} title="Download Ticket" className="w-8 h-8 rounded-lg bg-[#0B1F3A] text-white flex items-center justify-center hover:bg-[#102A4C] transition-colors">
-                                <span className="material-symbols-outlined text-sm">download</span>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              <div className="border-t border-slate-100 px-5 py-3.5 flex items-center justify-between gap-4">
-                <p className="text-sm text-slate-400">
-                  Showing {(page * PAGE_SIZE) + 1}–{Math.min(filteredBookings.length, (page + 1) * PAGE_SIZE)} of {filteredBookings.length}{activeFilterCount > 0 ? ' (filtered)' : ''}
-                </p>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30 transition-colors">
-                    <span className="material-symbols-outlined text-sm">chevron_left</span>
-                  </button>
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const pageNum = totalPages <= 5 ? i : Math.max(0, Math.min(totalPages - 5, page - 2)) + i;
-                    return (
-                      <button key={pageNum} onClick={() => setPage(pageNum)} className={`w-8 h-8 rounded-lg text-sm font-semibold transition-colors ${page === pageNum ? 'bg-[#002046] text-white' : 'text-slate-500 hover:bg-slate-100'}`}>{pageNum + 1}</button>
-                    );
-                  })}
-                  <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:bg-slate-100 disabled:opacity-30 transition-colors">
-                    <span className="material-symbols-outlined text-sm">chevron_right</span>
-                  </button>
-                </div>
-              </div>
-            </>
-          )}
-        </div>
-
-      </div>
-      <FilterModal
-        open={filterOpen}
-        filters={pendingFilters}
-        onChange={setPendingFilters}
-        onClose={() => setFilterOpen(false)}
-        onApply={() => { setActiveFilters(pendingFilters); setFilterOpen(false); }}
-        onReset={() => { setPendingFilters(EMPTY_FILTERS); setActiveFilters(EMPTY_FILTERS); setFilterOpen(false); }}
-      />
-      {reviewModalBooking ? (
-        <RatingModal
-          booking={reviewModalBooking}
-          submitting={submittingReview}
-          onClose={() => setReviewModalBooking(null)}
-          onSubmit={async ({ rating, comment }) => {
-            try {
-              setSubmittingReview(true);
-              await submitTripRating(reviewModalBooking.scheduleId, {
-                rating,
-                title: `${rating} star review`,
-                comment: comment.trim(),
-              });
-              toast.success('Thanks for sharing your review.');
-              await fetchCompletedTrips();
-              setReviewModalBooking(null);
-            } catch (error) {
-              toast.error(error?.message || 'Unable to submit your review right now.');
-            } finally {
-              setSubmittingReview(false);
-            }
-          }}
-        />
-      ) : null}
-      {cancelModalBooking ? (
-        <UserCancelModal
-          booking={cancelModalBooking}
-          reason={cancelReason}
-          setReason={setCancelReason}
-          submitting={cancellingBookingId === String(cancelModalBooking?.bookingId || cancelModalBooking?.id || '')}
-          onClose={() => {
-            setCancelModalBooking(null);
-            setCancelReason('');
-          }}
-          onConfirm={async () => {
-            const bookingId = String(cancelModalBooking?.bookingId || cancelModalBooking?.id || '').trim();
-            if (!bookingId) return toast.error('Booking ID missing for cancellation.');
-            try {
-              setCancellingBookingId(bookingId);
-              const result = await cancelMyBooking(bookingId, cancelReason.trim());
-              const refundAmount = Number(result?.refundAmount ?? calculateUserRefundPreview(cancelModalBooking).amount ?? 0);
-              const refundStatus = String(result?.refundStatus || '').toUpperCase();
-              toast.success(
-                refundAmount > 0
-                  ? `Booking cancelled. Refund of ₹${refundAmount} ${refundStatus === 'PROCESSED' ? 'processed.' : 'will reflect in 5-7 days.'}`
-                  : 'Booking cancelled. No refund is applicable for this timing.'
-              );
-              setTripTab('cancelled');
-              setCancelModalBooking(null);
-              setCancelReason('');
-              await fetchBookings();
-            } catch (error) {
-              toast.error(error?.message || 'Unable to cancel this booking right now.');
-            } finally {
-              setCancellingBookingId('');
-            }
-          }}
-        />
-      ) : null}
-      {cancellingBookingId ? <CenterScreenLoader label="Cancelling your booking..." /> : null}
-      {rescheduleModalBooking && (
-        <UserRescheduleModal
-          booking={rescheduleModalBooking}
-          onClose={() => setRescheduleModalBooking(null)}
-          onSuccess={async () => { setRescheduleModalBooking(null); await fetchBookings(); }}
-        />
+      {tracking && (
+        <BusTrackingMap scheduleId={tracking.scheduleId} routeFrom={tracking.from} routeTo={tracking.to} onClose={() => setTracking(null)} />
       )}
-    </UserLayout>
+      <UserLayout activeItem="bookings" title="My Bookings" showHeaderTitle={false} showHeaderSearch={false}>
+        <div className="space-y-6">
+
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-black text-slate-900">My bookings</h1>
+              <p className="text-sm text-slate-500 mt-1">Tickets, trip changes, cancellations and refunds — all in one place.</p>
+            </div>
+            {latestBooking && (
+              <span className="inline-flex items-center gap-2 rounded-xl bg-green-50 border border-green-200 px-4 py-2 text-sm font-semibold text-green-700">
+                <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                Booking confirmed
+              </span>
+            )}
+          </div>
+
+          {/* Stats */}
+          <section className="bg-white rounded-2xl border border-slate-200/70 shadow-sm grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+            {stats.map((s) => (
+              <div key={s.label} className="flex items-center gap-3 p-5">
+                <span className={`w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center ${s.tone}`}>
+                  <span className="material-symbols-outlined text-[20px]">{s.icon}</span>
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xl font-black text-slate-900 leading-none truncate">{loading ? '–' : s.value}</p>
+                  <p className="text-xs text-slate-500 mt-1">{s.label}</p>
+                </div>
+              </div>
+            ))}
+          </section>
+
+          {/* Tabs + filter */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex rounded-xl border border-slate-200 bg-white p-1 overflow-x-auto" role="tablist">
+              {TABS.map((t) => (
+                <button key={t.id} role="tab" aria-selected={tripTab === t.id} onClick={() => setTripTab(t.id)}
+                  className={`flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-sm font-bold whitespace-nowrap transition-colors ${
+                    tripTab === t.id ? 'bg-primary text-white' : 'text-slate-500 hover:text-primary'
+                  }`}>
+                  {t.label}
+                  <span className={`text-[11px] font-bold ${tripTab === t.id ? 'text-[#FDBA74]' : 'text-slate-400'}`}>{loading ? '' : tabCount(t.id)}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => { setPendingFilters(activeFilters); setFilterOpen(true); }}
+              className={`inline-flex items-center gap-1.5 rounded-xl border px-4 py-2.5 text-sm font-bold transition-colors ${
+                activeFilterCount > 0 ? 'bg-primary text-white border-primary' : 'bg-white text-slate-600 border-slate-200 hover:border-[#FF8A65]'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[18px]">tune</span>
+              Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+            </button>
+          </div>
+
+          {/* List */}
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="h-40 rounded-2xl bg-white border border-slate-200/70 animate-pulse" />
+              ))}
+            </div>
+          ) : filteredBookings.length === 0 ? (
+            <section className="rounded-2xl bg-white border border-slate-200/70 p-12 text-center">
+              <span className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-[#FDBA74]/20 flex items-center justify-center">
+                <span className="material-symbols-outlined text-3xl text-orange-600">confirmation_number</span>
+              </span>
+              <h2 className="text-lg font-black text-slate-900">{activeFilterCount > 0 ? 'No bookings match your filters' : emptyCopy[0]}</h2>
+              <p className="mt-1 text-sm text-slate-500">{activeFilterCount > 0 ? 'Try clearing a filter.' : emptyCopy[1]}</p>
+              <div className="mt-5 flex justify-center gap-2">
+                {activeFilterCount > 0 ? (
+                  <button onClick={() => { setPendingFilters(EMPTY_FILTERS); setActiveFilters(EMPTY_FILTERS); }} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-[#102A4C] transition-colors">
+                    Clear filters
+                  </button>
+                ) : (tripTab === 'upcoming' || tripTab === 'all') && (
+                  <button onClick={() => navigate(ROUTES.SEARCH_RESULTS)} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-[#102A4C] transition-colors">
+                    Search buses
+                  </button>
+                )}
+              </div>
+            </section>
+          ) : (
+            <div className="space-y-4">
+              {paginatedBookings.map((booking, index) => {
+                const bookingId = toDisplayBookingId(booking);
+                const { routeFrom, routeTo } = getBookingRouteSegment(booking);
+                const cityFrom = booking?.from || routeFrom;
+                const cityTo = booking?.to || routeTo;
+                const seats = extractSeats(booking);
+                const passengers = extractPassengers(booking);
+                const amount = Number(booking?.payableAmount ?? booking?.totalAmount ?? booking?.amount ?? 0);
+                const scheduleId = getScheduleId(booking);
+                const group = groupOf(booking);
+                const upper = String(booking?.__displayStatus || booking?.status || '').toUpperCase();
+                const meta = group === 'completed' ? STATUS_META.COMPLETED
+                  : isUnpaidStatus(upper) ? STATUS_META.FAILED
+                  : (STATUS_META[upper] || STATUS_META.CONFIRMED);
+                const unpaid = isUnpaidStatus(upper);
+                // Unpaid booking: retry while this browser still holds its checkout and seat lock
+                const awaitingPayment = upper === 'PENDING';
+                const payDeadline = awaitingPayment && getBookingTimestamp(booking) ? getBookingTimestamp(booking) + PAYMENT_WINDOW_MS : 0;
+                const resumable = awaitingPayment && !pendingPayment?.paid && isPendingPaymentMatch(booking, pendingPayment)
+                  && pendingPayment?.bookingState && new Date(pendingPayment?.lockExpiresAt || 0).getTime() > now;
+                const dep = departureOf(booking);
+                const policy = policyMap[scheduleId];
+                const minHours = Number(policy?.dateChange?.minHoursBeforeDeparture ?? 12);
+                const reviewable = reviewableByScheduleId.get(scheduleId);
+
+                const isUpcoming = group === 'upcoming' && isConfirmedBooking(booking);
+                const canTrack = isUpcoming && getTravelDateKey(booking) === getTodayDateKey();
+                const showReschedule = isUpcoming && policy?.dateChange?.allowed === true;
+                const rescheduleOpen = showReschedule && canReschedule(booking, minHours);
+                const canRate = reviewable && !reviewable.alreadyRated;
+                const tripState = { ...booking, from: routeFrom, to: routeTo, scheduleId };
+
+                return (
+                  <article key={`${getBookingIdentity(booking) || index}`} className="rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+                    <div className="p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${meta.cls}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
+                              {meta.label}
+                            </span>
+                            <span className="text-[11px] font-mono font-semibold text-slate-400">{bookingId}</span>
+                          </div>
+                          <h2 className="text-lg font-black text-slate-900 truncate">
+                            {cityFrom} <span className="text-[#FF8A65]">→</span> {cityTo}
+                          </h2>
+                          <p className="text-xs text-slate-500 truncate">{getBookingBusName(booking) || 'Bus'}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xl font-black text-slate-900">₹{Math.round(amount).toLocaleString('en-IN')}</p>
+                          <p className="text-[11px] text-slate-400">{passengers.length || seats.length || 1} traveller{(passengers.length || seats.length || 1) !== 1 ? 's' : ''}</p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        {[
+                          ['Travel date', formatTripDate(dep)],
+                          ['Departure', formatTripTime(dep) || '—'],
+                          [seats.length > 1 ? 'Seats' : 'Seat', seats.length ? seats.join(', ') : '—'],
+                          ['Boarding', routeFrom !== cityFrom ? routeFrom : (booking?.fromStop || cityFrom)],
+                        ].map(([label, value]) => (
+                          <div key={label} className="min-w-0">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</p>
+                            <p className="text-sm font-semibold text-slate-800 truncate">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {unpaid && (
+                        <p className="mt-4 flex items-center gap-1.5 rounded-xl bg-slate-50 border border-slate-100 px-4 py-2.5 text-xs text-slate-600">
+                          <span className="material-symbols-outlined text-[16px]">info</span>
+                          Payment wasn’t completed, so this booking was cancelled and the seats released. No money was taken.
+                        </p>
+                      )}
+                      {group === 'cancelled' && !unpaid && (
+                        <div className="mt-4 rounded-xl bg-slate-50 border border-slate-100 px-4 py-3">
+                          {getCancelledByLabel(booking?.cancelledBy) && (
+                            <p className="text-xs text-slate-500">
+                              Cancelled by <span className="font-semibold text-slate-700">{getCancelledByLabel(booking?.cancelledBy)}</span>
+                              {booking?.cancelReason ? <> · “{booking.cancelReason}”</> : null}
+                            </p>
+                          )}
+                          <RefundTimeline booking={booking} />
+                        </div>
+                      )}
+                      {group === 'pending' && !awaitingPayment && (
+                        <p className="mt-4 flex items-center gap-1.5 rounded-xl bg-amber-50 border border-amber-100 px-4 py-2.5 text-xs text-amber-800">
+                          <span className="material-symbols-outlined text-[16px]">hourglass_top</span>
+                          We’re confirming your payment. This usually takes a minute — refresh to check.
+                        </p>
+                      )}
+                      {awaitingPayment && (
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-50 border border-amber-100 px-4 py-3">
+                          <p className="flex items-start gap-1.5 text-xs text-amber-800">
+                            <span className="material-symbols-outlined text-[16px]">hourglass_top</span>
+                            <span>
+                              We haven’t received payment for this booking.
+                              {payDeadline > now
+                                ? ` If it isn’t paid by ${formatIstTime(new Date(payDeadline))}, it’s cancelled automatically and the seats are released.`
+                                : ' It’s being cancelled automatically — no money is taken for unpaid bookings.'}
+                              {' '}If you already paid, it’ll confirm in a minute.
+                            </span>
+                          </p>
+                          {resumable && (
+                            <ActionButton icon="credit_card" label="Complete payment" tone="primary"
+                              onClick={() => navigate(ROUTES.PAYMENT, { state: pendingPayment.bookingState })} />
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Actions — always visible */}
+                    {group !== 'pending' && (
+                      <div className="flex flex-wrap items-center gap-2 px-5 py-3 bg-slate-50/70 border-t border-slate-100">
+                        {group !== 'cancelled' && (
+                          <>
+                            <ActionButton icon="download" label="Download ticket" tone="primary" onClick={() => downloadTicket(booking)} />
+                            <ActionButton icon="visibility" label="View" onClick={() => viewTicket(booking)} />
+                          </>
+                        )}
+                        {canTrack && scheduleId && (
+                          <ActionButton icon="share_location" label="Track bus" tone="accent" onClick={() => setTracking({ scheduleId, from: routeFrom, to: routeTo })} />
+                        )}
+                        {isUpcoming && (
+                          <ActionButton icon="share" label="Share trip" onClick={() => shareTrip({
+                            bookingId: booking?.bookingId, bookingCode: bookingId, from: cityFrom, to: cityTo,
+                            dateLabel: formatTripDate(dep), timeLabel: formatTripTime(dep), busName: getBookingBusName(booking),
+                            boarding: booking?.fromStop || routeFrom, seats: seats.join(', '),
+                          })} />
+                        )}
+                        {isUpcoming && (
+                          <ActionButton icon="u_turn_left" label="Book return" onClick={() => navigate(ROUTES.SEARCH_RESULTS, {
+                            // Return journey: swapped cities, the day after this trip (never in the past)
+                            state: { from: cityTo, to: cityFrom, date: [getTravelDateKey(booking) ? shiftYmd(getTravelDateKey(booking), 1) : '', localDateString(1)].sort().pop() },
+                          })} />
+                        )}
+                        {showReschedule && (
+                          <ActionButton
+                            icon="edit_calendar" label="Change date"
+                            disabled={!rescheduleOpen}
+                            title={rescheduleOpen ? 'Move this trip to another date' : `Date changes close ${minHours} hours before departure`}
+                            onClick={() => setRescheduleModalBooking(tripState)}
+                          />
+                        )}
+                        {canRate && (
+                          <ActionButton icon="star" label="Rate trip" tone="accent" onClick={() => setReviewModalBooking(tripState)} />
+                        )}
+                        {(group === 'completed' || group === 'cancelled') && (
+                          <ActionButton icon="replay" label="Book again" onClick={() => navigate(ROUTES.SEARCH_RESULTS, { state: { from: cityFrom, to: cityTo, date: localDateString(1) } })} />
+                        )}
+                        {isUpcoming && (
+                          <span className="sm:ml-auto">
+                            <ActionButton icon="close" label="Cancel" tone="danger" onClick={() => { setCancelModalBooking(tripState); setCancelReason(''); }} />
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </article>
+                );
+              })}
+
+              <PaginationControls page={page} pageSize={PAGE_SIZE} totalItems={filteredBookings.length} onPageChange={setPage} itemLabel="bookings" />
+            </div>
+          )}
+        </div>
+
+        <FilterModal
+          open={filterOpen}
+          filters={pendingFilters}
+          onChange={setPendingFilters}
+          onClose={() => setFilterOpen(false)}
+          onApply={() => { setActiveFilters(pendingFilters); setFilterOpen(false); }}
+          onReset={() => { setPendingFilters(EMPTY_FILTERS); setActiveFilters(EMPTY_FILTERS); setFilterOpen(false); }}
+        />
+        {reviewModalBooking && (
+          <RatingModal
+            booking={reviewModalBooking}
+            submitting={submittingReview}
+            onClose={() => setReviewModalBooking(null)}
+            onSubmit={async ({ rating, comment }) => {
+              try {
+                setSubmittingReview(true);
+                await submitTripRating(reviewModalBooking.scheduleId, { rating, title: `${rating} star review`, comment: comment.trim() });
+                toast.success('Thanks for sharing your review.');
+                await fetchCompletedTrips();
+                setReviewModalBooking(null);
+              } catch (error) {
+                toast.error(error?.message || 'Unable to submit your review right now.');
+              } finally {
+                setSubmittingReview(false);
+              }
+            }}
+          />
+        )}
+        {cancelModalBooking && (
+          <UserCancelModal
+            booking={cancelModalBooking}
+            slabs={policyMap[getScheduleId(cancelModalBooking)]?.cancellation}
+            reason={cancelReason}
+            setReason={setCancelReason}
+            refundTo={refundTo}
+            setRefundTo={setRefundTo}
+            submitting={cancellingBookingId === String(cancelModalBooking?.bookingId || cancelModalBooking?.id || '')}
+            onClose={() => { setCancelModalBooking(null); setCancelReason(''); }}
+            onConfirm={async () => {
+              const bookingId = String(cancelModalBooking?.bookingId || cancelModalBooking?.id || '').trim();
+              if (!bookingId) return toast.error('Booking ID missing for cancellation.');
+              try {
+                setCancellingBookingId(bookingId);
+                const result = await cancelMyBooking(bookingId, cancelReason.trim(), WALLET_ENABLED ? refundTo : undefined);
+                const refundAmount = Number(result?.refundAmount ?? calculateUserRefundPreview(cancelModalBooking, policyMap[getScheduleId(cancelModalBooking)]?.cancellation).amount ?? 0);
+                const refundStatus = String(result?.refundStatus || '').toUpperCase();
+                toast.success(
+                  refundAmount > 0
+                    ? (WALLET_ENABLED && refundTo === 'CREDIT'
+                      ? `Booking cancelled. ₹${refundAmount} added to your TripGo credit.`
+                      : `Booking cancelled. Refund of ₹${refundAmount} ${refundStatus === 'PROCESSED' ? 'processed.' : 'will reflect in 5–7 business days.'}`)
+                    : 'Booking cancelled. No refund applies this close to departure.'
+                );
+                setTripTab('cancelled');
+                setCancelModalBooking(null);
+                setCancelReason('');
+                await fetchBookings();
+              } catch (error) {
+                toast.error(error?.message || 'Unable to cancel this booking right now.');
+              } finally {
+                setCancellingBookingId('');
+              }
+            }}
+          />
+        )}
+        {cancellingBookingId && <CenterScreenLoader label="Cancelling your booking..." />}
+        {rescheduleModalBooking && (
+          <UserRescheduleModal
+            booking={rescheduleModalBooking}
+            onClose={() => setRescheduleModalBooking(null)}
+            onSuccess={async () => { setRescheduleModalBooking(null); await fetchBookings(); }}
+          />
+        )}
+      </UserLayout>
     </>
   );
 };

@@ -68,7 +68,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
 
-            if (jwtTokenProvider.validateToken(token)) {
+            // Suspended accounts lose access immediately, not when their access token expires
+            if (jwtTokenProvider.validateToken(token) && userDetails.isAccountNonLocked()) {
 
                 UsernamePasswordAuthenticationToken authentication =
                         new UsernamePasswordAuthenticationToken(

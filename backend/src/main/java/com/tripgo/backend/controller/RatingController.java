@@ -188,25 +188,35 @@ public class RatingController {
     public ResponseEntity<?> getCompletedTrips(Authentication auth) {
         User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
 
+        // One query for all of the user's reviews, keyed by schedule
+        Map<java.util.UUID, Review> myReviewsBySchedule = new java.util.HashMap<>();
+        reviewRepository.findByUserId(user.getId()).forEach(r -> {
+            if (r.getRouteSchedule() != null) myReviewsBySchedule.putIfAbsent(r.getRouteSchedule().getId(), r);
+        });
+
         List<Map<String, Object>> trips = bookingRepository
                 .findByUserAndStatus(user, BookingStatus.CONFIRMED)
                 .stream()
                 .filter(b -> "COMPLETED".equals(b.getRouteSchedule().getTripStatus()))
                 .map(b -> {
                     RouteSchedule s = b.getRouteSchedule();
-                    boolean alreadyRated = reviewRepository
-                            .existsByUserIdAndRouteScheduleId(user.getId(), s.getId());
-                    return Map.<String, Object>of(
-                            "bookingId", b.getId(),
-                            "scheduleId", s.getId(),
-                            "from", s.getRoute().getOrigin(),
-                            "to", s.getRoute().getDestination(),
-                            "departureTime", s.getDepartureTime(),
-                            "arrivalTime", s.getArrivalTime(),
-                            "busName", s.getBus().getName(),
-                            "totalAmount", b.getTotalAmount(),
-                            "alreadyRated", alreadyRated
-                    );
+                    Review myReview = myReviewsBySchedule.get(s.getId());
+                    // HashMap (not Map.of) because rating/comment are null until the trip is rated
+                    Map<String, Object> trip = new java.util.HashMap<>();
+                    trip.put("bookingId", b.getId());
+                    trip.put("bookingCode", b.getBookingCode());
+                    trip.put("scheduleId", s.getId());
+                    trip.put("from", s.getRoute().getOrigin());
+                    trip.put("to", s.getRoute().getDestination());
+                    trip.put("departureTime", s.getDepartureTime());
+                    trip.put("arrivalTime", s.getArrivalTime());
+                    trip.put("travelDate", b.getTravelDate());
+                    trip.put("busName", s.getBus().getName());
+                    trip.put("totalAmount", b.getTotalAmount());
+                    trip.put("alreadyRated", myReview != null);
+                    trip.put("rating", myReview != null ? myReview.getRating() : null);
+                    trip.put("comment", myReview != null ? myReview.getComment() : null);
+                    return trip;
                 })
                 .toList();
 

@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../../../config/env';
 import { ROUTES } from '../../../shared/constants/routes';
 import { saveReturnToForOAuth } from '../../../shared/utils/returnTo';
 import { isPasswordValid } from '../../../shared/utils/passwordRules';
+import { REFERRALS_ENABLED } from '../../../shared/constants/features';
 import { isValidEmail, normalizePhone, useRegistration } from '../utils/registerForm';
 import AuthSplitLayout from './AuthSplitLayout';
 import {
@@ -11,7 +12,7 @@ import {
   SubmitButton, TermsCheckbox, TextField, VerifyEmailSuccess,
 } from './RegisterFormParts';
 
-const FIELD_NAMES = ['firstName', 'lastName', 'email', 'phone', 'password'];
+const FIELD_NAMES = ['firstName', 'lastName', 'email', 'phone', 'password', 'referralCode'];
 
 const DesktopForm = () => {
   const navigate = useNavigate();
@@ -19,6 +20,8 @@ const DesktopForm = () => {
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', email: '', phone: '',
     password: '', confirmPassword: '', agreeToTerms: false,
+    // Invite links look like /register?ref=CODE (spec §8)
+    referralCode: new URLSearchParams(location.search).get('ref') || '',
   });
   const [errors, setErrors] = useState({});
   const reg = useRegistration({ apiBaseUrl: API_BASE_URL, endpoint: '/auth/register', fieldNames: FIELD_NAMES, setErrors });
@@ -58,6 +61,7 @@ const DesktopForm = () => {
       email: formData.email.trim(),
       phone: formData.phone,
       password: formData.password,
+      ...(REFERRALS_ENABLED && formData.referralCode.trim() ? { referralCode: formData.referralCode.trim().toUpperCase() } : {}),
     });
   };
 
@@ -125,6 +129,12 @@ const DesktopForm = () => {
               onConfirm={set('confirmPassword')}
               errors={errors}
             />
+
+            {REFERRALS_ENABLED && (
+              <TextField id="reg-referral" label="Referral code (optional)" icon="redeem" error={errors.referralCode}
+                placeholder="Got a code from a friend?" type="text" autoComplete="off"
+                value={formData.referralCode} onChange={set('referralCode')} />
+            )}
 
             <TermsCheckbox id="terms" checked={formData.agreeToTerms} onChange={set('agreeToTerms')} error={errors.agreeToTerms} />
 

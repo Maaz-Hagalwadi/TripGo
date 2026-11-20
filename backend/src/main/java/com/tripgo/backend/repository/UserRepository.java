@@ -28,4 +28,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Optional<User> findByOperator(Operator operator);
 
+    Optional<User> findByReferralCode(String referralCode);
+
 }

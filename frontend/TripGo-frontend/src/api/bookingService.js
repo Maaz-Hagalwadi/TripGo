@@ -30,9 +30,11 @@ export const getMyBookings = async () => {
   return apiGet('/booking/my-bookings');
 };
 
-export const cancelMyBooking = async (bookingId, cancelReason) => {
+/** refundTo: 'ORIGINAL' (card, default) or 'CREDIT' (instant TripGo credit — spec §7, needs wallet backend). */
+export const cancelMyBooking = async (bookingId, cancelReason, refundTo) => {
   return apiPost(`/booking/${encodeURIComponent(bookingId)}/cancel`, {
     reason: cancelReason,
+    ...(refundTo ? { refundTo } : {}),
   });
 };
 

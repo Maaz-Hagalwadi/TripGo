@@ -19,6 +19,8 @@ public class UserProfileResponse {
     private String operatorStatus;
     private String profilePictureUrl;
     private boolean isPremium;
+    /** False for Google-only accounts, which have no password to change. */
+    private boolean hasPassword;
 
     public static UserProfileResponse from(User user) {
         String operatorStatus = null;
@@ -36,7 +38,8 @@ public class UserProfileResponse {
                     .toList(),
                 operatorStatus,
                 user.getProfilePictureUrl(),
-                user.isPremium()
+                user.isPremium(),
+                user.getPassword() != null
         );
     }
 }
