@@ -100,7 +100,7 @@ Backend also has a `./run.sh` script. Requires a `.env` file — see `backend/SE
 **Database:**
 - PostgreSQL 13 via HikariCP (max 10 connections, min-idle 5, connection-timeout 10 s)
 - **52 Flyway migrations** (V1–V52) manage the full schema — never edit the DB directly, always add a new migration
-- Migration naming: `V##__descriptive_snake_case.sql`; V50–V52 seed demo accounts and bookings for testing (demo.operator@tripgo.com / TripGo@2026)
+- Migration naming: `V##__descriptive_snake_case.sql`; V50–V52 seed demo data for testing (demo operator account `demo.operator@tripgo.com`; never put passwords in migrations or docs — the first admin comes from `ADMIN_EMAIL`/`ADMIN_PASSWORD`, see `config/AdminBootstrap.java`)
 - Key domain tables: `users`, `operators`, `buses`, `routes`, `route_schedules`, `bookings`, `booking_seats`, `payments`, `tickets`, `ratings`
 - Additional tables: `user_saved_routes` (V47), `audit_logs` (V48), `promo_codes` (V46); `users` table has `profile_picture_url` (V42), `premium` (V43), `suspended` (V44) columns
 - Seat availability is tracked per date and route segment
