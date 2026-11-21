@@ -12,6 +12,8 @@ import java.util.UUID;
 public interface BoardingDroppingPointRepository extends JpaRepository<BoardingDroppingPoint, UUID> {
     List<BoardingDroppingPoint> findByScheduleOrderByTypeAscArrivalTimeAsc(RouteSchedule schedule);
 
+    boolean existsByScheduleAndType(RouteSchedule schedule, String type);
+
     @Query("""
         SELECT DISTINCT p FROM BoardingDroppingPoint p
         WHERE p.schedule.route.id = :routeId

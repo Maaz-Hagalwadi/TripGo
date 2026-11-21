@@ -117,8 +117,8 @@ export const submitTripRating = async (scheduleId, payload) => {
   return apiPost(`/booking/trips/${encodeURIComponent(scheduleId)}/rating`, payload);
 };
 
-export const applyPromoCode = async (code, bookingAmount) =>
-  apiPost('/booking/apply-promo', { code, bookingAmount });
+export const applyPromoCode = async (code, bookingAmount, { email, phone } = {}) =>
+  apiPost('/booking/apply-promo', { code, bookingAmount, email: email || null, phone: phone || null });
 
 export const getLatestBusTracking = async (scheduleId) =>
   apiGet(`/tracking/${encodeURIComponent(scheduleId)}/latest`);

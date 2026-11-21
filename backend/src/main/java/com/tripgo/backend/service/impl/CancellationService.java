@@ -1,5 +1,7 @@
 package com.tripgo.backend.service.impl;
 
+import com.tripgo.backend.model.entities.User;
+
 import com.tripgo.backend.config.AppTime;
 
 import com.stripe.model.Refund;
@@ -81,8 +83,11 @@ public class CancellationService {
         }
 
         // Extract email data inside transaction before async call
-        String userEmail = booking.getUser().getEmail();
-        String firstName = booking.getUser().getFirstName();
+        // Guest bookings have no user: this used to throw after the Stripe refund, rolling the booking back
+        // to CONFIRMED while the money had already been returned
+        User account = booking.getUser();
+        String userEmail = account != null ? account.getEmail() : booking.getGuestEmail();
+        String firstName = account != null ? account.getFirstName() : "Traveller";
         String from = booking.getRouteSchedule().getRoute().getOrigin();
         String to = booking.getRouteSchedule().getRoute().getDestination();
         String busName = booking.getRouteSchedule().getBus().getName();
@@ -90,11 +95,14 @@ public class CancellationService {
         String refundStatus = booking.getRefundStatus();
 
         // Send cancellation email
-        emailService.sendCancellationEmail(
-                userEmail, firstName, bookingCode, from, to, busName,
-                cancelledBy, reason, refundAmount, refundStatus);
+        if (userEmail != null && !userEmail.isBlank()) {
+            emailService.sendCancellationEmail(
+                    userEmail, firstName, bookingCode, from, to, busName,
+                    cancelledBy, reason, refundAmount, refundStatus);
+        }
 
-        // In-app notification
+        // In-app notification (signed-in travellers only)
+        if (account == null) return refundAmount;
         if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
             String refundMsg = "PROCESSED".equals(refundStatus)
                     ? String.format("₹%.0f has been refunded to your original payment method.", refundAmount)

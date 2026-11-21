@@ -10,12 +10,16 @@ import com.tripgo.backend.model.entities.Bus;
 import com.tripgo.backend.model.entities.User;
 import com.tripgo.backend.repository.AmenityMasterRepository;
 import com.tripgo.backend.repository.BusRepository;
+import com.tripgo.backend.repository.RouteScheduleRepository;
+import com.tripgo.backend.exception.BadRequestException;
+import org.springframework.transaction.annotation.Transactional;
 import com.tripgo.backend.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 @Service
 @RequiredArgsConstructor
@@ -26,6 +30,7 @@ public class BusService {
     private final UserRepository userRepository;
     private final EmailService emailService;
     private final NotificationService notificationService;
+    private final RouteScheduleRepository routeScheduleRepository;
 
     public BusResponse createBus(CreateBusRequest req, User user) {
 
@@ -115,6 +120,11 @@ public class BusService {
             throw new RuntimeException("Access denied");
         }
 
+        // Type and seat count define the generated seat layout; changing them would orphan or miss seats
+        if (!Objects.equals(bus.getBusType(), req.busType()) || !Objects.equals(bus.getTotalSeats(), req.totalSeats())) {
+            throw new BadRequestException("The bus type and number of seats can't be changed once the seat layout exists. Add a new bus for a different layout.");
+        }
+
         List<AmenityMaster> amenities = amenityRepository.findAllById(req.amenityIds());
 
         bus.setName(req.name());
@@ -130,6 +140,7 @@ public class BusService {
         return toResponse(bus);
     }
 
+    @Transactional
     public void delete(UUID id, User user) {
         Bus bus = busRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Bus not found"));
@@ -138,8 +149,12 @@ public class BusService {
             throw new RuntimeException("Access denied");
         }
 
-        bus.setActive(false);
-        busRepository.save(bus);
+        // Deactivating used to stand in for delete, which put the bus back in the admin approval queue.
+        // Schedules keep their bus with ON DELETE SET NULL, so a bus in use must not be removed.
+        if (routeScheduleRepository.existsByBus(bus)) {
+            throw new BadRequestException("This bus is used by one or more schedules. Delete those schedules or move them to another bus first.");
+        }
+        busRepository.delete(bus); // seats, amenities and bus fares are removed by ON DELETE CASCADE
     }
 
 

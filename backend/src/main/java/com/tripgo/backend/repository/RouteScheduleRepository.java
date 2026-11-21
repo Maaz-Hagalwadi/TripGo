@@ -39,10 +39,10 @@ public interface RouteScheduleRepository extends JpaRepository<RouteSchedule, UU
         AND LOWER(TRIM(seg2.toStop)) = LOWER(TRIM(:to))
         AND seg1.seq <= seg2.seq
         AND rs.active = true
-        AND rs.tripStatus NOT IN ('STARTED', 'COMPLETED', 'CANCELLED')
+        AND rs.tripStatus NOT IN ('COMPLETED', 'CANCELLED')
         AND (
             (rs.frequency IS NOT NULL AND rs.frequency != 'ONCE')
-            OR (rs.departureTime >= :startOfDay AND rs.departureTime < :endOfDay)
+            OR (rs.tripStatus != 'STARTED' AND rs.departureTime >= :startOfDay AND rs.departureTime < :endOfDay)
         )
         """)
     List<RouteSchedule> findByFromAndToAndDate(
@@ -84,4 +84,6 @@ public interface RouteScheduleRepository extends JpaRepository<RouteSchedule, UU
     int markCompletedIfOpen(@Param("id") UUID id);
 
     boolean existsByBusAndRouteAndDepartureTimeAndActiveTrue(Bus bus, Route route, Instant departureTime);
+
+    boolean existsByBus(Bus bus);
 }

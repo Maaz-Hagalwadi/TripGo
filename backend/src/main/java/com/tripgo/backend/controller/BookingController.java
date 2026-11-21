@@ -85,6 +85,7 @@ public class BookingController {
                     "isAisle", Boolean.TRUE.equals(seat.getIsAisle()),
                     "isBlocked", Boolean.TRUE.equals(seat.getIsBlocked()),
                     "available", !isLocked && !isBooked && !Boolean.TRUE.equals(seat.getIsBlocked()),
+                    "isBooked", isBooked, // sold, as opposed to only held by someone mid-checkout
                     "bookedByFemale", bookedByFemale
             );
         }).toList();
@@ -136,13 +137,32 @@ public class BookingController {
         RouteSchedule schedule = scheduleRepo.findById(scheduleId)
                 .orElseThrow(() -> new RuntimeException("Schedule not found"));
 
-        UUID token = lockService.lockSeats(schedule, seatNumbers, user, resolveTravelDate(schedule, travelDate, date), from, to);
+        LocalDate resolvedDate = resolveTravelDate(schedule, travelDate, date);
+        requireBookable(schedule, resolvedDate);
+        UUID token = lockService.lockSeats(schedule, seatNumbers, user, resolvedDate, from, to);
 
         return Map.of(
                 "status", "LOCKED",
                 "lockToken", token,
                 "expiresInMinutes", 15
         );
+    }
+
+    /** Seats can only be held on a departure that is running that day and hasn't left yet. */
+    private void requireBookable(RouteSchedule schedule, LocalDate travelDate) {
+        String status = schedule.getTripStatus() == null ? "SCHEDULED" : schedule.getTripStatus();
+        LocalDate runDate = schedule.getDepartureTime().atZone(AppTime.ZONE).toLocalDate();
+        boolean recurring = schedule.getFrequency() != null && !"ONCE".equalsIgnoreCase(schedule.getFrequency());
+        java.time.LocalTime depTime = schedule.getDepartureTime().atZone(AppTime.ZONE).toLocalTime();
+        boolean departed = travelDate.atTime(depTime).atZone(AppTime.ZONE).toInstant().isBefore(Instant.now());
+        boolean runs = recurring
+                ? !travelDate.isBefore(runDate) && com.tripgo.backend.service.impl.ScheduleRolloverService.runsOn(schedule.getFrequency(), runDate, travelDate)
+                : travelDate.equals(runDate);
+        boolean closed = !Boolean.TRUE.equals(schedule.getActive()) || "COMPLETED".equals(status) || "CANCELLED".equals(status)
+                || ("STARTED".equals(status) && travelDate.equals(runDate));
+        if (!runs || departed || closed) {
+            throw new com.tripgo.backend.exception.BadRequestException("This bus is no longer taking bookings for that date");
+        }
     }
 
     private LocalDate resolveTravelDate(RouteSchedule schedule, String travelDate, String fallbackDate) {
@@ -209,8 +229,9 @@ public class BookingController {
 
     // ─── POST apply promo code ────────────────────────────────────────────────
     @PostMapping("/apply-promo")
-    public ResponseEntity<ApplyPromoResponse> applyPromo(@Valid @RequestBody ApplyPromoRequest request) {
-        return ResponseEntity.ok(discountService.applyPromo(request));
+    public ResponseEntity<ApplyPromoResponse> applyPromo(@Valid @RequestBody ApplyPromoRequest request, Authentication auth) {
+        User user = (auth != null && auth.getPrincipal() instanceof CustomUserDetails cud) ? cud.getUser() : null;
+        return ResponseEntity.ok(discountService.applyPromo(request, user));
     }
 
     // ─── GET my bookings (user) ───────────────────────────────────────────────

@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import AdminLayout from '../shared/components/AdminLayout';
 import { API_BASE_URL } from '../config/env';
 import { ROUTES } from '../shared/constants/routes';
-import { Card, PageHeader, StatusPill } from '../features/admin/components/AdminUI';
+import { Card, PageHeader, StatusPill } from '../shared/components/console/ConsoleUI';
 
 // Traveller and operator support tickets are emailed here (backend SUPPORT_EMAIL); they aren't stored in TripGo
 const SUPPORT_EMAIL = 'support@tripgo.com';

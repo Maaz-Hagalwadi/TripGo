@@ -32,6 +32,8 @@ public class AdminDiscountController {
                 .maxDiscount(req.getMaxDiscount())
                 .minOrderAmount(req.getMinOrderAmount())
                 .usageLimit(req.getUsageLimit())
+                .perCustomerLimit(req.getPerCustomerLimit())
+                .firstBookingOnly(Boolean.TRUE.equals(req.getFirstBookingOnly()))
                 .usedCount(0)
                 .validFrom(req.getValidFrom())
                 .validTo(req.getValidTo())
@@ -49,6 +51,8 @@ public class AdminDiscountController {
             d.setMaxDiscount(req.getMaxDiscount());
             d.setMinOrderAmount(req.getMinOrderAmount());
             d.setUsageLimit(req.getUsageLimit());
+            d.setPerCustomerLimit(req.getPerCustomerLimit());
+            if (req.getFirstBookingOnly() != null) d.setFirstBookingOnly(req.getFirstBookingOnly());
             d.setValidFrom(req.getValidFrom());
             d.setValidTo(req.getValidTo());
             if (req.getActive() != null) d.setActive(req.getActive());

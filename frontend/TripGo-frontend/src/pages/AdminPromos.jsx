@@ -5,8 +5,8 @@ import { apiGet, apiPost, apiPut, apiPatch, apiDelete } from '../api/apiClient';
 import { toIstYmd } from '../shared/utils/scheduleSearchUtils';
 import {
   ActionButton, Card, ConfirmDialog, EmptyState, FilterTabs, PageHeader, SearchInput, SkeletonRows, StatCard, StatusPill,
-} from '../features/admin/components/AdminUI';
-import { headerPrimaryButton } from '../features/admin/components/adminStyles';
+} from '../shared/components/console/ConsoleUI';
+import { headerPrimaryButton } from '../shared/components/console/consoleStyles';
 
 const fetchDiscounts = () => apiGet('/admin/discounts');
 const createDiscount = (body) => apiPost('/admin/discounts', body);
@@ -14,7 +14,7 @@ const updateDiscount = (id, body) => apiPut(`/admin/discounts/${id}`, body);
 const toggleDiscount = (id) => apiPatch(`/admin/discounts/${id}/toggle`, {});
 const deleteDiscount = (id) => apiDelete(`/admin/discounts/${id}`);
 
-const EMPTY_FORM = { code: '', description: '', type: 'PERCENT', value: '', maxDiscount: '', minOrderAmount: '', usageLimit: '', validFrom: '', validTo: '', active: true };
+const EMPTY_FORM = { code: '', description: '', type: 'PERCENT', value: '', maxDiscount: '', minOrderAmount: '', usageLimit: '', perCustomerLimit: '', firstBookingOnly: false, validFrom: '', validTo: '', active: true };
 const INPUT = 'w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:bg-slate-50 disabled:text-slate-500';
 const LABEL = 'mb-1.5 block text-xs font-bold text-slate-600';
 
@@ -68,6 +68,7 @@ const PromoDialog = ({ promo, onClose, onSaved }) => {
     if (form.maxDiscount !== '' && !(Number(form.maxDiscount) > 0)) e.maxDiscount = 'Leave empty or enter an amount above 0';
     if (form.minOrderAmount !== '' && Number(form.minOrderAmount) < 0) e.minOrderAmount = 'Can’t be negative';
     if (form.usageLimit !== '' && !(Number.isInteger(Number(form.usageLimit)) && Number(form.usageLimit) >= 1)) e.usageLimit = 'Leave empty or enter a whole number';
+    if (form.perCustomerLimit !== '' && !(Number.isInteger(Number(form.perCustomerLimit)) && Number(form.perCustomerLimit) >= 1)) e.perCustomerLimit = 'Leave empty or enter a whole number';
     if (form.validFrom && form.validTo && form.validTo < form.validFrom) e.validTo = 'Must be on or after the start date';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -85,6 +86,8 @@ const PromoDialog = ({ promo, onClose, onSaved }) => {
         maxDiscount: form.type === 'PERCENT' && form.maxDiscount !== '' ? Number(form.maxDiscount) : null,
         minOrderAmount: form.minOrderAmount !== '' ? Number(form.minOrderAmount) : null,
         usageLimit: form.usageLimit !== '' ? Number(form.usageLimit) : null,
+        perCustomerLimit: form.perCustomerLimit !== '' ? Number(form.perCustomerLimit) : null,
+        firstBookingOnly: Boolean(form.firstBookingOnly),
         validFrom: form.validFrom || null,
         validTo: form.validTo || null,
       };
@@ -159,6 +162,22 @@ const PromoDialog = ({ promo, onClose, onSaved }) => {
               <input id="promo-limit" className={INPUT} type="number" inputMode="numeric" min="1" step="1" value={form.usageLimit} onChange={(e) => set('usageLimit', e.target.value)} placeholder="Unlimited" />
               {err('usageLimit')}
             </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className={LABEL} htmlFor="promo-per-customer">Uses per traveller <span className="font-normal text-slate-400">optional</span></label>
+              <input id="promo-per-customer" className={INPUT} type="number" inputMode="numeric" min="1" step="1" value={form.perCustomerLimit} onChange={(e) => set('perCustomerLimit', e.target.value)} placeholder="Unlimited" />
+              {err('perCustomerLimit')}
+              <p className="mt-1 text-xs text-slate-500">Counted by account, email and phone, so guests can’t reuse it either.</p>
+            </div>
+            <label className="flex items-start gap-3 rounded-xl border border-slate-200 p-3.5 cursor-pointer sm:mt-6">
+              <input type="checkbox" className="mt-0.5 w-4 h-4 accent-[#0B1F3A]" checked={Boolean(form.firstBookingOnly)} onChange={(e) => set('firstBookingOnly', e.target.checked)} />
+              <span>
+                <span className="block text-sm font-bold text-slate-800">First booking only</span>
+                <span className="block text-xs text-slate-500">Only travellers with no confirmed TripGo booking yet</span>
+              </span>
+            </label>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
@@ -333,6 +352,7 @@ const AdminPromos = () => {
                     <div className="text-sm">
                       <p className={p.state === 'EXPIRED' ? 'text-red-600' : 'text-slate-700'}>{validity(p)}</p>
                       <p className="text-xs text-slate-500">{p.usageLimit ? `${used} of ${p.usageLimit} uses` : `${used} uses · no limit`}</p>
+                      {(p.firstBookingOnly || p.perCustomerLimit) && <p className="text-xs text-slate-500">{[p.firstBookingOnly && 'First booking only', p.perCustomerLimit && `${p.perCustomerLimit}× per traveller`].filter(Boolean).join(' · ')}</p>}
                     </div>
                     <div className="flex items-center gap-2 md:justify-end">
                       <button

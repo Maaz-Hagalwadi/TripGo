@@ -242,3 +242,8 @@ export const getRoutePoints = async (routeId) => {
 export const importPointsFromRoute = async (scheduleId) => {
   return apiPost(`/operator/schedules/${scheduleId}/points/import-from-route`, {});
 };
+
+/** Stop (false) or resume (true) sales for a schedule; its bookings are untouched. */
+export const setScheduleActive = async (scheduleId, active) => {
+  return apiPatch(`/operator/schedules/${scheduleId}/active`, { active });
+};

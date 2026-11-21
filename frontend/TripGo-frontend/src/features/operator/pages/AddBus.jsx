@@ -2,333 +2,179 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useAuth } from '../../../shared/contexts/AuthContext';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
 import { getAmenities } from '../../../api/amenityService';
 import { useBusWizard } from '../context/BusWizardContext';
 import { addBusSchema } from '../../../shared/schemas';
 import { ROUTES } from '../../../shared/constants/routes';
+import { Card } from '../../../shared/components/console/ConsoleUI';
+import BusWizardHeader from '../components/BusWizardHeader';
+import { prettyType } from '../utils/operatorFormat';
 
-const AMENITY_ICONS = {
-  WIFI: 'wifi', AC: 'ac_unit', CHARGER: 'power', WATER: 'water_full', BLANKET: 'bed',
-};
+const AMENITY_ICONS = { WIFI: 'wifi', AC: 'ac_unit', CHARGER: 'power', CHARGING_POINT: 'power', WATER: 'water_full', WATER_BOTTLE: 'water_full', BLANKET: 'bed', TV: 'tv', SNACKS: 'restaurant', READING_LIGHT: 'light' };
 
 const BUS_TYPE_GROUPS = [
-  { label: 'Seater Types', options: [['SEATER','Seater'],['SEMI_SLEEPER','Semi Sleeper'],['EXECUTIVE_SEATER','Executive Seater'],['LUXURY_SEATER','Luxury Seater']] },
-  { label: 'Sleeper Types', options: [['SLEEPER','Sleeper'],['AC_SLEEPER','AC Sleeper'],['NON_AC_SLEEPER','Non-AC Sleeper'],['SEMI_SLEEPER_AC','Semi Sleeper AC'],['SEMI_SLEEPER_NON_AC','Semi Sleeper Non-AC']] },
-  { label: 'Multi-Axle', options: [['MULTI_AXLE_SEMI_SLEEPER','Multi-Axle Semi Sleeper'],['MULTI_AXLE_SLEEPER','Multi-Axle Sleeper'],['MULTI_AXLE_AC_SLEEPER','Multi-Axle AC Sleeper']] },
-  { label: 'Volvo Premium', options: [['VOLVO_AC','Volvo AC'],['VOLVO_MULTI_AXLE','Volvo Multi-Axle'],['VOLVO_SLEEPER','Volvo Sleeper'],['VOLVO_MULTI_AXLE_SLEEPER','Volvo Multi-Axle Sleeper']] },
-  { label: 'Mercedes-Benz Premium', options: [['MERCEDES_BENZ_AC','Mercedes-Benz AC'],['MERCEDES_BENZ_SLEEPER','Mercedes-Benz Sleeper']] },
-  { label: 'Special', options: [['ELECTRIC','Electric'],['MINI_BUS','Mini Bus'],['DELUXE','Deluxe'],['SUPER_DELUXE','Super Deluxe']] },
+  { label: 'Seater', options: [['SEATER', 'Seater'], ['SEMI_SLEEPER', 'Semi sleeper'], ['EXECUTIVE_SEATER', 'Executive seater'], ['LUXURY_SEATER', 'Luxury seater']] },
+  { label: 'Sleeper', options: [['SLEEPER', 'Sleeper'], ['AC_SLEEPER', 'AC sleeper'], ['NON_AC_SLEEPER', 'Non-AC sleeper'], ['SEMI_SLEEPER_AC', 'Semi sleeper AC'], ['SEMI_SLEEPER_NON_AC', 'Semi sleeper non-AC']] },
+  { label: 'Multi-axle', options: [['MULTI_AXLE_SEMI_SLEEPER', 'Multi-axle semi sleeper'], ['MULTI_AXLE_SLEEPER', 'Multi-axle sleeper'], ['MULTI_AXLE_AC_SLEEPER', 'Multi-axle AC sleeper']] },
+  { label: 'Volvo', options: [['VOLVO_AC', 'Volvo AC'], ['VOLVO_MULTI_AXLE', 'Volvo multi-axle'], ['VOLVO_SLEEPER', 'Volvo sleeper'], ['VOLVO_MULTI_AXLE_SLEEPER', 'Volvo multi-axle sleeper']] },
+  { label: 'Mercedes-Benz', options: [['MERCEDES_BENZ_AC', 'Mercedes-Benz AC'], ['MERCEDES_BENZ_SLEEPER', 'Mercedes-Benz sleeper']] },
+  { label: 'Other', options: [['ELECTRIC', 'Electric'], ['MINI_BUS', 'Mini bus'], ['DELUXE', 'Deluxe'], ['SUPER_DELUXE', 'Super deluxe']] },
 ];
 
-const STEPS = [
-  { label: 'Bus Info' },
-  { label: 'Seat Layout' },
-  { label: 'Review' },
-];
-
-const CHECKLIST = [
-  { icon: 'badge',        text: 'Bus name & unique code' },
-  { icon: 'pin',          text: 'Vehicle registration number' },
-  { icon: 'build',        text: 'Model & manufacturer' },
-  { icon: 'event_seat',   text: 'Total seat capacity' },
-  { icon: 'category',     text: 'Bus type (AC / Sleeper etc.)' },
-  { icon: 'wifi',         text: 'Available amenities list' },
-];
-
-const WIZARD_STEPS = [
-  { step: 1, label: 'Bus Info',     desc: 'Name, code, type & amenities',  icon: 'directions_bus', active: true  },
-  { step: 2, label: 'Seat Layout',  desc: 'Configure rows and seat grid',   icon: 'grid_view',      active: false },
-  { step: 3, label: 'Review',       desc: 'Confirm and submit your bus',    icon: 'fact_check',     active: false },
-];
-
-const TIPS = [
-  { text: 'Bus code must be unique across your fleet — use a short identifier like "MH01-BUS".' },
-  { text: 'Seat layout is configured in the next step. You can customise upper and lower berths.' },
-  { text: 'Amenities are shown to passengers during booking — select all that apply.' },
-];
-
-const inputCls = (hasError) =>
-  `w-full pl-10 pr-4 py-2.5 rounded-lg bg-white text-sm text-slate-900 outline-none border transition-all placeholder:text-slate-400 focus:ring-2 focus:ring-[#002046]/20 focus:border-[#002046]/50 ${hasError ? 'border-red-400' : 'border-slate-200'}`;
-
-const Field = ({ label, icon, error, children, required }) => (
-  <div>
-    <label className="block text-xs font-semibold text-slate-600 mb-1.5">
-      {label}{required && <span className="text-red-400 ml-0.5">*</span>}
-    </label>
-    <div className="relative">
-      <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-base pointer-events-none">{icon}</span>
-      {children}
-    </div>
-    {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
-  </div>
-);
+const INPUT = (err) => `w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:ring-2 transition-all ${
+  err ? 'border-red-300 focus:border-red-400 focus:ring-red-100' : 'border-slate-200 focus:border-primary focus:ring-primary/15'
+}`;
+const LABEL = 'mb-1.5 block text-xs font-bold text-slate-600';
+const Err = ({ msg }) => (msg ? <p className="mt-1 text-xs text-red-600">{msg}</p> : null);
+const isSleeperType = (t) => String(t).includes('SLEEPER') && !String(t).includes('SEMI');
 
 const AddBus = () => {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
   const { wizardData, updateWizard } = useBusWizard();
   const [amenities, setAmenities] = useState([]);
   const [loadingAmenities, setLoadingAmenities] = useState(true);
-  const [selectedAmenities, setSelectedAmenities] = useState(wizardData.amenityIds || []);
-  const [submitting, setSubmitting] = useState(false);
+  const [selected, setSelected] = useState(wizardData.amenityIds || []);
 
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const { register, handleSubmit, watch, formState: { errors } } = useForm({
     resolver: zodResolver(addBusSchema),
     defaultValues: {
-      busName: wizardData.busName || '',
-      busCode: wizardData.busCode || '',
-      vehicleNumber: wizardData.vehicleNumber || '',
-      model: wizardData.model || '',
-      busType: wizardData.busType || '',
-      totalSeats: wizardData.totalSeats || '',
+      busName: wizardData.busName || '', busCode: wizardData.busCode || '', vehicleNumber: wizardData.vehicleNumber || '',
+      model: wizardData.model || '', busType: wizardData.busType || '', totalSeats: wizardData.totalSeats || '',
     },
   });
 
   useEffect(() => {
-    if (loading) return;
-    if (!user || user.role !== 'OPERATOR') navigate(ROUTES.HOME);
-  }, [user, loading, navigate]);
-
-  useEffect(() => {
-    getAmenities()
-      .then(data => setAmenities(data || []))
-      .catch(() => setAmenities([]))
-      .finally(() => setLoadingAmenities(false));
+    getAmenities().then((d) => setAmenities(Array.isArray(d) ? d : [])).catch(() => setAmenities([])).finally(() => setLoadingAmenities(false));
   }, []);
 
-  const toggleAmenity = (id) =>
-    setSelectedAmenities(prev => prev.includes(id) ? prev.filter(a => a !== id) : [...prev, id]);
-
+  const toggle = (id) => setSelected((p) => (p.includes(id) ? p.filter((a) => a !== id) : [...p, id]));
   const onSubmit = (data) => {
-    setSubmitting(true);
-    updateWizard({ ...data, amenityIds: selectedAmenities });
+    // Changing type or seat count invalidates marks made on the old layout
+    const layoutChanged = data.busType !== wizardData.busType || String(data.totalSeats) !== String(wizardData.totalSeats);
+    updateWizard({ ...data, amenityIds: selected, ...(layoutChanged ? { seatMarks: {}, blockedSeats: [] } : {}) });
     navigate(ROUTES.OPERATOR_BUS_LAYOUT);
   };
 
+  const preview = watch();
+  const seats = Number(preview.totalSeats) || 0;
+  const sleeper = isSleeperType(preview.busType);
+
   return (
-    <OperatorLayout activeItem="add-bus" title="Add Bus">
-      <div className="space-y-4">
+    <OperatorLayout activeItem="add-bus" title="Add a bus">
+      <div className="space-y-5">
+        <BusWizardHeader step={0} title="Add a bus" subtitle="Tell travellers what they’ll ride in. TripGo approves new buses before they can be scheduled." onBack={() => navigate(ROUTES.OPERATOR_MY_BUSES)} />
 
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate(ROUTES.OPERATOR_MY_BUSES)}
-            className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 transition-colors flex-shrink-0"
-          >
-            <span className="material-symbols-outlined text-base">arrow_back</span>
-          </button>
-          <div>
-            <h1 className="text-lg font-black text-slate-900">Add New Bus</h1>
-            <p className="text-xs text-slate-500">Register your bus to start creating schedules</p>
-          </div>
-        </div>
-
-        {/* Stepper — full width */}
-        <div className="rounded-xl bg-white border border-slate-200 px-5 py-3.5">
-          <div className="flex items-center">
-            {STEPS.map((step, i) => (
-              <div key={step.label} className="flex items-center flex-1 last:flex-none">
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black transition-all ${
-                    i === 0 ? 'bg-[#002046] text-white' : 'bg-slate-100 text-slate-400'
-                  }`}>
-                    {i + 1}
-                  </div>
-                  <span className={`text-xs font-semibold hidden sm:block ${i === 0 ? 'text-[#002046]' : 'text-slate-400'}`}>
-                    {step.label}
-                  </span>
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+            <Card title="Identity" subtitle="How the bus appears to travellers and to TripGo" icon="badge">
+              <div className="grid gap-4 p-5 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className={LABEL} htmlFor="busName">Bus name</label>
+                  <input id="busName" {...register('busName')} placeholder="e.g. Royal Express AC Sleeper" className={INPUT(errors.busName)} />
+                  <Err msg={errors.busName?.message} />
                 </div>
-                {i < STEPS.length - 1 && <div className="flex-1 h-px mx-3 bg-slate-200" />}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Two-column: form + sidebar */}
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,560px)_1fr] gap-5 items-start">
-
-          {/* ── LEFT: Form ── */}
-          <form onSubmit={handleSubmit(onSubmit)}>
-            <div className="rounded-xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-
-              {/* Bus Identity */}
-              <div className="px-6 py-5 border-b border-slate-100">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-4">Bus Identity</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="sm:col-span-2">
-                    <Field label="Bus Name" icon="directions_bus" error={errors.busName?.message} required>
-                      <input {...register('busName')} placeholder="Enter bus name" className={inputCls(!!errors.busName)} />
-                    </Field>
-                  </div>
-                  <Field label="Bus Code" icon="tag" error={errors.busCode?.message} required>
-                    <input {...register('busCode')} placeholder="Enter bus code" className={inputCls(!!errors.busCode)} />
-                  </Field>
-                  <Field label="Vehicle Number" icon="pin" error={errors.vehicleNumber?.message} required>
-                    <input {...register('vehicleNumber')} placeholder="Enter vehicle number" className={inputCls(!!errors.vehicleNumber)} />
-                  </Field>
+                <div>
+                  <label className={LABEL} htmlFor="busCode">Bus code <span className="font-normal text-slate-400">your internal ID</span></label>
+                  <input id="busCode" {...register('busCode')} placeholder="e.g. RX-07" className={INPUT(errors.busCode)} />
+                  <Err msg={errors.busCode?.message} />
+                </div>
+                <div>
+                  <label className={LABEL} htmlFor="vehicleNumber">Number plate</label>
+                  <input id="vehicleNumber" {...register('vehicleNumber')} placeholder="KA 01 AB 1234" className={`${INPUT(errors.vehicleNumber)} uppercase`} />
+                  <Err msg={errors.vehicleNumber?.message} />
                 </div>
               </div>
+            </Card>
 
-              {/* Specifications */}
-              <div className="px-6 py-5 border-b border-slate-100">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-4">Specifications</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Model" icon="build" error={errors.model?.message} required>
-                    <input {...register('model')} placeholder="Enter bus model" className={inputCls(!!errors.model)} />
-                  </Field>
-                  <Field label="Total Seats" icon="event_seat" error={errors.totalSeats?.message} required>
-                    <input {...register('totalSeats')} type="number" min={1} placeholder="Enter total seats" className={inputCls(!!errors.totalSeats)} />
-                  </Field>
-                  <div className="sm:col-span-2">
-                    <Field label="Bus Type" icon="category" error={errors.busType?.message} required>
-                      <select {...register('busType')} className={`${inputCls(!!errors.busType)} appearance-none`}>
-                        <option value="">Select bus type</option>
-                        {BUS_TYPE_GROUPS.map(({ label, options }) => (
-                          <optgroup key={label} label={label}>
-                            {options.map(([val, text]) => <option key={val} value={val}>{text}</option>)}
-                          </optgroup>
-                        ))}
-                      </select>
-                      <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-base pointer-events-none">expand_more</span>
-                    </Field>
-                  </div>
+            <Card title="Type & capacity" subtitle="Decides the seat layout in the next step" icon="airline_seat_recline_extra">
+              <div className="grid gap-4 p-5 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <label className={LABEL} htmlFor="busType">Bus type</label>
+                  <select id="busType" {...register('busType')} className={INPUT(errors.busType)}>
+                    <option value="">Choose a type</option>
+                    {BUS_TYPE_GROUPS.map(({ label, options }) => (
+                      <optgroup key={label} label={label}>
+                        {options.map(([v, t]) => <option key={v} value={v}>{t}</option>)}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <Err msg={errors.busType?.message} />
                 </div>
+                <div>
+                  <label className={LABEL} htmlFor="model">Model</label>
+                  <input id="model" {...register('model')} placeholder="e.g. Volvo 9600" className={INPUT(errors.model)} />
+                  <Err msg={errors.model?.message} />
+                </div>
+                <div>
+                  <label className={LABEL} htmlFor="totalSeats">{sleeper ? 'Berths' : 'Seats'} <span className="font-normal text-slate-400">10–60</span></label>
+                  <input id="totalSeats" type="number" inputMode="numeric" min={10} max={60} {...register('totalSeats')} placeholder="40" className={INPUT(errors.totalSeats)} />
+                  <Err msg={errors.totalSeats?.message} />
+                </div>
+                {seats >= 10 && preview.busType && (
+                  <p className="sm:col-span-2 flex items-center gap-2 rounded-xl bg-slate-50 px-4 py-2.5 text-xs text-slate-600">
+                    <span className="material-symbols-outlined text-[16px] text-[#FF8A65]">info</span>
+                    {sleeper
+                      ? `Layout: ${Math.floor(seats / 2)} lower and ${seats - Math.floor(seats / 2)} upper berths, 1 + 2 per row.`
+                      : `Layout: ${Math.ceil(seats / 4)} rows of 2 + 2 seats.`}
+                  </p>
+                )}
               </div>
+            </Card>
 
-              {/* Amenities */}
-              <div className="px-6 py-5">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Amenities</p>
-                  {selectedAmenities.length > 0 && (
-                    <span className="text-[10px] font-bold text-[#002046] bg-[#002046]/8 px-2 py-0.5 rounded-full">
-                      {selectedAmenities.length} selected
-                    </span>
-                  )}
-                </div>
-                {loadingAmenities ? (
-                  <div className="flex items-center gap-2 py-4 text-slate-400 text-sm">
-                    <div className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-[#002046] animate-spin" />
-                    Loading amenities...
-                  </div>
-                ) : amenities.length === 0 ? (
-                  <p className="text-slate-400 text-sm py-2">No amenities available</p>
+            <Card title="Amenities" subtitle="Shown to travellers on search results and when booking" icon="star" action={selected.length > 0 && <span className="text-xs font-bold text-orange-700">{selected.length} selected</span>}>
+              <div className="p-5">
+                {loadingAmenities ? <div className="h-10 rounded-xl bg-slate-100 animate-pulse" /> : amenities.length === 0 ? (
+                  <p className="text-sm text-slate-500">No amenities are set up yet.</p>
                 ) : (
                   <div className="flex flex-wrap gap-2">
-                    {amenities.map(amenity => {
-                      const selected = selectedAmenities.includes(amenity.id);
+                    {amenities.map((a) => {
+                      const on = selected.includes(a.id);
                       return (
-                        <button key={amenity.id} type="button" onClick={() => toggleAmenity(amenity.id)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                            selected
-                              ? 'bg-[#002046] text-white border-[#002046]'
-                              : 'bg-slate-50 text-slate-600 border-slate-200 hover:border-[#002046]/40'
-                          }`}>
-                          <span className="material-symbols-outlined text-sm">{AMENITY_ICONS[amenity.code] || 'check_circle'}</span>
-                          {amenity.description || amenity.code}
+                        <button key={a.id} type="button" onClick={() => toggle(a.id)} aria-pressed={on}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-bold transition-colors ${on ? 'bg-primary border-primary text-white' : 'border-slate-200 text-slate-600 hover:border-[#FF8A65]'}`}>
+                          <span className="material-symbols-outlined text-[16px]">{on ? 'check' : (AMENITY_ICONS[a.code] || 'add')}</span>
+                          {a.description || prettyType(a.code)}
                         </button>
                       );
                     })}
                   </div>
                 )}
               </div>
+            </Card>
 
-              {/* Footer */}
-              <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/60 flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => navigate(ROUTES.OPERATOR_MY_BUSES)}
-                  disabled={submitting}
-                  className="px-5 py-2 rounded-lg border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-white transition-colors disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-6 py-2 rounded-lg bg-[#002046] text-white font-bold text-sm flex items-center gap-2 hover:bg-[#003a80] transition-colors shadow-sm disabled:opacity-60"
-                >
-                  {submitting ? (
-                    <><div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />Saving...</>
-                  ) : (
-                    <>Next: Seat Layout<span className="material-symbols-outlined text-base">arrow_forward</span></>
-                  )}
-                </button>
-              </div>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => navigate(ROUTES.OPERATOR_MY_BUSES)} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button type="submit" className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-[#102A4C]">
+                Next: seat layout<span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+              </button>
             </div>
           </form>
 
-          {/* ── RIGHT: Sidebar ── */}
-          <div className="hidden lg:block">
-          <div className="flex flex-col gap-4 sticky top-6">
-
-            {/* Top row: Registration Steps + Quick Tips side by side */}
-            <div className="grid grid-cols-2 gap-4 items-start">
-
-              {/* Steps overview */}
-              <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-100">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Registration Steps</p>
-                </div>
-                <div className="divide-y divide-slate-50">
-                  {[
-                    { step: 1, label: 'Bus Info',    desc: 'Name, code, type & amenities', icon: 'directions_bus', active: true  },
-                    { step: 2, label: 'Seat Layout', desc: 'Configure rows & seat grid',   icon: 'grid_view',      active: false },
-                    { step: 3, label: 'Review',      desc: 'Confirm and submit your bus',  icon: 'fact_check',     active: false },
-                  ].map(({ step, label, desc, icon, active }) => (
-                    <div key={step} className={`flex items-start gap-3 px-4 py-3 ${active ? 'bg-[#002046]/[0.02]' : 'opacity-50'}`}>
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-[10px] font-black ${active ? 'bg-[#002046] text-white' : 'bg-slate-100 text-slate-400'}`}>
-                        {step}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <p className={`text-xs font-bold ${active ? 'text-[#002046]' : 'text-slate-500'}`}>{label}</p>
-                          {active && <span className="text-[9px] font-bold text-[#002046] bg-[#002046]/10 px-1.5 py-0.5 rounded-full">Now</span>}
-                        </div>
-                        <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">{desc}</p>
-                      </div>
-                      <span className="material-symbols-outlined text-slate-300 text-base flex-shrink-0">{icon}</span>
-                    </div>
+          <aside className="space-y-4 lg:sticky lg:top-4">
+            <section className="rounded-2xl bg-white border border-slate-200/80 shadow-sm p-5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Preview</p>
+              <p className="mt-2 text-lg font-black text-slate-900 truncate">{preview.busName || 'Your bus name'}</p>
+              <p className="text-sm text-slate-500">{[preview.busType && prettyType(preview.busType), seats ? `${seats} ${sleeper ? 'berths' : 'seats'}` : null].filter(Boolean).join(' · ') || 'Type · seats'}</p>
+              {selected.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {amenities.filter((a) => selected.includes(a.id)).map((a) => (
+                    <span key={a.id} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                      <span className="material-symbols-outlined text-[13px] text-green-600">check</span>{a.description || prettyType(a.code)}
+                    </span>
                   ))}
                 </div>
-              </div>
-
-              {/* Quick Tips */}
-              <div className="rounded-xl bg-amber-50 border border-amber-100 overflow-hidden">
-                <div className="px-4 py-3.5 border-b border-amber-100 flex items-center gap-2">
-                  <span className="material-symbols-outlined text-amber-500 text-base">lightbulb</span>
-                  <p className="text-xs font-black text-amber-800">Quick Tips</p>
-                </div>
-                <div className="px-4 py-3 space-y-3">
-                  {TIPS.map(({ text }) => (
-                    <div key={text} className="flex items-start gap-2">
-                      <span className="text-amber-400 text-xs mt-0.5 flex-shrink-0">•</span>
-                      <p className="text-[11px] text-amber-700 leading-relaxed">{text}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-
-            {/* What you'll need — full width below */}
-            <div className="rounded-2xl bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] p-4 text-white shadow-sm relative overflow-hidden">
-              <div className="absolute -top-2 -right-2 text-5xl opacity-10 select-none">★</div>
-              <p className="text-[9px] font-semibold opacity-60 uppercase tracking-wider mb-3">What you'll need</p>
-              <div className="grid grid-cols-2 gap-x-4 gap-y-4">
-                {CHECKLIST.map(({ icon, text }) => (
-                  <div key={text} className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-white/60 text-sm flex-shrink-0">{icon}</span>
-                    <span className="text-[11px] font-medium text-white/80">{text}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
-          </div>
+              )}
+            </section>
+            <section className="rounded-2xl bg-[#FFF7F2] border border-[#FDBA74]/40 p-5">
+              <p className="flex items-center gap-1.5 text-sm font-black text-slate-900"><span className="material-symbols-outlined text-[18px] text-orange-600">lightbulb</span>Good to know</p>
+              <ul className="mt-2 space-y-2 text-xs text-slate-600">
+                <li>Type and seat count can’t be changed after you submit — they define the seat layout.</li>
+                <li>Mark ladies-only, window and blocked seats in the next step.</li>
+                <li>Approval usually takes under a day; you’ll get an email when it’s done.</li>
+              </ul>
+            </section>
+          </aside>
         </div>
       </div>
     </OperatorLayout>

@@ -40,6 +40,13 @@ public class Discount {
     @Column(name = "usage_limit")
     private Integer usageLimit;
 
+    @Column(name = "per_customer_limit")
+    private Integer perCustomerLimit;   // null = no per-traveller cap
+
+    @Builder.Default
+    @Column(name = "first_booking_only", nullable = false)
+    private Boolean firstBookingOnly = false;
+
     @Column(name = "used_count")
     private Integer usedCount;
 

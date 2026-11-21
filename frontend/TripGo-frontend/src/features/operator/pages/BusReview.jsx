@@ -1,295 +1,139 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../shared/contexts/AuthContext';
+import { toast } from 'sonner';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
 import { createBus, generateLayout, getBusSeats, markSeat } from '../../../api/busService';
 import { getAmenities } from '../../../api/amenityService';
 import { useBusWizard } from '../context/BusWizardContext';
-import { toast } from 'sonner';
 import { ROUTES } from '../../../shared/constants/routes';
+import { Card, EmptyState } from '../../../shared/components/console/ConsoleUI';
 import CenterScreenLoader from '../../../shared/components/ui/CenterScreenLoader';
+import BusWizardHeader from '../components/BusWizardHeader';
+import { prettyType } from '../utils/operatorFormat';
 
-const MARK_LABELS = { isBlocked: 'Blocked', isLadiesOnly: 'Ladies Only', isWindow: 'Window', isAisle: 'Aisle' };
-const MARK_COLORS = {
-  isBlocked:    'bg-slate-100 text-slate-600 border-slate-300',
-  isLadiesOnly: 'bg-pink-50 text-pink-600 border-pink-300',
-  isWindow:     'bg-blue-50 text-blue-600 border-blue-300',
-  isAisle:      'bg-teal-50 text-teal-600 border-teal-300',
-};
-
-const STEPS = ['Bus Info', 'Seat Layout', 'Review'];
+const MARK_LABELS = { isLadiesOnly: 'Women only', isWindow: 'Window', isAisle: 'Aisle', isBlocked: 'Not for sale' };
+const isSleeperType = (t) => String(t).includes('SLEEPER') && !String(t).includes('SEMI');
 
 const BusReview = () => {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
-  const { wizardData, resetWizard } = useBusWizard();
-  const { busName, busCode, vehicleNumber, model, totalSeats, busType, amenityIds, seatMarks } = wizardData;
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [amenitiesList, setAmenitiesList] = useState([]);
+  const { wizardData, updateWizard, resetWizard } = useBusWizard();
+  const { busName, busCode, vehicleNumber, model, totalSeats, busType, amenityIds = [], seatMarks = {}, createdBusId } = wizardData;
+  const [submitting, setSubmitting] = useState(false);
+  const [amenities, setAmenities] = useState([]);
 
-  useEffect(() => {
-    if (loading) return;
-    if (!user || user.role !== 'OPERATOR') navigate(ROUTES.HOME);
-  }, [user, loading, navigate]);
+  useEffect(() => { getAmenities().then((a) => setAmenities(Array.isArray(a) ? a : [])).catch(() => {}); }, []);
 
-  useEffect(() => {
-    getAmenities().then(setAmenitiesList).catch(() => {});
-  }, []);
+  const sleeper = isSleeperType(busType);
+  const seatCount = parseInt(totalSeats, 10) || 0;
 
-  const getLayoutTemplate = (type) => {
-    if (type?.includes('SLEEPER') && !type?.includes('SEMI')) return 'SLEEPER_2X1';
-    return 'SEATER_2X2';
-  };
-
-  const handleSubmit = async () => {
-    setIsSubmitting(true);
+  const submit = async () => {
+    setSubmitting(true);
     try {
-      const seats_count = parseInt(totalSeats);
-      const bus = await createBus({ name: busName, busCode, vehicleNumber, model, totalSeats: seats_count, busType, amenityIds: amenityIds || [] });
+      // If a previous attempt created the bus but a later step failed, continue with that bus
+      let busId = createdBusId;
+      if (!busId) {
+        const bus = await createBus({ name: busName, busCode, vehicleNumber, model, totalSeats: seatCount, busType, amenityIds });
+        busId = bus.id;
+        updateWizard({ createdBusId: busId });
+      }
+      const template = sleeper ? 'SLEEPER_2X1' : 'SEATER_2X2';
+      await generateLayout(busId, template, sleeper ? Math.ceil(seatCount / 6) : Math.ceil(seatCount / 4));
 
-      const template = getLayoutTemplate(busType);
-      const rows = template === 'SLEEPER_2X1' ? Math.ceil(seats_count / 6) : Math.ceil(seats_count / 4);
-      await generateLayout(bus.id, template, rows);
-
-      if (seatMarks && Object.keys(seatMarks).length > 0) {
-        const seatsData = await getBusSeats(bus.id);
-        const combined = [
-          ...(seatsData.seats ?? []),
-          ...(seatsData.lowerDeck ?? []),
-          ...(seatsData.upperDeck ?? []),
-        ];
-        const toMark = combined.filter(s => seatMarks[s.seatNumber]);
-        await Promise.allSettled(toMark.map(s => markSeat(bus.id, s.id, seatMarks[s.seatNumber])));
+      const marked = Object.keys(seatMarks);
+      if (marked.length) {
+        const data = await getBusSeats(busId);
+        const all = [...(data.seats ?? []), ...(data.lowerDeck ?? []), ...(data.upperDeck ?? [])];
+        const targets = all.filter((s) => seatMarks[s.seatNumber]);
+        const results = await Promise.allSettled(targets.map((s) => markSeat(busId, s.id, seatMarks[s.seatNumber])));
+        const failed = results.filter((r) => r.status === 'rejected').length + (marked.length - targets.length);
+        if (failed) toast.warning(`${failed} seat mark${failed > 1 ? 's' : ''} couldn’t be saved — you can set them later from My buses.`);
       }
 
       resetWizard();
-      toast.success('Bus added and sent for admin approval.');
+      toast.success('Bus submitted. TripGo will review it shortly.');
       navigate(ROUTES.OPERATOR_MY_BUSES);
     } catch (error) {
-      const message = error.message || 'Failed to add bus. Please try again.';
-      toast.error(
-        message.includes('duplicate key') || message.includes('duplicate') || message.includes('already exists') || message.includes('unique constraint')
-          ? 'Bus code already exists. Please go back and use a different bus code.'
-          : message
-      );
+      const message = error.message || 'Couldn’t submit the bus. Please try again.';
+      toast.error(/duplicate|already exists|unique/i.test(message) ? 'That bus code or number plate is already registered. Go back and change it.' : message);
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
   };
 
+  if (!busType || !seatCount) {
+    return (
+      <OperatorLayout activeItem="add-bus" title="Review">
+        <Card>
+          <EmptyState icon="directions_bus" title="Nothing to review yet" subtitle="Fill in the bus details first."
+            action={<button onClick={() => navigate(ROUTES.OPERATOR_ADD_BUS)} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white">Go to bus details</button>} />
+        </Card>
+      </OperatorLayout>
+    );
+  }
+
+  const markRows = Object.entries(seatMarks);
+  const amenityNames = amenityIds.map((id) => amenities.find((a) => a.id === id)).filter(Boolean).map((a) => a.description || prettyType(a.code));
+  const blocked = markRows.filter(([, m]) => m.isBlocked).length;
+
   return (
-    <OperatorLayout activeItem="add-bus" title="Review & Submit">
-      {isSubmitting && (
-        <CenterScreenLoader
-          label="Processing your bus submission..."
-          description="Please wait while we create the bus and prepare the seat layout."
-        />
-      )}
-      <div className="space-y-4">
+    <OperatorLayout activeItem="add-bus" title="Review">
+      {submitting && <CenterScreenLoader label="Submitting your bus…" description="Creating the bus and its seat layout." />}
+      <div className="space-y-5">
+        <BusWizardHeader step={2} title="Review & submit" subtitle="Check everything — the type and seat count can’t be changed later." onBack={() => navigate(ROUTES.OPERATOR_BUS_LAYOUT)} />
 
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate(ROUTES.OPERATOR_BUS_LAYOUT)}
-            className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 transition-colors flex-shrink-0"
-          >
-            <span className="material-symbols-outlined text-base">arrow_back</span>
-          </button>
-          <div>
-            <h1 className="text-lg font-black text-slate-900">Review & Submit</h1>
-            <p className="text-xs text-slate-500 mt-0.5">Confirm your bus details before submitting</p>
-          </div>
-        </div>
-
-        {/* Stepper */}
-        <div className="rounded-xl bg-white border border-slate-200 px-5 py-3.5">
-          <div className="flex items-center">
-            {STEPS.map((label, i) => {
-              const done = i < 2, active = i === 2;
-              return (
-                <div key={label} className="flex items-center flex-1 last:flex-none">
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black ${done ? 'bg-emerald-500 text-white' : active ? 'bg-[#002046] text-white' : 'bg-slate-100 text-slate-400'}`}>
-                      {done ? <span className="material-symbols-outlined text-xs">check</span> : i + 1}
-                    </div>
-                    <span className={`text-xs font-semibold hidden sm:block ${done ? 'text-emerald-600' : active ? 'text-[#002046]' : 'text-slate-400'}`}>{label}</span>
-                  </div>
-                  {i < STEPS.length - 1 && <div className="flex-1 h-px mx-3 bg-slate-200" />}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Two-column: review card + sidebar */}
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,560px)_1fr] gap-5 items-start">
-
-          {/* LEFT: Review card */}
-          <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-
-            {/* Navy hero header */}
-            <div className="bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-5 pt-5 pb-6 relative">
-              <div className="absolute -bottom-3 -right-3 text-7xl opacity-[0.06] select-none pointer-events-none">★</div>
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center flex-shrink-0">
-                  <span className="material-symbols-outlined text-white text-2xl">directions_bus</span>
-                </div>
-                <div className="min-w-0 flex-1 pr-2">
-                  <h2 className="text-lg font-black text-white truncate">{busName}</h2>
-                  <p className="text-white/50 text-xs mt-0.5 font-medium">{busCode} · {vehicleNumber}</p>
-                </div>
-              </div>
-              <div className="flex items-center flex-wrap gap-2 mt-3">
-                <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold bg-emerald-400/20 text-emerald-300">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  Ready to Submit
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold bg-white/10 text-white/70">
-                  {busType?.replace(/_/g, ' ')}
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold bg-white/10 text-white/70">
-                  <span className="material-symbols-outlined text-xs">event_seat</span>
-                  {totalSeats} seats
-                </span>
-              </div>
-            </div>
-
-            {/* Details */}
-            <div className="px-5 py-4 border-b border-slate-100">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">Details</p>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { icon: 'precision_manufacturing', label: 'Model',       value: model },
-                  { icon: 'event_seat',              label: 'Total Seats', value: totalSeats },
-                ].map(({ icon, label, value }) => (
-                  <div key={label} className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 ring-1 ring-slate-100">
-                    <div className="w-7 h-7 rounded-lg bg-white ring-1 ring-slate-200 flex items-center justify-center flex-shrink-0">
-                      <span className="material-symbols-outlined text-slate-500 text-sm">{icon}</span>
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">{label}</p>
-                      <p className="text-sm font-bold text-slate-800 truncate">{value || '—'}</p>
-                    </div>
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
+          <div className="space-y-5">
+            <Card title="Bus details" icon="directions_bus" action={<button onClick={() => navigate(ROUTES.OPERATOR_ADD_BUS)} className="text-xs font-bold text-primary hover:text-[#FF8A65]">Edit</button>}>
+              <dl className="grid gap-x-6 gap-y-4 p-5 sm:grid-cols-2">
+                {[['Bus name', busName], ['Bus code', busCode], ['Number plate', vehicleNumber], ['Model', model], ['Type', prettyType(busType)], [sleeper ? 'Berths' : 'Seats', `${seatCount}${blocked ? ` (${seatCount - blocked} for sale)` : ''}`]].map(([k, v]) => (
+                  <div key={k}>
+                    <dt className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{k}</dt>
+                    <dd className="mt-0.5 text-sm font-semibold text-slate-900">{v || '—'}</dd>
                   </div>
                 ))}
+              </dl>
+              <div className="border-t border-slate-100 px-5 py-4">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Amenities</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {amenityNames.length ? amenityNames.map((n) => (
+                    <span key={n} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700"><span className="material-symbols-outlined text-[14px] text-green-600">check</span>{n}</span>
+                  )) : <span className="text-sm text-slate-500">None selected</span>}
+                </div>
               </div>
-            </div>
+            </Card>
 
-            {/* Amenities */}
-            <div className="px-5 py-4 border-b border-slate-100">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">Amenities</p>
-              <div className="flex flex-wrap gap-2">
-                {amenityIds?.length > 0
-                  ? amenityIds.map(id => {
-                      const amenity = amenitiesList.find(a => a.id === id);
-                      return (
-                        <span key={id} className="flex items-center gap-1.5 rounded-xl bg-[#002046]/[0.08] text-[#002046] px-3 py-1.5 text-xs font-semibold">
-                          <span className="material-symbols-outlined text-xs">check_circle</span>
-                          {amenity?.code || id}
-                        </span>
-                      );
-                    })
-                  : <span className="text-slate-400 text-sm">No amenities selected</span>}
-              </div>
-            </div>
-
-            {/* Seat Marks */}
-            {seatMarks && Object.keys(seatMarks).length > 0 && (
-              <div className="px-5 py-4 border-b border-slate-100">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-3">
-                  Seat Marks ({Object.keys(seatMarks).length})
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {Object.entries(seatMarks).map(([num, marks]) => {
-                    const flags = ['isBlocked', 'isLadiesOnly', 'isWindow', 'isAisle'].filter(k => marks[k]);
-                    const firstFlag = flags[0];
-                    return (
-                      <span
-                        key={num}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border ${firstFlag ? MARK_COLORS[firstFlag] : 'bg-slate-50 text-slate-600 border-slate-200'}`}
-                      >
-                        {num}: {flags.map(f => MARK_LABELS[f]).join(', ')}
+            <Card title="Seat marks" icon="event_seat" action={<button onClick={() => navigate(ROUTES.OPERATOR_BUS_LAYOUT)} className="text-xs font-bold text-primary hover:text-[#FF8A65]">Edit</button>}>
+              <div className="p-5">
+                {markRows.length === 0 ? <p className="text-sm text-slate-500">No seats marked — every seat will be on sale.</p> : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {markRows.sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true })).map(([n, m]) => (
+                      <span key={n} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs">
+                        <b className="text-slate-900">{n}</b> <span className="text-slate-500">{Object.keys(MARK_LABELS).filter((k) => m[k]).map((k) => MARK_LABELS[k]).join(', ')}</span>
                       </span>
-                    );
-                  })}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
+            </Card>
 
-            {/* Footer */}
-            <div className="px-5 py-4 bg-slate-50/60 flex items-center justify-between gap-3">
-              <button
-                onClick={() => navigate(ROUTES.OPERATOR_BUS_LAYOUT)}
-                className="px-5 py-2.5 rounded-lg border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-white transition-colors"
-              >
-                Back
-              </button>
-              <button
-                onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="px-6 py-2.5 rounded-lg bg-[#002046] text-white font-bold text-sm flex items-center gap-2 hover:bg-[#003a80] transition-colors shadow-sm disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-base">check_circle</span>
-                Confirm & Submit
+            <div className="flex justify-between gap-2">
+              <button onClick={() => navigate(ROUTES.OPERATOR_BUS_LAYOUT)} className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">Back</button>
+              <button onClick={submit} disabled={submitting} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white hover:bg-[#102A4C] disabled:opacity-50">
+                <span className="material-symbols-outlined text-[18px]">send</span>Submit for approval
               </button>
             </div>
           </div>
 
-          {/* RIGHT: Sidebar */}
-          <div className="hidden lg:block">
-            <div className="flex flex-col gap-4 sticky top-6">
-
-              {/* Registration Steps */}
-              <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-100">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Registration Steps</p>
-                </div>
-                <div className="divide-y divide-slate-50">
-                  {[
-                    { step: 1, label: 'Bus Info',    desc: 'Name, code, type & amenities', icon: 'directions_bus', state: 'done'   },
-                    { step: 2, label: 'Seat Layout', desc: 'Configure rows & seat grid',   icon: 'grid_view',      state: 'done'   },
-                    { step: 3, label: 'Review',      desc: 'Confirm and submit your bus',  icon: 'fact_check',     state: 'active' },
-                  ].map(({ step, label, desc, icon, state }) => (
-                    <div key={step} className={`flex items-start gap-2.5 px-4 py-3 ${state === 'active' ? 'bg-[#002046]/[0.02]' : ''}`}>
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-[10px] font-black ${
-                        state === 'done' ? 'bg-emerald-500 text-white' : state === 'active' ? 'bg-[#002046] text-white' : 'bg-slate-100 text-slate-400'
-                      }`}>
-                        {state === 'done' ? <span className="material-symbols-outlined text-xs">check</span> : step}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className={`text-[11px] font-bold ${state === 'active' ? 'text-[#002046]' : state === 'done' ? 'text-emerald-600' : 'text-slate-500'}`}>{label}</p>
-                          {state === 'active' && <span className="text-[9px] font-bold text-[#002046] bg-[#002046]/10 px-1.5 py-0.5 rounded-full">Now</span>}
-                        </div>
-                        <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">{desc}</p>
-                      </div>
-                      <span className="material-symbols-outlined text-slate-300 text-sm flex-shrink-0">{icon}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* What happens next */}
-              <div className="rounded-2xl bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] p-4 text-white shadow-sm relative overflow-hidden">
-                <div className="absolute -top-2 -right-2 text-5xl opacity-10 select-none">★</div>
-                <p className="text-[9px] font-semibold opacity-60 uppercase tracking-wider mb-3">What happens next?</p>
-                <div className="space-y-3">
-                  {[
-                    'Your bus will be submitted for admin approval.',
-                    'Once approved, it will appear in route assignments.',
-                    "You'll be notified when your bus goes live.",
-                  ].map(tip => (
-                    <div key={tip} className="flex items-start gap-2">
-                      <span className="text-white/40 text-xs mt-0.5 flex-shrink-0">•</span>
-                      <p className="text-[11px] text-white/70 leading-relaxed">{tip}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-          </div>
-
+          <aside className="rounded-2xl bg-[#FFF7F2] border border-[#FDBA74]/40 p-5 lg:sticky lg:top-4">
+            <p className="flex items-center gap-1.5 text-sm font-black text-slate-900"><span className="material-symbols-outlined text-[18px] text-orange-600">schedule</span>What happens next</p>
+            <ol className="mt-3 space-y-3 text-sm text-slate-600">
+              {['TripGo checks the bus details — usually within a day.', 'You get an email and a notification when it’s approved.', 'Then add it to a route schedule and it goes on sale.'].map((t, i) => (
+                <li key={t} className="flex gap-2.5">
+                  <span className="w-5 h-5 flex-shrink-0 rounded-full bg-white text-[11px] font-black text-orange-700 flex items-center justify-center">{i + 1}</span>{t}
+                </li>
+              ))}
+            </ol>
+          </aside>
         </div>
       </div>
     </OperatorLayout>

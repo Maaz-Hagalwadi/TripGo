@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { VISIT_TRACKING_ENABLED } from '../../../shared/constants/features';
 import { getVisitSummary, getVisits } from '../../../api/visitAnalyticsService';
-import { Avatar, Card, EmptyState, FilterTabs, Pagination, SearchInput, SkeletonRows, StatCard, StatusPill } from './AdminUI';
+import { Avatar, Card, EmptyState, FilterTabs, Pagination, SearchInput, SkeletonRows, StatCard, StatusPill } from '../../../shared/components/console/ConsoleUI';
 
 const VISITS_COLOR = '#3B6FB6';
 const PAGE_SIZE = 25;

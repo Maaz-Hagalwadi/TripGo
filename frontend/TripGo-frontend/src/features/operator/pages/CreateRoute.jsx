@@ -1,444 +1,412 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../shared/contexts/AuthContext';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
 import { getBuses } from '../../../api/busService';
-import { createRoute, addSegment, addFare, createSchedule } from '../../../api/routeService';
-import { toast } from 'sonner';
+import { addFare, addPoint, addSegment, createRoute, createSchedule, getCities, recomputeDistance } from '../../../api/routeService';
+import { assignDriverToSchedule, getDrivers } from '../../../api/operatorDriverService';
 import { ROUTES } from '../../../shared/constants/routes';
-import CenterScreenLoader from '../../../shared/components/ui/CenterScreenLoader';
+import BusWizardHeader from '../components/BusWizardHeader';
+import DepartureFields from '../components/DepartureFields';
+import PointsEditor from '../components/PointsEditor';
+import {
+  fareSeatTypesFor, istToIso, minutesLabel, prettyType, rupees, SEAT_TYPE_LABEL, todayIst,
+} from '../utils/operatorFormat';
+import {
+  departureError, departurePayload, emptyDeparture, FREQUENCIES, INPUT, LABEL, pointError, pointPayload, toList,
+} from '../utils/routeForms';
 
-const STEPS = ['Route Details', 'Stops', 'Fares', 'Schedule'];
+const STEPS = ['Route & bus', 'Stops', 'Fares', 'Departure', 'Pickup & drop'];
+const norm = (v) => String(v || '').trim().toLowerCase();
+const leg = (to = '') => ({ to, km: '', mins: '' });
 
 const CreateRoute = () => {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
-  const [step, setStep] = useState(1);
-  const [buses, setBuses] = useState([]);
+  const [step, setStep] = useState(0);
+  const [buses, setBuses] = useState(null);
+  const [drivers, setDrivers] = useState([]);
+  const [cities, setCities] = useState([]);
 
-  const [routeData, setRouteData] = useState({ name: '', origin: '', destination: '' });
-  const [routeId, setRouteId] = useState(null);
-  const [segments, setSegments] = useState([{ fromStop: '', toStop: '', distanceKm: '', durationMinutes: '' }]);
-  const [segmentIds, setSegmentIds] = useState([]);
-  const [fares, setFares] = useState([]);
-  const [scheduleData, setScheduleData] = useState({ busId: '', departureDate: '', departureTime: '', arrivalDate: '', arrivalTime: '', frequency: 'DAILY' });
-  const [submitting, setSubmitting] = useState(false);
-  const [submittingLabel, setSubmittingLabel] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+  const [route, setRoute] = useState({ name: '', origin: '', destination: '' });
+  const [busId, setBusId] = useState('');
+  const [legs, setLegs] = useState([leg()]); // last leg always ends at the destination
+  const [fares, setFares] = useState({}); // { [legIndex]: { [seatType]: '450' } }
+  const [gst, setGst] = useState('5');
+  const [departure, setDeparture] = useState(emptyDeparture());
+  const [driverId, setDriverId] = useState('');
+  const [points, setPoints] = useState([]);
 
-  const selectedBus = buses.find(b => String(b.id) === String(scheduleData.busId));
-  const getFareSeatTypes = (busType = '') => {
-    const t = busType.toUpperCase();
-    if (t.includes('AC') && t.includes('SLEEPER')) return ['AC_SLEEPER'];
-    if (t.includes('SLEEPER')) return ['SLEEPER'];
-    if (t.includes('AC')) return ['AC_SEATER'];
-    return ['SEATER'];
-  };
-  const fareSeatTypes = selectedBus ? getFareSeatTypes(selectedBus.busType) : ['SEATER', 'SLEEPER', 'AC_SEATER', 'AC_SLEEPER'];
+  const [error, setError] = useState('');
+  const [publishing, setPublishing] = useState('');
+  // What has already been saved, so "Try again" after a failure resumes instead of duplicating
+  const saved = useRef({ routeId: null, segmentIds: [], fares: {}, scheduleId: null, points: 0, driver: false });
+  const [routeSaved, setRouteSaved] = useState(false);
 
   useEffect(() => {
-    if (loading) return;
-    if (!user || user.role !== 'OPERATOR') { navigate('/'); return; }
-    getBuses().then(data => setBuses((data || []).filter(b => b.active))).catch(() => {});
-  }, [user, loading, navigate]);
+    getBuses().then((d) => setBuses(toList(d).filter((b) => b.active))).catch(() => setBuses([]));
+    getDrivers().then((d) => setDrivers(toList(d))).catch(() => {});
+    getCities().then((c) => setCities(Array.isArray(c) ? c : [])).catch(() => {});
+  }, []);
 
-  const handleStep1Submit = async () => {
-    if (!routeData.name || !routeData.origin || !routeData.destination) { setErrorMessage('Please fill all route details'); return; }
-    try {
-      setSubmitting(true); setSubmittingLabel('Saving route details...'); setErrorMessage('');
-      const response = await createRoute(routeData);
-      setRouteId(response.id);
-      setSegments([{ fromStop: routeData.origin, toStop: '', distanceKm: '', durationMinutes: '' }]);
-      setStep(2);
-    } catch (e) { setErrorMessage(e.message); }
-    finally { setSubmitting(false); setSubmittingLabel(''); }
-  };
+  const bus = buses?.find((b) => String(b.id) === String(busId));
+  const seatTypes = fareSeatTypesFor(bus?.busType);
+  const stopNames = [route.origin, ...legs.map((l, i) => (i === legs.length - 1 ? route.destination : l.to))];
+  const totalKm = legs.reduce((n, l) => n + (Number(l.km) || 0), 0);
+  const totalMins = legs.reduce((n, l) => n + (Number(l.mins) || 0), 0);
+  const fullFare = (type) => legs.reduce((n, _, i) => n + (Number(fares[i]?.[type]) || 0), 0);
+  const busDriver = drivers.find((d) => String(d.assignedBusId) === String(busId));
 
-  const addSegmentRow = () => {
-    const last = segments[segments.length - 1];
-    if (!last.toStop) { setErrorMessage('Fill the current stop before adding another'); return; }
-    setErrorMessage('');
-    setSegments([...segments, { fromStop: last.toStop, toStop: '', distanceKm: '', durationMinutes: '' }]);
-  };
-
-  const removeSegmentRow = (index) => {
-    if (segments.length === 1) return;
-    const updated = segments.filter((_, i) => i !== index);
-    for (let i = 1; i < updated.length; i++) updated[i].fromStop = updated[i - 1].toStop;
-    setSegments(updated);
-  };
-
-  const updateSegmentField = (index, field, value) => {
-    const updated = [...segments];
-    updated[index][field] = value;
-    if (field === 'toStop' && index + 1 < updated.length) updated[index + 1].fromStop = value;
-    setSegments(updated);
-  };
-
-  const handleStep2Submit = async () => {
-    if (segments.some(s => !s.toStop || !s.distanceKm || !s.durationMinutes)) { setErrorMessage('Please fill all segment details'); return; }
-    try {
-      setSubmitting(true); setSubmittingLabel('Saving stops...'); setErrorMessage('');
-      const ids = [];
-      for (const seg of segments) { const r = await addSegment(routeId, seg); ids.push(r.id); }
-      setSegmentIds(ids);
-      const initialFares = [];
-      segments.forEach((seg, idx) => {
-        fareSeatTypes.forEach(type => initialFares.push({ segmentId: ids[idx], seatType: type, baseFare: '', gstPercent: 5.0, segmentName: `${seg.fromStop} → ${seg.toStop}` }));
-      });
-      setFares(initialFares);
-      setStep(3);
-    } catch (e) { setErrorMessage(e.message); }
-    finally { setSubmitting(false); setSubmittingLabel(''); }
-  };
-
-  const updateFare = (index, field, value) => {
-    const updated = [...fares]; updated[index][field] = value; setFares(updated);
-  };
-
-  const handleStep3Submit = async () => {
-    try {
-      setSubmitting(true); setSubmittingLabel('Saving fares...'); setErrorMessage('');
-      for (const fare of fares.filter(f => f.baseFare)) {
-        await addFare(routeId, { segmentId: fare.segmentId, seatType: fare.seatType, baseFare: parseFloat(fare.baseFare), gstPercent: fare.gstPercent });
+  const stepError = (s) => {
+    if (s === 0) {
+      if (String(route.name).trim().length < 3) return 'Give the route a name (at least 3 letters)';
+      if (!route.origin.trim() || !route.destination.trim()) return 'Add where the route starts and ends';
+      if (norm(route.origin) === norm(route.destination)) return 'Start and end can’t be the same place';
+      if (!busId) return 'Choose the bus that runs this route';
+    }
+    if (s === 1) {
+      for (let i = 0; i < legs.length; i++) {
+        const name = stopNames[i + 1];
+        if (!String(name).trim()) return `Name stop ${i + 1}`;
+        if (!(Number(legs[i].km) > 0)) return `Add the distance from ${stopNames[i]} to ${name}`;
+        if (!(Number(legs[i].mins) > 0)) return `Add the travel time from ${stopNames[i]} to ${name}`;
       }
-      setStep(4);
-    } catch (e) { setErrorMessage(e.message); }
-    finally { setSubmitting(false); setSubmittingLabel(''); }
+      if (new Set(stopNames.map(norm)).size !== stopNames.length) return 'Each stop can appear only once';
+    }
+    if (s === 2) {
+      for (let i = 0; i < legs.length; i++) {
+        for (const t of seatTypes) {
+          if (!(Number(fares[i]?.[t]) > 0)) return `Add the ${SEAT_TYPE_LABEL[t].toLowerCase()} fare for ${stopNames[i]} → ${stopNames[i + 1]}`;
+        }
+      }
+      if (!(Number(gst) >= 0 && Number(gst) <= 28)) return 'GST must be between 0% and 28%';
+    }
+    if (s === 3) return departureError(departure);
+    if (s === 4) {
+      if (!points.some((p) => p.type === 'BOARDING')) return 'Add at least one boarding point';
+      if (!points.some((p) => p.type === 'DROPPING')) return 'Add at least one dropping point';
+      const bad = points.find((p) => pointError(p));
+      if (bad) return `${bad.name || 'A point'}: ${pointError(bad)}`;
+    }
+    return '';
   };
 
-  const handleStep4Submit = async () => {
-    const { busId, departureDate, departureTime, arrivalDate, arrivalTime, frequency } = scheduleData;
-    if (!busId || !departureDate || !departureTime || !arrivalDate || !arrivalTime) { setErrorMessage('Please fill all schedule details'); return; }
+  const next = () => {
+    const e = stepError(step);
+    if (e) { setError(e); return; }
+    setError('');
+    if (step === 0) setDeparture((d) => ({ ...d, busId }));
+    if (step === 3 && points.length === 0) {
+      // Start with the obvious two: board at the origin when the bus leaves, get off at the destination
+      setPoints([
+        { type: 'BOARDING', name: route.origin.trim(), arrivalTime: departure.depTime, landmark: '', address: '' },
+        { type: 'DROPPING', name: route.destination.trim(), arrivalTime: departure.arrTime, landmark: '', address: '' },
+      ]);
+    }
+    setStep((s) => s + 1);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const back = () => { setError(''); if (step === 0) navigate(ROUTES.OPERATOR_SCHEDULES); else setStep((s) => s - 1); };
+
+  const setLeg = (i, patch) => setLegs((prev) => prev.map((l, j) => (j === i ? { ...l, ...patch } : l)));
+  const insertStop = () => { setLegs((prev) => [...prev.slice(0, -1), leg(), prev[prev.length - 1]]); setFares({}); };
+  const removeLeg = (i) => {
+    setLegs((prev) => prev.filter((_, j) => j !== i));
+    setFares({}); // stretches changed — fares are per stretch
+  };
+  const setFare = (i, type, v) => setFares((prev) => ({ ...prev, [i]: { ...(prev[i] || {}), [type]: v } }));
+
+  const publish = async () => {
+    for (let s = 0; s < STEPS.length; s++) {
+      const e = stepError(s);
+      if (e) { setStep(s); setError(e); return; }
+    }
+    setError('');
+    const st = saved.current;
     try {
-      setSubmitting(true); setSubmittingLabel('Creating schedule...'); setErrorMessage('');
-      await createSchedule(routeId, {
-        busId,
-        departureTime: new Date(`${departureDate}T${departureTime}`).toISOString(),
-        arrivalTime: new Date(`${arrivalDate}T${arrivalTime}`).toISOString(),
-        frequency,
-      });
-      toast.success('Route & Schedule created successfully!');
-      navigate(ROUTES.OPERATOR_SCHEDULES);
-    } catch (e) { setErrorMessage(e.message); }
-    finally { setSubmitting(false); setSubmittingLabel(''); }
+      if (!st.routeId) {
+        setPublishing('Saving the route…');
+        const r = await createRoute({ name: route.name.trim(), origin: route.origin.trim(), destination: route.destination.trim() });
+        st.routeId = r.id;
+        setRouteSaved(true);
+      }
+      for (let i = st.segmentIds.length; i < legs.length; i++) {
+        setPublishing(`Saving stops (${i + 1} of ${legs.length})…`);
+        const seg = await addSegment(st.routeId, { fromStop: stopNames[i].trim(), toStop: stopNames[i + 1].trim(), distanceKm: Number(legs[i].km), durationMinutes: Number(legs[i].mins) });
+        st.segmentIds.push(seg.id);
+        if (st.segmentIds.length === legs.length) recomputeDistance(st.routeId).catch(() => {});
+      }
+      setPublishing('Saving fares…');
+      for (let i = 0; i < legs.length; i++) {
+        for (const t of seatTypes) {
+          const key = `${i}:${t}`;
+          const amount = Number(fares[i][t]);
+          if (st.fares[key] === `${amount}@${gst}`) continue;
+          await addFare(st.routeId, { segmentId: st.segmentIds[i], seatType: t, baseFare: amount, gstPercent: Number(gst), busId: null });
+          st.fares[key] = `${amount}@${gst}`;
+        }
+      }
+      if (!st.scheduleId) {
+        setPublishing('Creating the departure…');
+        const sch = await createSchedule(st.routeId, departurePayload(departure));
+        st.scheduleId = sch.id;
+      }
+      for (let i = st.points; i < points.length; i++) {
+        setPublishing(`Adding boarding & dropping points (${i + 1} of ${points.length})…`);
+        await addPoint(st.scheduleId, pointPayload(points[i]));
+        st.points = i + 1;
+      }
+      if (driverId && !st.driver) {
+        setPublishing('Assigning the driver…');
+        await assignDriverToSchedule(st.scheduleId, driverId);
+        st.driver = true;
+      }
+      toast.success('Route published — travellers can now find and book it');
+      navigate(ROUTES.OPERATOR_ROUTE_DETAIL.replace(':routeId', st.routeId));
+    } catch (e) {
+      setError(`${e.message || 'Something went wrong'}. Everything before this step is saved — fix it and press “Publish route” again.`);
+    } finally {
+      setPublishing('');
+    }
   };
 
-  const inputCls = 'w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white outline-none focus:ring-1 focus:ring-[#002046]';
-  const labelCls = 'block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5';
+  const stepTitle = ['Name the route and pick its bus', 'Every stop, in order', 'What each stretch costs', 'When the bus leaves', 'Where travellers get on and off'][step];
 
   return (
-    <>
-      {submitting && <CenterScreenLoader label={submittingLabel || 'Processing...'} description="Please wait while we save your route setup." />}
-      <OperatorLayout activeItem="schedules" title="Create Route">
-        <div className="space-y-5 max-w-2xl mx-auto">
+    <OperatorLayout activeItem="schedules" title="Create route">
+      <div className="mx-auto max-w-3xl space-y-5 pb-24">
+        <BusWizardHeader step={step} steps={STEPS} label="Create route steps" title="Create a route" subtitle={stepTitle} onBack={back} />
 
-          {/* Header */}
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate(ROUTES.OPERATOR_SCHEDULES)} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 transition-colors flex-shrink-0">
-              <span className="material-symbols-outlined text-base">arrow_back</span>
-            </button>
+        {routeSaved && step <= 1 && (
+          <p className="rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-800">The route and its stops are already saved. To change them, finish publishing and edit them on the route page.</p>
+        )}
+
+        {/* Step 1 — route & bus */}
+        {step === 0 && (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-4">
+            <datalist id="tg-cities">{cities.map((c) => <option key={c} value={c} />)}</datalist>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={LABEL} htmlFor="r-origin">Starts at</label>
+                <input id="r-origin" list="tg-cities" disabled={routeSaved} value={route.origin} onChange={(e) => setRoute((r) => ({ ...r, origin: e.target.value }))} placeholder="e.g. Bangalore" className={INPUT} />
+              </div>
+              <div>
+                <label className={LABEL} htmlFor="r-dest">Ends at</label>
+                <input id="r-dest" list="tg-cities" disabled={routeSaved} value={route.destination} onChange={(e) => setRoute((r) => ({ ...r, destination: e.target.value }))} placeholder="e.g. Honnavar" className={INPUT} />
+              </div>
+            </div>
+            <p className="-mt-1 text-xs text-slate-500">Travellers search by these names, so use the common spelling (e.g. “Bangalore”, not “Blr”).</p>
             <div>
-              <h1 className="text-lg font-black text-slate-900">Create Route</h1>
-              <p className="text-xs text-slate-500 mt-0.5">Set up a new route with stops, fares and a schedule</p>
+              <label className={LABEL} htmlFor="r-name">Route name</label>
+              <input id="r-name" disabled={routeSaved} value={route.name} onChange={(e) => setRoute((r) => ({ ...r, name: e.target.value }))}
+                onFocus={() => { if (!route.name && route.origin && route.destination) setRoute((r) => ({ ...r, name: `${r.origin.trim()} – ${r.destination.trim()}` })); }}
+                placeholder="e.g. Bangalore – Honnavar Express" className={INPUT} />
+              <p className="mt-1 text-xs text-slate-500">Only you see this name.</p>
             </div>
-          </div>
+            <div>
+              <p className={LABEL}>Bus</p>
+              {buses === null ? <div className="h-16 rounded-xl bg-slate-100 animate-pulse" /> : buses.length === 0 ? (
+                <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">You need an approved bus first. <Link to={ROUTES.OPERATOR_ADD_BUS} className="font-bold underline">Add a bus</Link> — an admin reviews it, then come back here.</p>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Bus">
+                  {buses.map((b) => {
+                    const on = String(b.id) === String(busId);
+                    return (
+                      <button key={b.id} type="button" role="radio" aria-checked={on} disabled={routeSaved && !on} onClick={() => { setBusId(String(b.id)); setFares({}); }}
+                        className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors disabled:opacity-40 ${on ? 'border-primary ring-2 ring-primary/15 bg-primary/[0.03]' : 'border-slate-200 hover:border-slate-300'}`}>
+                        <span className={`w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center ${on ? 'bg-primary text-white' : 'bg-slate-100 text-slate-500'}`}><span className="material-symbols-outlined text-[20px]">directions_bus</span></span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-black text-slate-900 truncate">{b.name}</span>
+                          <span className="block text-xs text-slate-500 truncate">{b.vehicleNumber || b.busCode} · {prettyType(b.busType)} · {b.totalSeats} seats</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
 
-          {/* Stepper */}
-          <div className="rounded-xl bg-white ring-1 ring-slate-200 shadow-sm px-5 py-3.5">
-            <div className="flex items-center">
-              {STEPS.map((label, i) => {
-                const done = i + 1 < step, active = i + 1 === step;
+        {/* Step 2 — stops */}
+        {step === 1 && (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+            <p className="mb-4 text-sm text-slate-600">Add every town where travellers can get on or off. Travellers can book any stretch, e.g. {route.origin || 'A'} → {stopNames[1] || 'B'}.</p>
+            <ol className="relative">
+              <li className="flex items-center gap-3 pb-2">
+                <span className="w-7 h-7 flex-shrink-0 rounded-full bg-primary text-white flex items-center justify-center"><span className="material-symbols-outlined text-[16px]">trip_origin</span></span>
+                <span className="font-black text-slate-900">{route.origin}</span>
+                <span className="text-xs text-slate-400">Start</span>
+              </li>
+              {legs.map((l, i) => {
+                const last = i === legs.length - 1;
                 return (
-                  <div key={label} className="flex items-center flex-1 last:flex-none">
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black ${done ? 'bg-emerald-500 text-white' : active ? 'bg-[#002046] text-white' : 'bg-slate-100 text-slate-400'}`}>
-                        {done ? <span className="material-symbols-outlined text-xs">check</span> : i + 1}
+                  <li key={i} className="relative pl-3.5">
+                    <div className="ml-0 border-l-2 border-dashed border-slate-200 pl-6 py-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                          <input type="number" min="1" inputMode="numeric" value={l.km} disabled={routeSaved} onChange={(e) => setLeg(i, { km: e.target.value })} aria-label={`Distance to stop ${i + 1}`} className={`${INPUT.replace('w-full', '')} w-24 py-1.5`} placeholder="0" />km
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                          <input type="number" min="1" inputMode="numeric" value={l.mins} disabled={routeSaved} onChange={(e) => setLeg(i, { mins: e.target.value })} aria-label={`Minutes to stop ${i + 1}`} className={`${INPUT.replace('w-full', '')} w-24 py-1.5`} placeholder="0" />min
+                        </label>
+                        {Number(l.mins) > 0 && <span className="text-xs text-slate-400">{minutesLabel(l.mins)}</span>}
                       </div>
-                      <span className={`text-xs font-semibold hidden sm:block ${done ? 'text-emerald-600' : active ? 'text-[#002046]' : 'text-slate-400'}`}>{label}</span>
                     </div>
-                    {i < STEPS.length - 1 && <div className="flex-1 h-px mx-3 bg-slate-200" />}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Error */}
-          {errorMessage && (
-            <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-50 ring-1 ring-red-200 text-sm text-red-700">
-              <span className="material-symbols-outlined text-red-500 text-base">error</span>
-              {errorMessage}
-            </div>
-          )}
-
-          {/* Step 1: Route Details */}
-          {step === 1 && (
-            <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-              <div className="bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-5 py-4 relative">
-                <div className="absolute -top-1 -right-3 text-6xl opacity-[0.07] select-none pointer-events-none">★</div>
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-white text-lg">route</span>
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-black text-white">Route Details</h2>
-                    <p className="text-white/60 text-xs mt-0.5">Name your route and set the endpoints</p>
-                  </div>
-                </div>
-              </div>
-              <div className="px-5 py-5 space-y-4">
-                <div>
-                  <label className={labelCls}>Route Name *</label>
-                  <input value={routeData.name} onChange={e => setRouteData({ ...routeData, name: e.target.value })} placeholder="e.g. Mumbai Express" className={inputCls} />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Origin *</label>
-                    <input value={routeData.origin} onChange={e => setRouteData({ ...routeData, origin: e.target.value })} placeholder="e.g. Mumbai" className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Destination *</label>
-                    <input value={routeData.destination} onChange={e => setRouteData({ ...routeData, destination: e.target.value })} placeholder="e.g. Goa" className={inputCls} />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelCls}>Select Bus (optional)</label>
-                  <select value={scheduleData.busId} onChange={e => setScheduleData({ ...scheduleData, busId: e.target.value })} className={inputCls}>
-                    <option value="">Choose a bus for fare calculation</option>
-                    {buses.map(bus => <option key={bus.id} value={bus.id}>{bus.name} ({bus.busCode}) — {bus.busType.replace(/_/g, ' ')}</option>)}
-                  </select>
-                  {selectedBus && (
-                    <p className="text-xs text-slate-400 mt-1.5">Fares will be set for: <span className="text-[#002046] font-semibold">{getFareSeatTypes(selectedBus.busType).join(', ')}</span></p>
-                  )}
-                  <p className="text-xs text-slate-400 mt-1.5">You can add more buses via "Add Schedule" after creating the route.</p>
-                </div>
-              </div>
-              <div className="px-5 py-4 border-t border-slate-100 flex justify-end">
-                <button onClick={handleStep1Submit} disabled={submitting} className="px-6 py-2.5 rounded-xl bg-[#002046] text-white font-bold text-sm hover:bg-[#003a80] transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2">
-                  Next: Add Stops
-                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Segments */}
-          {step === 2 && (
-            <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-              <div className="bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-5 py-4 relative">
-                <div className="absolute -top-1 -right-3 text-6xl opacity-[0.07] select-none pointer-events-none">★</div>
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-white text-lg">pin_drop</span>
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-black text-white">Stops & Segments</h2>
-                    <p className="text-white/60 text-xs mt-0.5">Define the stops along this route</p>
-                  </div>
-                </div>
-              </div>
-              <div className="px-5 py-5 space-y-3">
-                {segments.map((seg, idx) => (
-                  <div key={idx} className="rounded-xl ring-1 ring-slate-200 bg-slate-50/50 overflow-hidden">
-                    <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
-                      <div className="flex items-center gap-2">
-                        <span className="w-5 h-5 rounded-full bg-[#002046] text-white text-[10px] font-black flex items-center justify-center">{idx + 1}</span>
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Segment {idx + 1}</span>
-                      </div>
-                      {segments.length > 1 && (
-                        <button onClick={() => removeSegmentRow(idx)} className="text-red-400 hover:text-red-600 transition-colors">
-                          <span className="material-symbols-outlined text-sm">delete</span>
-                        </button>
+                    <div className="-ml-3.5 flex items-center gap-3 py-1">
+                      <span className={`w-7 h-7 flex-shrink-0 rounded-full flex items-center justify-center ${last ? 'bg-gradient-to-r from-[#FDBA74] to-[#FF8A65] text-primary' : 'bg-white border-2 border-primary text-primary'}`}>
+                        <span className="material-symbols-outlined text-[16px]">{last ? 'location_on' : 'radio_button_unchecked'}</span>
+                      </span>
+                      {last ? (
+                        <><span className="font-black text-slate-900">{route.destination}</span><span className="text-xs text-slate-400">End</span></>
+                      ) : (
+                        <>
+                          <input list="tg-cities" value={l.to} disabled={routeSaved} onChange={(e) => setLeg(i, { to: e.target.value })} placeholder={`Stop ${i + 1}, e.g. Shivamogga`} aria-label={`Stop ${i + 1}`} className={`${INPUT} max-w-xs py-2`} />
+                          {!routeSaved && <button type="button" onClick={() => removeLeg(i)} aria-label={`Remove stop ${i + 1}`} className="w-8 h-8 rounded-lg text-red-500 hover:bg-red-50 flex items-center justify-center"><span className="material-symbols-outlined text-[18px]">close</span></button>}
+                        </>
                       )}
                     </div>
-                    <div className="px-4 py-3 space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className={labelCls}>From</label>
-                          <input value={seg.fromStop} disabled className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-slate-100 text-slate-500 outline-none" />
-                        </div>
-                        <div>
-                          <label className={labelCls}>To *</label>
-                          <input value={seg.toStop} onChange={e => updateSegmentField(idx, 'toStop', e.target.value)} placeholder="Next stop" className={inputCls} />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className={labelCls}>Distance (km) *</label>
-                          <input type="number" value={seg.distanceKm} onChange={e => updateSegmentField(idx, 'distanceKm', e.target.value)} placeholder="0" className={inputCls} />
-                        </div>
-                        <div>
-                          <label className={labelCls}>Duration (min) *</label>
-                          <input type="number" value={seg.durationMinutes} onChange={e => updateSegmentField(idx, 'durationMinutes', e.target.value)} placeholder="0" className={inputCls} />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                <button onClick={addSegmentRow} className="w-full py-3 rounded-xl border-2 border-dashed border-slate-300 text-slate-500 text-sm font-semibold hover:border-[#002046] hover:text-[#002046] transition-colors flex items-center justify-center gap-1.5">
-                  <span className="material-symbols-outlined text-base">add</span>
-                  Add Another Stop
-                </button>
-              </div>
-              <div className="px-5 py-4 border-t border-slate-100 flex gap-3">
-                <button onClick={() => setStep(1)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Back</button>
-                <button onClick={handleStep2Submit} disabled={submitting} className="flex-1 py-2.5 rounded-xl bg-[#002046] text-white font-bold text-sm hover:bg-[#003a80] transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                  Next: Set Fares
-                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                </button>
-              </div>
-            </div>
-          )}
+                  </li>
+                );
+              })}
+            </ol>
+            <datalist id="tg-cities">{cities.map((c) => <option key={c} value={c} />)}</datalist>
+            {!routeSaved && (
+              <button type="button" onClick={insertStop} className="mt-4 inline-flex items-center gap-1.5 rounded-xl border-2 border-dashed border-slate-300 px-4 py-2.5 text-sm font-bold text-slate-600 hover:border-primary hover:text-primary">
+                <span className="material-symbols-outlined text-[18px]">add_location_alt</span>Add a stop before {route.destination}
+              </button>
+            )}
+            <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700">
+              <span className="font-black">{legs.length + 1} stops</span> · {totalKm} km · {minutesLabel(totalMins)} driving
+            </p>
+          </section>
+        )}
 
-          {/* Step 3: Fares */}
-          {step === 3 && (
-            <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-              <div className="bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-5 py-4 relative">
-                <div className="absolute -top-1 -right-3 text-6xl opacity-[0.07] select-none pointer-events-none">★</div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
-                      <span className="material-symbols-outlined text-white text-lg">payments</span>
-                    </div>
-                    <div>
-                      <h2 className="text-sm font-black text-white">Fares</h2>
-                      <p className="text-white/60 text-xs mt-0.5">Set ticket prices — passengers cannot book without fares</p>
-                    </div>
-                  </div>
-                  {selectedBus && (
-                    <span className="text-[10px] font-bold text-white/60 bg-white/10 px-2.5 py-1 rounded-full">{selectedBus.busType.replace(/_/g, ' ')}</span>
-                  )}
-                </div>
-              </div>
-              <div className="px-5 py-5 space-y-4">
-                {segments.map((seg, segIdx) => (
-                  <div key={segIdx} className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-100">
-                      <span className="material-symbols-outlined text-slate-400 text-sm">arrow_right_alt</span>
-                      <span className="text-xs font-bold text-slate-600">{seg.fromStop} → {seg.toStop}</span>
-                    </div>
-                    <div className="px-4 py-3 grid grid-cols-2 gap-3">
-                      {fareSeatTypes.map(type => {
-                        const fareIdx = fares.findIndex(f => f.segmentId === segmentIds[segIdx] && f.seatType === type);
-                        return (
-                          <div key={type}>
-                            <label className={labelCls}>{type.replace(/_/g, ' ')}</label>
-                            <div className="relative">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-medium">₹</span>
-                              <input type="number" min="0" value={fares[fareIdx]?.baseFare || ''} onChange={e => updateFare(fareIdx, 'baseFare', e.target.value)} placeholder="0.00" className="w-full pl-7 pr-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white outline-none focus:ring-1 focus:ring-[#002046]" />
-                            </div>
+        {/* Step 3 — fares */}
+        {step === 2 && (
+          <section className="rounded-2xl border border-slate-200 bg-white">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+              <p className="text-sm text-slate-600">Base fare per {seatTypes.length > 1 ? 'berth' : 'seat'} for each stretch. A ticket costs the stretches it covers, plus GST.</p>
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-600">GST
+                <input type="number" min="0" max="28" value={gst} onChange={(e) => setGst(e.target.value)} className={`${INPUT.replace('w-full', '')} w-20 py-1.5`} aria-label="GST percent" />%
+              </label>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs font-bold text-slate-500">
+                    <th className="px-5 py-3">Stretch</th>
+                    {seatTypes.map((t) => <th key={t} className="px-3 py-3 w-36">{SEAT_TYPE_LABEL[t]}</th>)}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {legs.map((l, i) => (
+                    <tr key={i}>
+                      <td className="px-5 py-3">
+                        <span className="font-bold text-slate-800">{stopNames[i]} → {stopNames[i + 1]}</span>
+                        <span className="block text-xs text-slate-400">{l.km} km · {minutesLabel(l.mins)}</span>
+                      </td>
+                      {seatTypes.map((t) => (
+                        <td key={t} className="px-3 py-3">
+                          <div className="relative">
+                            <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">₹</span>
+                            <input type="number" min="1" inputMode="numeric" value={fares[i]?.[t] || ''} onChange={(e) => setFare(i, t, e.target.value)} aria-label={`${SEAT_TYPE_LABEL[t]} fare ${stopNames[i]} to ${stopNames[i + 1]}`} className={`${INPUT} pl-7`} placeholder="0" />
                           </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-                <p className="text-xs text-amber-600 text-center flex items-center justify-center gap-1"><span className="material-symbols-outlined text-sm">warning</span>Passengers cannot book tickets on this route until fares are set.</p>
-              </div>
-              <div className="px-5 py-4 border-t border-slate-100 flex gap-3">
-                <button onClick={() => setStep(2)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Back</button>
-                <button onClick={handleStep3Submit} disabled={submitting} className="flex-1 py-2.5 rounded-xl bg-[#002046] text-white font-bold text-sm hover:bg-[#003a80] transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                  Next: Schedule
-                  <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-50 font-black text-slate-900">
+                    <td className="px-5 py-3">Full trip {route.origin} → {route.destination}</td>
+                    {seatTypes.map((t) => <td key={t} className="px-3 py-3">{rupees(fullFare(t))}<span className="block text-xs font-semibold text-slate-500">{rupees(fullFare(t) * (1 + (Number(gst) || 0) / 100))} with GST</span></td>)}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            {seatTypes.length > 1 && legs.some((_, i) => fares[i]?.LOWER && !fares[i]?.UPPER) && (
+              <div className="border-t border-slate-100 px-5 py-3">
+                <button type="button" onClick={() => setFares((prev) => Object.fromEntries(legs.map((_, i) => [i, { ...prev[i], UPPER: prev[i]?.UPPER || prev[i]?.LOWER || '' }])))} className="text-sm font-bold text-primary hover:underline">
+                  Use the lower-berth fares for upper berths too
                 </button>
               </div>
+            )}
+          </section>
+        )}
+
+        {/* Step 4 — departure */}
+        {step === 3 && (
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6 space-y-5">
+            <DepartureFields value={departure} onChange={setDeparture} buses={buses || []} tripMinutes={totalMins} lockBus />
+            <div className="border-t border-slate-100 pt-4">
+              <label className={LABEL} htmlFor="r-driver">Driver <span className="font-semibold text-slate-400">(can be added later)</span></label>
+              {busDriver ? (
+                <p className="text-sm text-slate-700"><span className="font-bold">{busDriver.firstName} {busDriver.lastName}</span> already drives {bus?.name}.</p>
+              ) : (
+                <select id="r-driver" value={driverId} onChange={(e) => setDriverId(e.target.value)} className={INPUT}>
+                  <option value="">Assign later</option>
+                  {drivers.filter((d) => !d.licenseExpiry || d.licenseExpiry >= todayIst()).map((d) => (
+                    <option key={d.id} value={d.id}>{d.firstName} {d.lastName} · {d.phone}{d.assignedBusName ? ` (now on ${d.assignedBusName})` : ''}</option>
+                  ))}
+                </select>
+              )}
+              <p className="mt-1 text-xs text-slate-500">A driver must be assigned before you can start the trip. Travellers get the driver’s details with their ticket.</p>
             </div>
-          )}
+          </section>
+        )}
 
-          {/* Step 4: Schedule */}
-          {step === 4 && (
-            <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden">
-              <div className="bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-5 py-4 relative">
-                <div className="absolute -top-1 -right-3 text-6xl opacity-[0.07] select-none pointer-events-none">★</div>
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-white text-lg">schedule</span>
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-black text-white">First Schedule</h2>
-                    <p className="text-white/60 text-xs mt-0.5">Add the first departure for this route</p>
-                  </div>
-                </div>
-              </div>
-              <div className="px-5 py-5 space-y-4">
-
-                {/* Bus selector */}
-                <div>
-                  <label className={labelCls}>Bus *</label>
-                  <select value={scheduleData.busId} onChange={e => setScheduleData({ ...scheduleData, busId: e.target.value })} className={inputCls}>
-                    <option value="">Choose a bus</option>
-                    {buses.map(bus => <option key={bus.id} value={bus.id}>{bus.name} ({bus.busCode}) — {bus.busType.replace(/_/g, ' ')}</option>)}
-                  </select>
-                  {selectedBus && (
-                    <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-xl bg-[#002046]/[0.05] ring-1 ring-[#002046]/10">
-                      <span className="material-symbols-outlined text-[#002046] text-sm">directions_bus</span>
-                      <span className="text-xs font-semibold text-[#002046]">{selectedBus.name} · {selectedBus.totalSeats} seats · {selectedBus.busType.replace(/_/g, ' ')}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Departure */}
-                <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
-                  <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-100">
-                    <span className="material-symbols-outlined text-slate-400 text-sm">flight_takeoff</span>
-                    <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Departure</span>
-                  </div>
-                  <div className="px-4 py-3 grid grid-cols-2 gap-3">
-                    <div>
-                      <label className={labelCls}>Date *</label>
-                      <input type="date" value={scheduleData.departureDate} min={new Date().toISOString().split('T')[0]} onChange={e => setScheduleData({ ...scheduleData, departureDate: e.target.value })} className={inputCls} />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Time *</label>
-                      <input type="time" value={scheduleData.departureTime} onChange={e => setScheduleData({ ...scheduleData, departureTime: e.target.value })} className={inputCls} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Arrival */}
-                <div className="rounded-xl ring-1 ring-slate-200 overflow-hidden">
-                  <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-50 border-b border-slate-100">
-                    <span className="material-symbols-outlined text-slate-400 text-sm">flight_land</span>
-                    <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">Arrival</span>
-                  </div>
-                  <div className="px-4 py-3 grid grid-cols-2 gap-3">
-                    <div>
-                      <label className={labelCls}>Date *</label>
-                      <input type="date" value={scheduleData.arrivalDate} min={scheduleData.departureDate || new Date().toISOString().split('T')[0]} onChange={e => setScheduleData({ ...scheduleData, arrivalDate: e.target.value })} className={inputCls} />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Time *</label>
-                      <input type="time" value={scheduleData.arrivalTime} onChange={e => setScheduleData({ ...scheduleData, arrivalTime: e.target.value })} className={inputCls} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Frequency */}
-                <div>
-                  <label className={labelCls}>Frequency</label>
-                  <select value={scheduleData.frequency} onChange={e => setScheduleData({ ...scheduleData, frequency: e.target.value })} className={inputCls}>
-                    <option value="DAILY">Daily</option>
-                    <option value="WEEKLY">Weekly</option>
-                    <option value="WEEKDAYS">Weekdays Only</option>
-                    <option value="WEEKENDS">Weekends Only</option>
-                    <option value="ONCE">One Time</option>
-                  </select>
-                </div>
-              </div>
-              <div className="px-5 py-4 border-t border-slate-100 flex gap-3">
-                <button onClick={() => setStep(3)} className="px-5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Back</button>
-                <button onClick={handleStep4Submit} disabled={submitting} className="flex-1 py-2.5 rounded-xl bg-[#002046] text-white font-bold text-sm hover:bg-[#003a80] transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                  <span className="material-symbols-outlined text-base">check_circle</span>
-                  Create Route & Schedule
-                </button>
-              </div>
+        {/* Step 5 — boarding & dropping */}
+        {step === 4 && (
+          <section className="space-y-4">
+            <p className="rounded-xl bg-white border border-slate-200 px-4 py-3 text-sm text-slate-600">
+              Travellers must pick one boarding and one dropping point to book, so both lists need at least one point. Times are when the bus reaches each point (IST).
+            </p>
+            <PointsEditor
+              points={points}
+              departureTime={departure.depTime}
+              onAdd={(p) => setPoints((prev) => [...prev, p])}
+              onSave={(orig, p) => setPoints((prev) => prev.map((x) => (x === orig ? p : x)))}
+              onDelete={(p) => setPoints((prev) => prev.filter((x) => x !== p))}
+            />
+            <div className="rounded-2xl border border-slate-200 bg-white p-5">
+              <p className="text-sm font-black text-slate-900">Ready to publish</p>
+              <ul className="mt-2 grid gap-1.5 text-sm text-slate-600 sm:grid-cols-2">
+                <li>{route.origin} → {route.destination} · {legs.length + 1} stops</li>
+                <li>{bus?.name} · {prettyType(bus?.busType)}</li>
+                <li>Full trip from {rupees(Math.min(...seatTypes.map(fullFare)))} + GST</li>
+                <li>First departure {departure.depDate && departure.depTime ? new Date(istToIso(departure.depDate, departure.depTime)).toLocaleString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Kolkata' }) : ''} · {(FREQUENCIES.find(([k]) => k === departure.frequency)?.[1] || '').toLowerCase()}</li>
+              </ul>
             </div>
-          )}
+          </section>
+        )}
 
+        {error && (
+          <p role="alert" className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            <span className="material-symbols-outlined text-[18px]">error</span>{error}
+          </p>
+        )}
+      </div>
+
+      {/* Sticky actions */}
+      <div className="fixed inset-x-0 bottom-[calc(65px+env(safe-area-inset-bottom))] md:bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur md:pl-64">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3">
+          <button type="button" onClick={back} disabled={Boolean(publishing)} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+            {step === 0 ? 'Cancel' : 'Back'}
+          </button>
+          <span className="hidden sm:block text-xs font-bold text-slate-400">Step {step + 1} of {STEPS.length}</span>
+          {step < STEPS.length - 1 ? (
+            <button type="button" onClick={next} className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-[#102A4C]">
+              Next: {STEPS[step + 1]}<span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+            </button>
+          ) : (
+            <button type="button" onClick={publish} disabled={Boolean(publishing)} className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#FDBA74] to-[#FF8A65] px-5 py-2.5 text-sm font-black text-primary hover:brightness-105 disabled:opacity-60">
+              <span className="material-symbols-outlined text-[18px]">{publishing ? 'progress_activity' : 'rocket_launch'}</span>
+              {publishing || 'Publish route'}
+            </button>
+          )}
         </div>
-      </OperatorLayout>
-    </>
+      </div>
+    </OperatorLayout>
   );
 };
 

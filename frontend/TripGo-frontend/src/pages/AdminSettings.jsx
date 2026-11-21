@@ -6,7 +6,7 @@ import { useAuth } from '../shared/contexts/AuthContext';
 import { ROUTES } from '../shared/constants/routes';
 import { changePassword, uploadProfilePicture, updateCurrentUser } from '../api/userService';
 import { PASSWORD_RULES, isPasswordValid } from '../shared/utils/passwordRules';
-import { Avatar, Card, PageHeader } from '../features/admin/components/AdminUI';
+import { Avatar, Card, PageHeader } from '../shared/components/console/ConsoleUI';
 
 const INPUT = 'w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15 disabled:bg-slate-50 disabled:text-slate-500';
 const LABEL = 'mb-1.5 block text-xs font-bold text-slate-600';

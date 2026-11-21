@@ -15,4 +15,8 @@ public class ApplyPromoRequest {
 
     @NotNull(message = "Booking amount is required")
     private BigDecimal bookingAmount;
+
+    /** Guest contact, so per-traveller rules (first booking, once per customer) can be checked. */
+    private String email;
+    private String phone;
 }

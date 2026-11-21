@@ -5,8 +5,8 @@ import AdminLayout from '../shared/components/AdminLayout';
 import { getAuditLogs } from '../api/adminAnalyticsService';
 import {
   Card, EmptyState, FilterTabs, PageHeader, Pagination, SearchInput, SkeletonRows, StatusPill,
-} from '../features/admin/components/AdminUI';
-import { headerButton } from '../features/admin/components/adminStyles';
+} from '../shared/components/console/ConsoleUI';
+import { headerButton } from '../shared/components/console/consoleStyles';
 import VisitorsPanel from '../features/admin/components/VisitorsPanel';
 
 const PAGE_SIZE = 50;

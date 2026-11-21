@@ -50,6 +50,26 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     @Query("SELECT b FROM Booking b JOIN FETCH b.user WHERE b.travelDate = :date AND b.status = :status")
     List<Booking> findByTravelDateAndStatus(@Param("date") java.time.LocalDate date, @Param("status") BookingStatus status);
 
+    boolean existsByRouteSchedule(RouteSchedule routeSchedule);
+
+    /** Confirmed bookings by one traveller — an account, or a guest matched by email or phone. */
+    @Query("""
+        SELECT COUNT(b) FROM Booking b LEFT JOIN b.user u
+        WHERE b.status = com.tripgo.backend.model.enums.BookingStatus.CONFIRMED
+        AND (u.id = :userId
+             OR (:email <> '' AND (LOWER(b.guestEmail) = :email OR LOWER(u.email) = :email))
+             OR (:phone <> '' AND (b.guestPhone = :phone OR u.phone = :phone)))
+        AND (:code = '' OR UPPER(b.promoCode) = :code)
+        """)
+    long countConfirmedForCustomer(@Param("userId") java.util.UUID userId, @Param("email") String email,
+                                   @Param("phone") String phone, @Param("code") String code);
+
+    /** Re-homes bookings for later dates of a recurring service onto its next schedule row. */
+    @Modifying
+    @Query("UPDATE Booking b SET b.routeSchedule = :to WHERE b.routeSchedule = :from AND b.travelDate >= :fromDate")
+    int moveToSchedule(@Param("from") RouteSchedule from, @Param("to") RouteSchedule to,
+                       @Param("fromDate") java.time.LocalDate fromDate);
+
     @Query("SELECT COALESCE(SUM(b.payableAmount), 0) FROM Booking b WHERE b.operator = :operator AND b.status = 'CONFIRMED'")
     BigDecimal getTotalRevenueByOperator(@Param("operator") Operator operator);
 

@@ -5,8 +5,8 @@ import {
 } from 'recharts';
 import AdminLayout from '../shared/components/AdminLayout';
 import { getAdminAnalytics } from '../api/adminAnalyticsService';
-import { Card, EmptyState, FilterTabs, PageHeader, StatCard } from '../features/admin/components/AdminUI';
-import { headerButton } from '../features/admin/components/adminStyles';
+import { Card, EmptyState, FilterTabs, PageHeader, StatCard } from '../shared/components/console/ConsoleUI';
+import { headerButton } from '../shared/components/console/consoleStyles';
 
 // Validated chart hues (light surface): revenue = coral, bookings = blue
 const REVENUE_COLOR = '#E8663D';

@@ -63,14 +63,22 @@ public class DriverController {
         Operator operator = getOperator(auth);
         List<Driver> drivers = driverRepository.findByOperator(operator);
 
-        return ResponseEntity.ok(drivers.stream().map(d -> Map.of(
-                "id", d.getId(),
-                "firstName", d.getFirstName(),
-                "lastName", d.getLastName() != null ? d.getLastName() : "",
-                "phone", d.getPhone() != null ? d.getPhone() : "",
-                "licenseNumber", d.getLicenseNumber(),
-                "licenseExpiry", d.getLicenseExpiry() != null ? d.getLicenseExpiry().toString() : ""
-        )).toList());
+        return ResponseEntity.ok(drivers.stream().map(d -> {
+            Map<String, Object> row = new java.util.LinkedHashMap<>();
+            row.put("id", d.getId());
+            row.put("firstName", d.getFirstName());
+            row.put("lastName", d.getLastName() != null ? d.getLastName() : "");
+            row.put("phone", d.getPhone() != null ? d.getPhone() : "");
+            row.put("licenseNumber", d.getLicenseNumber());
+            row.put("licenseExpiry", d.getLicenseExpiry() != null ? d.getLicenseExpiry().toString() : "");
+            // The bus this driver currently drives (open assignment), if any
+            assignmentRepository.findByDriverAndAssignedToIsNull(d).ifPresent(a -> {
+                row.put("assignedBusId", a.getBus().getId());
+                row.put("assignedBusName", a.getBus().getName());
+                row.put("assignedBusNumber", a.getBus().getVehicleNumber());
+            });
+            return row;
+        }).toList());
     }
 
     // PUT /operator/drivers/{id} - Edit driver
