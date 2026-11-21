@@ -80,6 +80,22 @@ public class Booking {
     @Column(name = "guest_phone")
     private String guestPhone;
 
+    /** Boarding / dropping point chosen at checkout (by value — point rows are recreated per departure). */
+    @Column(name = "boarding_point")
+    private String boardingPoint;
+
+    @Column(name = "boarding_time")
+    private java.time.LocalTime boardingTime;
+
+    @Column(name = "dropping_point")
+    private String droppingPoint;
+
+    @Column(name = "dropping_time")
+    private java.time.LocalTime droppingTime;
+
+    @Column(name = "promo_code")
+    private String promoCode;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

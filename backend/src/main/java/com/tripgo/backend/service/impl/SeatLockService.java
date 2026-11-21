@@ -22,6 +22,7 @@ public class SeatLockService {
 
     private final SeatLockRepository seatLockRepo;
     private final RouteSegmentRepository segmentRepo;
+    private final com.tripgo.backend.repository.BookingSeatRepository bookingSeatRepo;
 
     private static final Duration LOCK_DURATION = Duration.ofMinutes(15);
 
@@ -37,7 +38,18 @@ public class SeatLockService {
                 .filter(lock -> lock.getExpiresAt().isAfter(Instant.now()))
                 .toList();
 
+        // Seats already sold on an overlapping stretch that day can't be held again (they used to be)
+        List<com.tripgo.backend.model.entities.BookingSeat> sold =
+                bookingSeatRepo.findConfirmedByScheduleIdAndTravelDate(schedule.getId(), travelDate);
+
         for (String seatNumber : seatNumbers) {
+
+            boolean alreadySold = sold.stream()
+                    .filter(bs -> seatNumber.equalsIgnoreCase(bs.getSeatNumber()))
+                    .anyMatch(bs -> segmentsOverlap(segments, bs.getFromStop(), bs.getToStop(), resolvedFrom, resolvedTo));
+            if (alreadySold) {
+                throw new com.tripgo.backend.exception.BadRequestException("Seat " + seatNumber + " has just been booked by someone else — please pick another seat");
+            }
 
             boolean alreadyLocked = activeLocks.stream()
                     .filter(lock -> seatNumber.equalsIgnoreCase(lock.getSeatNumber()))

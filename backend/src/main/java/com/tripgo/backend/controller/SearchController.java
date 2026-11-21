@@ -6,11 +6,14 @@ import com.tripgo.backend.dto.response.PopularRouteResponse;
 import com.tripgo.backend.dto.response.SearchResponse;
 import com.tripgo.backend.dto.response.SeatAvailability;
 import com.tripgo.backend.model.entities.RouteSchedule;
+import com.tripgo.backend.repository.BoardingDroppingPointRepository;
 import com.tripgo.backend.repository.RouteRepository;
 import com.tripgo.backend.repository.RouteScheduleRepository;
 import com.tripgo.backend.repository.RouteSegmentRepository;
 import com.tripgo.backend.service.impl.AvailabilityService;
 import com.tripgo.backend.service.impl.PopularRouteService;
+import com.tripgo.backend.service.impl.ScheduleRolloverService;
+import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.LinkedHashMap;
 
+@Slf4j
 @RestController
 @RequestMapping("/search")
 @RequiredArgsConstructor
@@ -33,6 +37,7 @@ public class SearchController {
     private final RouteSegmentRepository segmentRepo;
     private final RouteRepository routeRepository;
     private final PopularRouteService popularRouteService;
+    private final BoardingDroppingPointRepository pointRepository;
 
     @GetMapping("/cities")
     public List<String> getCities() {
@@ -66,26 +71,31 @@ public class SearchController {
         String normalizedFrom = normalizeStopName(from);
         String normalizedTo = normalizeStopName(to);
         
-        System.out.println("🔍 Search request: " + from + " -> " + to + " (normalized: " + normalizedFrom + " -> " + normalizedTo + ")");
-        
         List<RouteSchedule> schedules = scheduleRepo.findByFromAndToAndDate(
                 normalizedFrom, normalizedTo,
                 date.atStartOfDay(AppTime.ZONE).toInstant(),
                 date.plusDays(1).atStartOfDay(AppTime.ZONE).toInstant()
         );
         
+        LocalDate today = LocalDate.now(AppTime.ZONE);
+        if (date.isBefore(today)) return List.of();
+        Instant now = Instant.now();
+
         return schedules.stream()
-                .filter(schedule -> matchesFrequency(schedule.getFrequency(), date))
-                .filter(schedule -> {
-                    if (schedule.getFrequency() != null) return true;
-                    return !"COMPLETED".equals(schedule.getTripStatus());
-                })
+                .filter(schedule -> isBookableOn(schedule, date))
+                // Boarding and dropping points are mandatory: without them a traveller can't complete a booking
+                .filter(schedule -> pointRepository.existsByScheduleAndType(schedule, "BOARDING")
+                        && pointRepository.existsByScheduleAndType(schedule, "DROPPING"))
                 .map(schedule -> {
                     Instant adjustedDeparture = adjustToDate(schedule.getDepartureTime(), date);
                     // Keep the trip duration: projecting the arrival onto the same date separately put
                     // overnight arrivals (e.g. 20:00 → 01:00) before the departure.
                     Instant adjustedArrival = adjustedDeparture.plus(
                             java.time.Duration.between(schedule.getDepartureTime(), schedule.getArrivalTime()));
+                    if (adjustedDeparture.isBefore(now)) return null; // already left today
+
+                    // Live trip state (delay, start time) belongs to the row's own run, not to other dates
+                    boolean sameRun = isRunDate(schedule, date);
 
                     RouteSchedule adjustedSchedule = new RouteSchedule();
                     adjustedSchedule.setId(schedule.getId());
@@ -95,27 +105,41 @@ public class SearchController {
                     adjustedSchedule.setArrivalTime(adjustedArrival);
                     adjustedSchedule.setFrequency(schedule.getFrequency());
                     adjustedSchedule.setActive(schedule.getActive());
-                    adjustedSchedule.setTripStatus(schedule.getTripStatus());
-                    adjustedSchedule.setDelayMinutes(schedule.getDelayMinutes());
-                    adjustedSchedule.setDelayReason(schedule.getDelayReason());
-                    adjustedSchedule.setActualDepartureTime(schedule.getActualDepartureTime());
-                    adjustedSchedule.setActualArrivalTime(schedule.getActualArrivalTime());
+                    adjustedSchedule.setTripStatus(sameRun ? schedule.getTripStatus() : "SCHEDULED");
+                    adjustedSchedule.setDelayMinutes(sameRun ? schedule.getDelayMinutes() : null);
+                    adjustedSchedule.setDelayReason(sameRun ? schedule.getDelayReason() : null);
+                    adjustedSchedule.setActualDepartureTime(sameRun ? schedule.getActualDepartureTime() : null);
+                    adjustedSchedule.setActualArrivalTime(sameRun ? schedule.getActualArrivalTime() : null);
 
-                    return availabilityService.search(adjustedSchedule, normalizedFrom, normalizedTo, null);
+                    try {
+                        return availabilityService.search(adjustedSchedule, normalizedFrom, normalizedTo, null);
+                    } catch (RuntimeException e) {
+                        // e.g. a route with no fares for this stretch — skip that bus, don't fail the whole search
+                        log.warn("Skipping schedule {} in search: {}", schedule.getId(), e.getMessage());
+                        return null;
+                    }
                 })
                 .filter(r -> r != null)
                 .toList();
     }
-    
-    private boolean matchesFrequency(String frequency, LocalDate date) {
-        if (frequency == null || frequency.equals("ONCE")) return true;
-        java.time.DayOfWeek day = date.getDayOfWeek();
-        return switch (frequency) {
-            case "DAILY" -> true;
-            case "WEEKDAYS" -> day != java.time.DayOfWeek.SATURDAY && day != java.time.DayOfWeek.SUNDAY;
-            case "WEEKENDS" -> day == java.time.DayOfWeek.SATURDAY || day == java.time.DayOfWeek.SUNDAY;
-            default -> true;
-        };
+
+    /**
+     * A recurring schedule row stands for every running day from its current run onwards. A trip that
+     * has started only closes its own day — it used to hide the bus from search on every date.
+     */
+    private boolean isBookableOn(RouteSchedule schedule, LocalDate date) {
+        String status = schedule.getTripStatus() == null ? "SCHEDULED" : schedule.getTripStatus();
+        if (schedule.getFrequency() == null || "ONCE".equalsIgnoreCase(schedule.getFrequency())) {
+            return !"STARTED".equals(status);
+        }
+        LocalDate runDate = schedule.getDepartureTime().atZone(AppTime.ZONE).toLocalDate();
+        if (date.isBefore(runDate)) return false;
+        if (!ScheduleRolloverService.runsOn(schedule.getFrequency(), runDate, date)) return false;
+        return !(date.equals(runDate) && "STARTED".equals(status));
+    }
+
+    private boolean isRunDate(RouteSchedule schedule, LocalDate date) {
+        return schedule.getDepartureTime().atZone(AppTime.ZONE).toLocalDate().equals(date);
     }
 
     private String normalizeStopName(String stop) {

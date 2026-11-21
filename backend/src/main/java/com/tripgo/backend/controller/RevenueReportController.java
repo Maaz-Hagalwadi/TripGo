@@ -77,7 +77,7 @@ public class RevenueReportController {
         Map<String, BigDecimal> dailyRevenue   = new LinkedHashMap<>();
         Map<String, Long>       dailyBookings  = new LinkedHashMap<>();
         for (int i = 29; i >= 0; i--) {
-            LocalDate day   = LocalDate.now().minusDays(i);
+            LocalDate day   = LocalDate.now(AppTime.ZONE).minusDays(i);
             Instant   start = day.atStartOfDay(AppTime.ZONE).toInstant();
             Instant   end   = day.plusDays(1).atStartOfDay(AppTime.ZONE).toInstant();
             String    key   = day.toString();
@@ -98,7 +98,7 @@ public class RevenueReportController {
         // ── Monthly revenue (last 12 months) ────────────────────────────────
         Map<String, BigDecimal> monthlyRevenue = new LinkedHashMap<>();
         for (int i = 11; i >= 0; i--) {
-            YearMonth ym    = YearMonth.now().minusMonths(i);
+            YearMonth ym    = YearMonth.now(AppTime.ZONE).minusMonths(i);
             Instant   start = ym.atDay(1).atStartOfDay(AppTime.ZONE).toInstant();
             Instant   end   = ym.atEndOfMonth().plusDays(1).atStartOfDay(AppTime.ZONE).toInstant();
 

@@ -6,8 +6,8 @@ import { getUsers, suspendUser, unsuspendUser } from '../api/adminService';
 import {
   ActionButton, Avatar, Card, ConfirmDialog, EmptyState, FilterTabs, PageHeader, Pagination,
   SearchInput, SkeletonRows, StatCard, StatusPill,
-} from '../features/admin/components/AdminUI';
-import { headerButton } from '../features/admin/components/adminStyles';
+} from '../shared/components/console/ConsoleUI';
+import { headerButton } from '../shared/components/console/consoleStyles';
 
 const PAGE_SIZE = 15;
 const ROLE_LABEL = { ROLE_ADMIN: 'Admin', ROLE_OPERATOR: 'Operator', ROLE_USER: 'Traveller' };

@@ -14,6 +14,11 @@ public interface DiscountRepository extends JpaRepository<Discount, UUID> {
 
     Optional<Discount> findByCodeIgnoreCaseAndActiveTrue(String code);
 
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query("UPDATE Discount d SET d.usedCount = COALESCE(d.usedCount, 0) + 1 WHERE LOWER(d.code) = LOWER(:code)")
+    int incrementUsage(@Param("code") String code);
+
     @Query(value = """
             SELECT code, description, type::text, value,
                    max_discount, min_order_amount, valid_to::text

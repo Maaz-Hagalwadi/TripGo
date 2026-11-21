@@ -1,464 +1,193 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import {
-  ResponsiveContainer,
-  BarChart, Bar,
-  AreaChart, Area,
-  XAxis, YAxis, CartesianGrid, Tooltip,
-  PieChart, Pie, Cell,
-} from 'recharts';
+import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
-import { useAuth } from '../../../shared/contexts/AuthContext';
 import { getRevenueReport } from '../../../api/operatorReportService';
-import { ROUTES } from '../../../shared/constants/routes';
+import { Card, EmptyState, FilterTabs, PageHeader, StatCard } from '../../../shared/components/console/ConsoleUI';
+import { headerButton } from '../../../shared/components/console/consoleStyles';
+import { rupees } from '../utils/operatorFormat';
 
-const formatCurrency = (v) => `₹${Number(v || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
-const shortLabel     = (v) => { const n = Number(v || 0); if (n >= 100000) return `₹${(n/100000).toFixed(1)}L`; if (n >= 1000) return `₹${(n/1000).toFixed(0)}k`; return `₹${n}`; };
-const normalizeEntries = (obj = {}) => Object.entries(obj || {}).map(([key, value]) => ({ key, value: Number(value || 0) }));
-const lastN = (arr, n) => arr.slice(Math.max(0, arr.length - n));
+// Validated chart hues on the light surface (same as admin analytics): revenue = coral, bookings = blue
+const REVENUE_COLOR = '#E8663D';
+const BOOKINGS_COLOR = '#3B6FB6';
+const GRID = '#EEF1F5';
+const AXIS = { fontSize: 11, fill: '#94A3B8' };
 
-const PIE_COLORS = ['#002046','#0057b7','#0ea5e9','#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981'];
+const compact = (v) => {
+  const n = Number(v || 0);
+  if (n >= 1e5) return `₹${Number((n / 1e5).toFixed(1))}L`;
+  if (n >= 1e3) return `₹${Number((n / 1e3).toFixed(n >= 1e4 ? 0 : 1))}K`;
+  return `₹${n}`;
+};
+const dayLabel = (ymd) => new Date(`${ymd}T00:00:00Z`).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+const monthLabel = (ym) => new Date(`${ym}-01T00:00:00Z`).toLocaleDateString('en-IN', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+const ranked = (obj) => Object.entries(obj || {}).map(([name, value]) => ({ name, value: Number(value) })).sort((a, b) => b.value - a.value);
 
-/* ── Tooltips ── */
-const BarTooltip = ({ active, payload, label }) => {
+const Tip = ({ active, payload, label, format, labelFormat }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-xl bg-white shadow-lg ring-1 ring-slate-200 px-3 py-2.5 text-xs">
-      <p className="font-bold text-slate-700 mb-0.5">{label}</p>
-      <p className="font-black text-[#002046]">{formatCurrency(payload[0]?.value)}</p>
+    <div className="rounded-xl bg-white px-3 py-2 text-xs shadow-lg ring-1 ring-slate-200">
+      <p className="font-semibold text-slate-500">{labelFormat(label)}</p>
+      <p className="mt-0.5 flex items-center gap-1.5 font-black text-slate-900"><span className="w-2 h-2 rounded-full" style={{ background: payload[0].color || payload[0].fill }} />{format(payload[0].value)}</p>
     </div>
   );
 };
 
-const TrendTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
+const Delta = ({ current, previous }) => {
+  if (previous == null) return null;
+  if (!previous) return current ? <span className="text-xs font-bold text-green-700">New activity</span> : null;
+  const pct = Math.round(((current - previous) / previous) * 100);
   return (
-    <div className="rounded-xl bg-white shadow-lg ring-1 ring-slate-200 px-3 py-2.5 text-xs">
-      <p className="font-bold text-slate-700 mb-0.5">{label}</p>
-      <p className="font-black text-[#002046]">{payload[0]?.value} bookings</p>
-    </div>
+    <span className={`inline-flex items-center gap-0.5 text-xs font-bold ${pct >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+      <span className="material-symbols-outlined text-[16px]">{pct >= 0 ? 'arrow_upward' : 'arrow_downward'}</span>{Math.abs(pct)}% <span className="font-medium text-slate-400">vs previous</span>
+    </span>
   );
 };
 
-const PieTooltip = ({ active, payload }) => {
-  if (!active || !payload?.length) return null;
+const Ranked = ({ rows, color, format, empty, extra }) => {
+  if (!rows.length) return <EmptyState icon="leaderboard" title="No data yet" subtitle={empty} />;
+  const max = Math.max(...rows.map((r) => r.value), 1);
   return (
-    <div className="rounded-xl bg-white shadow-lg ring-1 ring-slate-200 px-3 py-2.5 text-xs max-w-[180px]">
-      <p className="font-bold text-slate-700 mb-0.5 truncate">{payload[0]?.name}</p>
-      <p className="font-black text-[#002046]">{formatCurrency(payload[0]?.value)}</p>
-      <p className="text-slate-400">{payload[0]?.payload?.pct}% of total</p>
-    </div>
-  );
-};
-
-/* ── Bar chart card ── */
-const RevenueBarChart = ({ title, entries, window, setWindow, windowOptions }) => {
-  const data   = entries.map(e => ({ name: e.key, value: e.value }));
-  const hasData = data.some(d => d.value > 0);
-
-  return (
-    <div className="rounded-2xl bg-white ring-1 ring-slate-200 overflow-hidden shadow-sm">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-wrap gap-2">
-        <p className="text-sm font-black text-slate-900">{title}</p>
-        <select
-          value={window}
-          onChange={(e) => setWindow(Number(e.target.value))}
-          className="rounded-xl bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 outline-none ring-1 ring-slate-200 focus:ring-[#002046] cursor-pointer"
-        >
-          {windowOptions.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
-        </select>
-      </div>
-      <div className="px-2 pt-5 pb-3">
-        {!hasData ? (
-          <div className="h-52 flex flex-col items-center justify-center gap-3 text-center">
-            <span className="material-symbols-outlined text-4xl text-slate-200">bar_chart</span>
-            <p className="text-sm text-slate-400">No revenue data for this period</p>
+    <ol className="space-y-3 px-5 py-4">
+      {rows.slice(0, 8).map((r) => (
+        <li key={r.name}>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="truncate text-sm font-semibold text-slate-800">{r.name}</span>
+            <span className="flex-shrink-0 text-sm font-black text-slate-900 tabular-nums">{format(r.value)}{extra ? <span className="ml-1.5 text-xs font-medium text-slate-400">{extra(r.name)}</span> : null}</span>
           </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 4 }} barCategoryGap="35%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 500 }}
-                axisLine={false} tickLine={false} interval={0}
-                tickFormatter={(v) => v.length > 7 ? v.slice(5) : v}
-              />
-              <YAxis
-                tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false}
-                tickFormatter={shortLabel} width={46}
-              />
-              <Tooltip content={<BarTooltip />} cursor={{ fill: '#f8fafc' }} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                {data.map((entry, i) => (
-                  <Cell key={i} fill={entry.value > 0 ? '#002046' : '#e2e8f0'} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    </div>
+          <div className="mt-1.5 h-2 rounded-r-full bg-slate-100"><div className="h-2 rounded-r-full" style={{ width: `${Math.max(2, (r.value / max) * 100)}%`, background: color }} /></div>
+        </li>
+      ))}
+    </ol>
   );
 };
 
-/* ── Booking trend area chart ── */
-const BookingTrendChart = ({ entries, window, setWindow }) => {
-  const data    = entries.map(e => ({ name: e.key.slice(5), value: e.value }));
-  const hasData = data.some(d => d.value > 0);
-
-  return (
-    <div className="rounded-2xl bg-white ring-1 ring-slate-200 overflow-hidden shadow-sm">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 flex-wrap gap-2">
-        <p className="text-sm font-black text-slate-900">Booking Trend</p>
-        <select
-          value={window}
-          onChange={(e) => setWindow(Number(e.target.value))}
-          className="rounded-xl bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 outline-none ring-1 ring-slate-200 focus:ring-[#002046] cursor-pointer"
-        >
-          <option value={7}>Last 7 days</option>
-          <option value={14}>Last 14 days</option>
-          <option value={30}>Last 30 days</option>
-        </select>
-      </div>
-      <div className="px-2 pt-5 pb-3">
-        {!hasData ? (
-          <div className="h-52 flex flex-col items-center justify-center gap-3 text-center">
-            <span className="material-symbols-outlined text-4xl text-slate-200">show_chart</span>
-            <p className="text-sm text-slate-400">No bookings yet in this period</p>
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={data} margin={{ top: 4, right: 16, left: 0, bottom: 4 }}>
-              <defs>
-                <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#002046" stopOpacity={0.15} />
-                  <stop offset="95%" stopColor="#002046" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 500 }}
-                axisLine={false} tickLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false}
-                allowDecimals={false} width={32}
-              />
-              <Tooltip content={<TrendTooltip />} cursor={{ stroke: '#002046', strokeWidth: 1, strokeDasharray: '4 2' }} />
-              <Area
-                type="monotone" dataKey="value"
-                stroke="#002046" strokeWidth={2}
-                fill="url(#trendGrad)" dot={false} activeDot={{ r: 4, fill: '#002046' }}
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        )}
-      </div>
-    </div>
-  );
-};
-
-/* ── Pie chart card ── */
-const RevenuePieChart = ({ title, entries, icon, emptyIcon, emptyLabel }) => {
-  const total = entries.reduce((s, e) => s + e.value, 0);
-  const data  = entries.map((e, i) => ({
-    name: e.key, value: e.value,
-    pct: total > 0 ? ((e.value / total) * 100).toFixed(1) : '0',
-    color: PIE_COLORS[i % PIE_COLORS.length],
-  }));
-  const hasData = data.some(d => d.value > 0);
-
-  return (
-    <div className="rounded-2xl bg-white ring-1 ring-slate-200 overflow-hidden shadow-sm">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-        <p className="text-sm font-black text-slate-900">{title}</p>
-        <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold bg-[#002046]/[0.08] text-[#002046]">
-          {entries.length} {icon}
-        </span>
-      </div>
-
-      {!hasData ? (
-        <div className="p-10 flex flex-col items-center justify-center gap-3 text-center">
-          <span className="material-symbols-outlined text-4xl text-slate-200">{emptyIcon}</span>
-          <p className="text-sm text-slate-400">{emptyLabel}</p>
-        </div>
-      ) : (
-        <div className="px-4 pt-4 pb-5">
-          <ResponsiveContainer width="100%" height={220}>
-            <PieChart>
-              <Pie
-                data={data} cx="50%" cy="50%"
-                innerRadius={55} outerRadius={90}
-                paddingAngle={data.length > 1 ? 3 : 0}
-                dataKey="value" nameKey="name"
-              >
-                {data.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} stroke="white" strokeWidth={2} />
-                ))}
-              </Pie>
-              <Tooltip content={<PieTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-
-          <div className="mt-2 space-y-2">
-            {data.map((entry, i) => (
-              <div key={i} className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: entry.color }} />
-                  <span className="text-xs text-slate-600 truncate">{entry.name}</span>
-                  {i === 0 && (
-                    <span className="text-[10px] font-semibold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full flex-shrink-0">Top</span>
-                  )}
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <span className="text-xs font-bold text-slate-900">{formatCurrency(entry.value)}</span>
-                  <span className="text-[10px] text-slate-400 ml-1.5">{entry.pct}%</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-/* ── Top routes by bookings table ── */
-const TopRoutesTable = ({ bookingsByRoute, revenueByRoute }) => {
-  const rows = useMemo(() => {
-    return Object.entries(bookingsByRoute || {})
-      .map(([route, count]) => ({
-        route,
-        bookings: Number(count || 0),
-        revenue: Number(revenueByRoute?.[route] || 0),
-      }))
-      .sort((a, b) => b.bookings - a.bookings)
-      .slice(0, 10);
-  }, [bookingsByRoute, revenueByRoute]);
-
-  return (
-    <div className="rounded-2xl bg-white ring-1 ring-slate-200 overflow-hidden shadow-sm">
-      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-        <p className="text-sm font-black text-slate-900">Top Routes by Bookings</p>
-        <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold bg-[#002046]/[0.08] text-[#002046]">
-          {rows.length} routes
-        </span>
-      </div>
-      {rows.length === 0 ? (
-        <div className="p-10 flex flex-col items-center justify-center gap-3 text-center">
-          <span className="material-symbols-outlined text-4xl text-slate-200">route</span>
-          <p className="text-sm text-slate-400">No bookings yet</p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-slate-100">
-                <th className="px-5 py-3 text-left font-semibold text-slate-400 uppercase tracking-wider">#</th>
-                <th className="px-5 py-3 text-left font-semibold text-slate-400 uppercase tracking-wider">Route</th>
-                <th className="px-5 py-3 text-right font-semibold text-slate-400 uppercase tracking-wider">Bookings</th>
-                <th className="px-5 py-3 text-right font-semibold text-slate-400 uppercase tracking-wider">Revenue</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, i) => (
-                <tr key={row.route} className="border-b border-slate-50 hover:bg-slate-50/60 transition-colors">
-                  <td className="px-5 py-3.5 text-slate-400 font-semibold">{i + 1}</td>
-                  <td className="px-5 py-3.5">
-                    <span className="font-semibold text-slate-800">{row.route}</span>
-                    {i === 0 && (
-                      <span className="ml-2 text-[10px] font-bold bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full">Top</span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3.5 text-right font-black text-[#002046]">{row.bookings}</td>
-                  <td className="px-5 py-3.5 text-right font-semibold text-slate-700">{formatCurrency(row.revenue)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
-};
-
-/* ── Main Component ── */
 const Earnings = () => {
-  const navigate = useNavigate();
-  const { user, loading } = useAuth();
-  const [report, setReport]           = useState(null);
-  const [loadingReport, setLoadingReport] = useState(true);
-  const [dailyWindow, setDailyWindow]   = useState(7);
-  const [monthlyWindow, setMonthlyWindow] = useState(6);
-  const [trendWindow, setTrendWindow]   = useState(14);
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [range, setRange] = useState(14);
+  const [months, setMonths] = useState(6);
 
-  useEffect(() => {
-    if (loading) return;
-    if (!user || user.role !== 'OPERATOR') navigate(ROUTES.HOME);
-  }, [user, loading, navigate]);
-
-  const fetchRevenue = async () => {
+  const load = useCallback(async () => {
     try {
-      setLoadingReport(true);
-      const data = await getRevenueReport();
-      setReport(data || {});
+      setReport((await getRevenueReport()) || {});
     } catch (e) {
-      setReport({});
-      toast.error(e.message || 'Failed to load revenue report');
+      toast.error(e.message || 'Couldn’t load earnings');
+      setReport((p) => p || {});
     } finally {
-      setLoadingReport(false);
+      setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { fetchRevenue(); }, []);
+  useEffect(() => { load(); }, [load]);
 
-  const dailyEntries = useMemo(() => {
-    const entries = normalizeEntries(report?.dailyRevenue).sort((a, b) => new Date(a.key) - new Date(b.key));
-    return lastN(entries, dailyWindow);
-  }, [report, dailyWindow]);
-
-  const monthlyEntries = useMemo(() => {
-    const entries = normalizeEntries(report?.monthlyRevenue).sort((a, b) => a.key.localeCompare(b.key));
-    return lastN(entries, monthlyWindow);
-  }, [report, monthlyWindow]);
-
-  const trendEntries = useMemo(() => {
-    const entries = normalizeEntries(report?.dailyBookings).sort((a, b) => new Date(a.key) - new Date(b.key));
-    return lastN(entries, trendWindow);
-  }, [report, trendWindow]);
-
-  const routeEntries = useMemo(() => normalizeEntries(report?.revenueByRoute).sort((a, b) => b.value - a.value), [report]);
-  const busEntries   = useMemo(() => normalizeEntries(report?.revenueByBus).sort((a, b) => b.value - a.value), [report]);
-
-  const cancellationRate = Number(report?.cancellationRate ?? 0);
-  const totalCancelled   = Number(report?.totalCancelled ?? 0);
+  // The API returns the last 30 IST days (zero-filled) and the last 12 months, oldest first
+  const days = useMemo(() => Object.keys(report?.dailyRevenue || {}).sort().map((day) => ({
+    day, revenue: Number(report.dailyRevenue[day] || 0), bookings: Number(report.dailyBookings?.[day] || 0),
+  })), [report]);
+  const current = days.slice(-range);
+  const previous = days.length >= range * 2 ? days.slice(-range * 2, -range) : null;
+  const sum = (list, k) => list.reduce((n, d) => n + d[k], 0);
+  const monthly = Object.keys(report?.monthlyRevenue || {}).sort().slice(-months).map((m) => ({ month: m, revenue: Number(report.monthlyRevenue[m] || 0) }));
+  const byRoute = useMemo(() => ranked(report?.revenueByRoute), [report]);
+  const byBus = useMemo(() => ranked(report?.revenueByBus), [report]);
+  const confirmed = Number(report?.totalBookings || 0);
+  const cancelRate = Number(report?.cancellationRate || 0);
+  const busy = loading && !report;
 
   return (
     <OperatorLayout activeItem="earnings" title="Earnings">
       <div className="space-y-5">
+        <PageHeader
+          title="Earnings"
+          subtitle="Ticket sales from confirmed bookings · dates in IST"
+          actions={<button onClick={() => { setLoading(true); load(); }} disabled={loading} className={headerButton}><span className={`material-symbols-outlined text-[18px] ${loading ? 'animate-spin' : ''}`}>refresh</span>Refresh</button>}
+        />
 
-        {/* Header */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900">Revenue Dashboard</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Live revenue and booking analytics</p>
-          </div>
-          <button
-            onClick={fetchRevenue}
-            disabled={loadingReport}
-            className="flex-shrink-0 flex items-center gap-2 rounded-2xl bg-[#002046] text-white px-4 sm:px-5 py-2.5 text-sm font-bold hover:bg-[#003a80] transition-colors shadow-sm disabled:opacity-60"
-          >
-            {loadingReport ? (
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-            ) : (
-              <span className="material-symbols-outlined text-base">refresh</span>
-            )}
-            Refresh
-          </button>
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatCard icon="payments" tone="green" label="Total earnings" value={rupees(report?.totalRevenue)} sub="All time" loading={busy} />
+          <StatCard icon="confirmation_number" tone="blue" label="Confirmed bookings" value={confirmed.toLocaleString('en-IN')} sub="All time" loading={busy} />
+          <StatCard icon="receipt_long" tone="peach" label="Average booking" value={confirmed ? rupees(Number(report?.totalRevenue || 0) / confirmed) : '₹0'} loading={busy} />
+          <StatCard icon="event_busy" tone={cancelRate >= 20 ? 'red' : 'amber'} label="Cancellation rate" value={`${cancelRate}%`} sub={`${Number(report?.totalCancelled || 0)} cancelled`} loading={busy} />
         </div>
 
-        {loadingReport ? (
-          <div className="p-16 flex items-center justify-center gap-3 text-sm text-slate-500">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#002046]/30 border-t-[#002046]" />
-            Loading revenue dashboard...
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-black text-slate-900">Daily sales</h2>
+          <FilterTabs options={[{ value: 7, label: '7 days' }, { value: 14, label: '14 days' }, { value: 30, label: '30 days' }]} value={range} onChange={setRange} label="Date range" />
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-2">
+          <Card title="Earnings" subtitle={`Last ${range} days`} icon="payments">
+            <div className="px-5 pt-4">
+              <p className="text-2xl font-black text-slate-900 tabular-nums">{rupees(sum(current, 'revenue'))}</p>
+              <Delta current={sum(current, 'revenue')} previous={previous ? sum(previous, 'revenue') : null} />
+            </div>
+            <div className="h-56 px-2 pb-3 pt-2">
+              {busy ? <div className="h-full rounded-xl bg-slate-50 animate-pulse" /> : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={current} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                    <defs><linearGradient id="opRev" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={REVENUE_COLOR} stopOpacity={0.14} /><stop offset="100%" stopColor={REVENUE_COLOR} stopOpacity={0.02} /></linearGradient></defs>
+                    <CartesianGrid stroke={GRID} vertical={false} />
+                    <XAxis dataKey="day" tickFormatter={dayLabel} interval={range === 30 ? 4 : range === 14 ? 1 : 0} tick={AXIS} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={compact} tick={AXIS} axisLine={false} tickLine={false} width={52} allowDecimals={false} />
+                    <Tooltip content={<Tip format={rupees} labelFormat={dayLabel} />} cursor={{ stroke: '#CBD5E1', strokeWidth: 1 }} />
+                    <Area type="linear" dataKey="revenue" stroke={REVENUE_COLOR} strokeWidth={2} fill="url(#opRev)" dot={false} activeDot={{ r: 5, fill: REVENUE_COLOR, stroke: '#fff', strokeWidth: 2 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </Card>
+
+          <Card title="Bookings" subtitle={`Last ${range} days`} icon="confirmation_number">
+            <div className="px-5 pt-4">
+              <p className="text-2xl font-black text-slate-900 tabular-nums">{sum(current, 'bookings').toLocaleString('en-IN')}</p>
+              <Delta current={sum(current, 'bookings')} previous={previous ? sum(previous, 'bookings') : null} />
+            </div>
+            <div className="h-56 px-2 pb-3 pt-2">
+              {busy ? <div className="h-full rounded-xl bg-slate-50 animate-pulse" /> : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={current} margin={{ top: 8, right: 12, left: 0, bottom: 0 }} barCategoryGap="25%">
+                    <CartesianGrid stroke={GRID} vertical={false} />
+                    <XAxis dataKey="day" tickFormatter={dayLabel} interval={range === 30 ? 4 : range === 14 ? 1 : 0} tick={AXIS} axisLine={false} tickLine={false} />
+                    <YAxis tick={AXIS} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
+                    <Tooltip content={<Tip format={(v) => `${v} bookings`} labelFormat={dayLabel} />} cursor={{ fill: '#F1F5F9' }} />
+                    <Bar dataKey="bookings" fill={BOOKINGS_COLOR} radius={[4, 4, 0, 0]} maxBarSize={24} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        <Card title="Monthly earnings" icon="calendar_month" action={<FilterTabs options={[{ value: 3, label: '3 mo' }, { value: 6, label: '6 mo' }, { value: 12, label: '12 mo' }]} value={months} onChange={setMonths} label="Months" />}>
+          <div className="h-60 px-2 pb-3 pt-4">
+            {busy ? <div className="h-full rounded-xl bg-slate-50 animate-pulse" /> : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthly} margin={{ top: 8, right: 12, left: 0, bottom: 0 }} barCategoryGap="30%">
+                  <CartesianGrid stroke={GRID} vertical={false} />
+                  <XAxis dataKey="month" tickFormatter={monthLabel} tick={AXIS} axisLine={false} tickLine={false} />
+                  <YAxis tickFormatter={compact} tick={AXIS} axisLine={false} tickLine={false} width={52} allowDecimals={false} />
+                  <Tooltip content={<Tip format={rupees} labelFormat={monthLabel} />} cursor={{ fill: '#F1F5F9' }} />
+                  <Bar dataKey="revenue" fill={REVENUE_COLOR} radius={[4, 4, 0, 0]} maxBarSize={36} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
-        ) : (
-          <>
-            {/* Stats row */}
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-4">
-              <div className="rounded-2xl bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] p-3 sm:p-5 text-white shadow-sm relative overflow-hidden">
-                <div className="absolute -top-2 -right-2 text-5xl opacity-10 select-none">★</div>
-                <p className="text-[9px] sm:text-[10px] font-semibold opacity-60 uppercase tracking-wider mb-1.5">Total Revenue</p>
-                <p className="text-xl sm:text-3xl font-black">{formatCurrency(report?.totalRevenue)}</p>
-                <p className="text-[10px] opacity-50 mt-1">all time</p>
-              </div>
+        </Card>
 
-              <div className="rounded-2xl bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] p-3 sm:p-5 text-white shadow-sm relative overflow-hidden">
-                <div className="absolute -top-2 -right-2 text-5xl opacity-10 select-none">★</div>
-                <p className="text-[9px] sm:text-[10px] font-semibold opacity-60 uppercase tracking-wider mb-1.5">Confirmed</p>
-                <p className="text-xl sm:text-3xl font-black">{Number(report?.totalBookings || 0)}</p>
-                <p className="text-[10px] opacity-50 mt-1">bookings</p>
-              </div>
-
-              <div className="rounded-2xl bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] p-3 sm:p-5 text-white shadow-sm relative overflow-hidden">
-                <div className="absolute -top-2 -right-2 text-5xl opacity-10 select-none">★</div>
-                <p className="text-[9px] sm:text-[10px] font-semibold opacity-60 uppercase tracking-wider mb-1.5">Avg Booking Value</p>
-                <p className="text-xl sm:text-3xl font-black">
-                  {report?.totalBookings ? formatCurrency(Number(report.totalRevenue || 0) / Number(report.totalBookings)) : '₹0'}
-                </p>
-                <p className="text-[10px] opacity-50 mt-1">per booking</p>
-              </div>
-
-              <div className={`rounded-2xl p-3 sm:p-5 shadow-sm relative overflow-hidden col-span-2 xl:col-span-1 ${cancellationRate >= 20 ? 'bg-gradient-to-br from-rose-600 to-rose-800' : cancellationRate >= 10 ? 'bg-gradient-to-br from-amber-500 to-amber-700' : 'bg-gradient-to-br from-emerald-600 to-emerald-800'} text-white`}>
-                <div className="absolute -top-2 -right-2 text-5xl opacity-10 select-none">★</div>
-                <p className="text-[9px] sm:text-[10px] font-semibold opacity-70 uppercase tracking-wider mb-1.5">Cancellation Rate</p>
-                <p className="text-xl sm:text-3xl font-black">{cancellationRate}%</p>
-                <p className="text-[10px] opacity-70 mt-1">{totalCancelled} cancelled</p>
-              </div>
-            </div>
-
-            {/* Bar charts */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              <RevenueBarChart
-                title="Daily Revenue"
-                entries={dailyEntries}
-                window={dailyWindow}
-                setWindow={setDailyWindow}
-                windowOptions={[
-                  { value: 7, label: 'Last 7 days' },
-                  { value: 14, label: 'Last 14 days' },
-                  { value: 30, label: 'Last 30 days' },
-                ]}
-              />
-              <RevenueBarChart
-                title="Monthly Revenue"
-                entries={monthlyEntries}
-                window={monthlyWindow}
-                setWindow={setMonthlyWindow}
-                windowOptions={[
-                  { value: 3, label: 'Last 3 months' },
-                  { value: 6, label: 'Last 6 months' },
-                  { value: 12, label: 'Last 12 months' },
-                ]}
-              />
-            </div>
-
-            {/* Booking trend + top routes */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              <BookingTrendChart
-                entries={trendEntries}
-                window={trendWindow}
-                setWindow={setTrendWindow}
-              />
-              <TopRoutesTable
-                bookingsByRoute={report?.bookingsByRoute}
-                revenueByRoute={report?.revenueByRoute}
-              />
-            </div>
-
-            {/* Pie charts */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              <RevenuePieChart
-                title="Revenue by Route"
-                entries={routeEntries}
-                icon="routes"
-                emptyIcon="route"
-                emptyLabel="Route revenue will appear once bookings are made."
-              />
-              <RevenuePieChart
-                title="Revenue by Bus"
-                entries={busEntries}
-                icon="buses"
-                emptyIcon="directions_bus"
-                emptyLabel="Bus revenue will appear once bookings are made."
-              />
-            </div>
-          </>
-        )}
-
+        <div className="grid gap-5 xl:grid-cols-2">
+          <Card title="By route" subtitle="All-time earnings" icon="route">
+            {busy ? <div className="m-5 h-40 rounded-xl bg-slate-50 animate-pulse" /> : (
+              <Ranked rows={byRoute} color={REVENUE_COLOR} format={rupees} empty="Shows up once a route has bookings."
+                extra={(n) => (report?.bookingsByRoute?.[n] ? `${report.bookingsByRoute[n]} bookings` : '')} />
+            )}
+          </Card>
+          <Card title="By bus" subtitle="All-time earnings" icon="directions_bus">
+            {busy ? <div className="m-5 h-40 rounded-xl bg-slate-50 animate-pulse" /> : (
+              <Ranked rows={byBus} color={REVENUE_COLOR} format={rupees} empty="Shows up once a bus has bookings." />
+            )}
+          </Card>
+        </div>
       </div>
     </OperatorLayout>
   );

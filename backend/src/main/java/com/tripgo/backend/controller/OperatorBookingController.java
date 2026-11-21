@@ -52,6 +52,7 @@ public class OperatorBookingController {
     public ResponseEntity<?> getScheduleBookings(
             @PathVariable UUID scheduleId,
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) java.time.LocalDate travelDate,
             Authentication auth) {
 
         Operator operator = getOperator(auth);
@@ -68,7 +69,10 @@ public class OperatorBookingController {
                         .orElse(List.of())
                 : bookingRepository.findByRouteSchedule(schedule);
 
-        return ResponseEntity.ok(bookings.stream().map(this::toBookingResponse).toList());
+        // A recurring departure row holds bookings for several dates — the manifest is for one day
+        return ResponseEntity.ok(bookings.stream()
+                .filter(b -> travelDate == null || travelDate.equals(b.getTravelDate()))
+                .map(this::toBookingResponse).toList());
     }
 
     // PATCH /operator/bookings/{id}/cancel - Cancel a booking
@@ -156,6 +160,20 @@ public class OperatorBookingController {
                 "departureTime", booking.getRouteSchedule().getDepartureTime()
         ));
         result.put("seats", seatDetails);
+        result.put("boardingPoint", booking.getBoardingPoint());
+        result.put("boardingTime", booking.getBoardingTime() != null ? booking.getBoardingTime().toString() : null);
+        result.put("droppingPoint", booking.getDroppingPoint());
+        result.put("droppingTime", booking.getDroppingTime() != null ? booking.getDroppingTime().toString() : null);
+        result.put("contactPhone", booking.getUser() != null ? booking.getUser().getPhone() : booking.getGuestPhone());
+        result.put("contactEmail", booking.getUser() != null ? booking.getUser().getEmail() : booking.getGuestEmail());
+        // Recurring schedules keep their first departure on the schedule; the booking's own day is travelDate
+        result.put("travelDate", booking.getTravelDate());
+        result.put("departureTime", booking.getRouteSchedule().getDepartureTime());
+        result.put("arrivalTime", booking.getRouteSchedule().getArrivalTime());
+        if (booking.getRouteSchedule().getBus() != null) {
+            result.put("busName", booking.getRouteSchedule().getBus().getName());
+            result.put("busNumber", booking.getRouteSchedule().getBus().getVehicleNumber());
+        }
         return result;
     }
 

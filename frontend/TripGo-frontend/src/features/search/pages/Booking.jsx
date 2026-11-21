@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import UserLayout from '../../../shared/components/UserLayout';
+import CheckoutLayout from '../components/CheckoutLayout';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 import { ROUTES } from '../../../shared/constants/routes';
 import { INDIA_STATES } from '../../../shared/constants/indiaStates';
 import {
   getDelayMinutes,
   getTripStatusValue,
   isSeatAvailableForBooking,
+  isSeatBlocked,
+  isSeatBooked,
 } from '../../../shared/utils/scheduleSearchUtils';
 import {
   applyPromoCode,
@@ -29,6 +32,24 @@ const CURRENT_BOOKING_STORAGE_KEY = 'tripgo_current_booking_state';
 const BOOKING_DRAFT_PREFIX = 'tripgo_booking_draft_';
 const SAVED_TRAVELERS_KEY = 'tripgo_saved_travelers';
 const SAVED_CONTACT_KEY = 'tripgo_saved_contact';
+
+/**
+ * Recent travellers and contact details are remembered per signed-in account only. They used to be
+ * kept in one device-wide key, so the next person on a shared browser (or any guest) saw them.
+ */
+const accountStorageKey = (base) => {
+  try {
+    const token = localStorage.getItem('accessToken');
+    const sub = token ? JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub : '';
+    return sub ? `${base}:${String(sub).toLowerCase()}` : null;
+  } catch {
+    return null;
+  }
+};
+const forgetSharedTravellerData = () => {
+  localStorage.removeItem(SAVED_TRAVELERS_KEY); // legacy device-wide keys
+  localStorage.removeItem(SAVED_CONTACT_KEY);
+};
 const RECENT_TRAVELERS_LIMIT = 6;
 const MAX_SEATS = 6;
 const STEPS = ['seats', 'points', 'details'];
@@ -191,6 +212,8 @@ const GENDERS = [['MALE', 'Male'], ['FEMALE', 'Female'], ['OTHER', 'Other']];
 
 const Booking = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const hasTabBar = user?.role === 'USER'; // signed-in travellers have the app's bottom tab bar on phones
   const location = useLocation();
   const bookingState = useMemo(
     () => (location.state?.bus ? location.state : (readStorage(CURRENT_BOOKING_STORAGE_KEY) || {})),
@@ -217,9 +240,13 @@ const Booking = () => {
   const [points, setPoints] = useState({ boardingPoints: [], droppingPoints: [] });
   const [loadingPoints, setLoadingPoints] = useState(false);
   const [selection, setSelection] = useState(savedDraft?.selection || { boardingPointId: '', droppingPointId: '' });
-  const [contact, setContact] = useState(() => savedDraft?.contact || {
-    countryCode: '+91', phone: '', email: '', stateOfResidence: '', whatsappOptIn: false,
-    ...(readStorage(SAVED_CONTACT_KEY) || {}),
+  const [contact, setContact] = useState(() => {
+    forgetSharedTravellerData();
+    const contactKey = accountStorageKey(SAVED_CONTACT_KEY);
+    return savedDraft?.contact || {
+      countryCode: '+91', phone: '', email: '', stateOfResidence: '', whatsappOptIn: false,
+      ...((contactKey && readStorage(contactKey)) || {}),
+    };
   });
   const [passengers, setPassengers] = useState([]);
   const [savePassengerFlags, setSavePassengerFlags] = useState({});
@@ -227,7 +254,10 @@ const Booking = () => {
   const [policiesInfo, setPoliciesInfo] = useState(null);
   const [featuresInfo, setFeaturesInfo] = useState(null);
   const [ratingSummary, setRatingSummary] = useState(null);
-  const [recentTravelers] = useState(() => dedupeTravelers(readStorage(SAVED_TRAVELERS_KEY) || []));
+  const [recentTravelers] = useState(() => {
+    const key = accountStorageKey(SAVED_TRAVELERS_KEY);
+    return key ? dedupeTravelers(readStorage(key) || []) : [];
+  });
   const [savedProfilesList, setSavedProfilesList] = useState([]);
   const [promoInput, setPromoInput] = useState('');
   const [promoResult, setPromoResult] = useState(null);
@@ -239,7 +269,23 @@ const Booking = () => {
     setLoadingSeats(true);
     setLoadingSeatsError('');
     try {
-      setSeatsResponse(await getScheduleSeats(scheduleId, travelDate, searchParams?.from || '', searchParams?.to || ''));
+      const data = await getScheduleSeats(scheduleId, travelDate, searchParams?.from || '', searchParams?.to || '');
+      setSeatsResponse(data);
+      // A saved draft can point at seats sold since — e.g. the ones this traveller just booked
+      const all = [...(data?.lowerDeck || []), ...(data?.upperDeck || []), ...(data?.seats || [])];
+      const sold = selectedSeats.filter((n) => {
+        const seat = all.find((x) => String(x.seatNumber) === String(n));
+        return seat && (isSeatBooked(seat) || isSeatBlocked(seat));
+      });
+      if (sold.length) {
+        setSelectedSeats((prev) => prev.filter((n) => !sold.includes(n)));
+        setLockInfo(null);
+        setLockExpiresAt(null);
+        setLockSecondsLeft(0);
+        setStep('seats');
+        if (draftKey) removeStorage(draftKey);
+        toast.message(`Seat${sold.length > 1 ? 's' : ''} ${sold.join(', ')} ${sold.length > 1 ? 'are' : 'is'} no longer available — pick again.`);
+      }
     } catch (e) {
       setLoadingSeatsError(e.message || 'Failed to load seats');
     } finally {
@@ -461,7 +507,8 @@ const Booking = () => {
     setPromoLoading(true);
     setPromoError('');
     try {
-      const result = await applyPromoCode(promoInput.trim(), seatsTotal);
+      // Contact details let the server check per-traveller rules such as "first booking only"
+      const result = await applyPromoCode(promoInput.trim(), seatsTotal, { email: contact.email.trim(), phone: contact.phone.trim() });
       setPromoResult(result);
       toast.success(result.message);
     } catch (e) {
@@ -492,8 +539,10 @@ const Booking = () => {
 
     // Ticket and trip updates go to the contact details unless a traveller has their own
     const finalPassengers = passengers.map((p) => ({ ...p, phone: p.phone || contact.phone, email: p.email || contact.email }));
-    writeStorage(SAVED_CONTACT_KEY, contact, localStorage);
-    writeStorage(SAVED_TRAVELERS_KEY, dedupeTravelers([...finalPassengers.map(normalizeTraveler), ...recentTravelers]), localStorage);
+    const contactKey = accountStorageKey(SAVED_CONTACT_KEY);
+    const travelersKey = accountStorageKey(SAVED_TRAVELERS_KEY);
+    if (contactKey) writeStorage(contactKey, contact, localStorage);
+    if (travelersKey) writeStorage(travelersKey, dedupeTravelers([...finalPassengers.map(normalizeTraveler), ...recentTravelers]), localStorage);
     if (localStorage.getItem('accessToken')) {
       finalPassengers.forEach((passenger) => {
         if (!savePassengerFlags[passenger.seatNumber]) return;
@@ -519,7 +568,7 @@ const Booking = () => {
 
   if (!bus) {
     return (
-      <UserLayout activeItem="search" title="Select seats" showHeaderSearch={false}>
+      <CheckoutLayout activeItem="search" title="Select seats">
         <section className="rounded-2xl bg-white border border-slate-200/80 p-10 text-center">
           <span className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-[#FDBA74]/20 flex items-center justify-center">
             <span className="material-symbols-outlined text-3xl text-orange-600">directions_bus</span>
@@ -530,7 +579,7 @@ const Booking = () => {
             Search buses
           </button>
         </section>
-      </UserLayout>
+      </CheckoutLayout>
     );
   }
 
@@ -675,7 +724,7 @@ const Booking = () => {
   );
 
   return (
-    <UserLayout activeItem="search" title="Book your seats" showHeaderSearch={false}>
+    <CheckoutLayout activeItem="search" title="Book your seats">
       <div className="space-y-5 pb-20 md:pb-0">
         <CheckoutHeader
           from={searchParams?.from}
@@ -949,7 +998,7 @@ const Booking = () => {
       </div>
 
       {/* Phone: total + next step pinned above the tab bar */}
-      <div className="md:hidden fixed inset-x-0 bottom-[calc(65px+env(safe-area-inset-bottom))] z-30 border-t border-slate-200 bg-white/95 backdrop-blur px-4 py-3 flex items-center justify-between gap-3">
+      <div className={`md:hidden fixed inset-x-0 ${hasTabBar ? 'bottom-[calc(65px+env(safe-area-inset-bottom))]' : 'bottom-0 pb-[calc(0.75rem+env(safe-area-inset-bottom))]'} z-30 border-t border-slate-200 bg-white/95 backdrop-blur px-4 py-3 flex items-center justify-between gap-3`}>
         <div className="min-w-0">
           <p className="text-[11px] text-slate-500 truncate">
             {selectedSeats.length ? `Seats ${selectedSeats.join(', ')}` : 'No seats selected'}
@@ -964,7 +1013,7 @@ const Booking = () => {
           {step === 'details' ? 'Proceed to pay' : primaryAction.label}
         </button>
       </div>
-    </UserLayout>
+    </CheckoutLayout>
   );
 };
 

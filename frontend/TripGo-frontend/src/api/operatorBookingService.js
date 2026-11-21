@@ -15,6 +15,11 @@ export const getOperatorBookings = async (status) => {
   return apiGet(`/operator/bookings${toQuery({ status })}`);
 };
 
+/** Bookings on one departure; `travelDate` (YYYY-MM-DD) narrows a recurring departure to one day. */
+export const getScheduleBookings = async (scheduleId, travelDate) => {
+  return apiGet(`/operator/schedules/${encodeURIComponent(scheduleId)}/bookings${toQuery({ travelDate })}`);
+};
+
 export const cancelOperatorBooking = async (bookingId, cancelReason) => {
   return apiPost(`/booking/${encodeURIComponent(bookingId)}/operator-cancel`, {
     reason: cancelReason,

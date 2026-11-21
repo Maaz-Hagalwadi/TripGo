@@ -36,6 +36,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/payments")
+@lombok.extern.slf4j.Slf4j
 @RequiredArgsConstructor
 public class PaymentController {
 
@@ -54,6 +55,8 @@ public class PaymentController {
     private final NotificationService notificationService;
     private final com.tripgo.backend.repository.UserRepository userRepository;
     private final com.tripgo.backend.service.impl.WalletService walletService;
+    private final com.tripgo.backend.repository.BoardingDroppingPointRepository pointRepository;
+    private final com.tripgo.backend.service.impl.DiscountService discountService;
 
     // Premium benefits (zero cancellation fees, priority seats/support) are not implemented yet,
     // so new memberships stay closed until they are. Re-enable with PREMIUM_SALES_ENABLED=true.
@@ -229,6 +232,25 @@ public class PaymentController {
                     .map(p -> (Map<String, Object>) p)
                     .toList();
 
+            // Promo: re-validated here and taken off what Stripe charges (the page's discount used to be display-only)
+            BigDecimal discountAmount = BigDecimal.ZERO;
+            String promoCode = body.get("promoCode") instanceof String pc && !pc.isBlank() ? pc.trim().toUpperCase() : null;
+            if (promoCode != null) {
+                com.tripgo.backend.dto.request.ApplyPromoRequest promoReq = new com.tripgo.backend.dto.request.ApplyPromoRequest();
+                promoReq.setCode(promoCode);
+                promoReq.setBookingAmount(payableAmount);
+                promoReq.setEmail(guestEmail);
+                if (!passengers.isEmpty() && passengers.get(0).get("phone") instanceof String ph) promoReq.setPhone(ph);
+                try {
+                    discountAmount = discountService.applyPromo(promoReq, user).getDiscountAmount();
+                } catch (com.tripgo.backend.exception.BadRequestException e) {
+                    return ResponseEntity.badRequest().body(Map.of("error", e.getMessage() + ". Go back and remove the promo code to continue."));
+                }
+                payableAmount = payableAmount.subtract(discountAmount).max(BigDecimal.ZERO);
+            }
+            final BigDecimal expectedPayable = payableAmount;
+
+
             // Derive travelDate from the adjusted departure time passed in body, or fall back to schedule date
             java.time.LocalDate travelDate = null;
             if (body.get("travelDate") != null) {
@@ -263,7 +285,8 @@ public class PaymentController {
                                     && Objects.equals(normalizeValue(seat.getToStop()), normalizeValue(to))
                             );
 
-                            return sameSegment && existingSeatNumbers.equals(requestedSeatNumbers);
+                            return sameSegment && existingSeatNumbers.equals(requestedSeatNumbers)
+                                    && existing.getPayableAmount() != null && existing.getPayableAmount().compareTo(expectedPayable) == 0;
                         })
                         .toList();
                 if (!existingPending.isEmpty()) {
@@ -295,6 +318,18 @@ public class PaymentController {
             // ── Ladies-only / beside-woman enforcement ───────────────────────────
             List<BookingSeat> confirmedSeatsForCheck =
                     bookingSeatRepository.findConfirmedByScheduleIdAndTravelDate(scheduleId, travelDate);
+
+            // Never sell a seat twice: one of the held seats may have been booked since it was held
+            Set<String> heldSeats = locks.stream().map(l -> l.getSeatNumber().toUpperCase()).collect(Collectors.toSet());
+            Optional<String> sold = confirmedSeatsForCheck.stream()
+                    .filter(bs -> heldSeats.contains(bs.getSeatNumber().toUpperCase()))
+                    .filter(bs -> segmentsOverlap(allSegments, bs.getFromStop(), bs.getToStop(), from, to))
+                    .map(BookingSeat::getSeatNumber)
+                    .findFirst();
+            if (sold.isPresent()) {
+                return ResponseEntity.badRequest().body(Map.of("error",
+                        "Seat " + sold.get() + " has already been booked. Please go back and choose another seat."));
+            }
 
             Set<String> femaleBookedSeats = confirmedSeatsForCheck.stream()
                     .filter(bs -> segmentsOverlap(allSegments, bs.getFromStop(), bs.getToStop(), from, to))
@@ -353,12 +388,15 @@ public class PaymentController {
                     .operator(schedule.getRoute().getOperator())
                     .totalAmount(totalAmount)
                     .gstAmount(gstAmount)
-                    .discountAmount(BigDecimal.ZERO)
+                    .discountAmount(discountAmount)
+                    .promoCode(promoCode)
                     .payableAmount(payableAmount)
                     .status(BookingStatus.PENDING)
                     .bookingCode(bookingCode)
                     .travelDate(travelDate)
                     .build();
+            applyChosenPoint(booking, schedule, body.get("boardingPointId"), "BOARDING");
+            applyChosenPoint(booking, schedule, body.get("droppingPointId"), "DROPPING");
             bookingRepository.save(booking);
 
             for (Map<String, Object> p : passengers) {
@@ -409,6 +447,7 @@ public class PaymentController {
                     booking.setStatus(BookingStatus.CONFIRMED);
                     bookingRepository.save(booking);
                     createTicketIfAbsent(booking);
+                    countPromoUse(booking);
                     lockService.release(lockToken);
                     if (booking.getUser() != null) {
                         notificationService.send(booking.getUser(), "BOOKING_CONFIRMED",
@@ -502,6 +541,27 @@ public class PaymentController {
      * Step 2a: Frontend calls this after Stripe confirms payment on client side.
      * Acts as a fallback in case webhook is delayed.
      */
+    private void countPromoUse(Booking booking) {
+        try {
+            discountService.recordUse(booking.getPromoCode());
+        } catch (Exception e) {
+            log.warn("Couldn't count promo use for booking {}: {}", booking.getId(), e.getMessage());
+        }
+    }
+
+    /** Copies the traveller's chosen point onto the booking; ignores ids that aren't this departure's. */
+    private void applyChosenPoint(Booking booking, RouteSchedule schedule, Object rawId, String type) {
+        if (!(rawId instanceof String id) || id.isBlank()) return;
+        UUID pointId;
+        try { pointId = UUID.fromString(id); } catch (IllegalArgumentException e) { return; }
+        pointRepository.findById(pointId)
+                .filter(p -> p.getSchedule().getId().equals(schedule.getId()) && type.equals(p.getType()))
+                .ifPresent(p -> {
+                    if ("BOARDING".equals(type)) { booking.setBoardingPoint(p.getName()); booking.setBoardingTime(p.getArrivalTime()); }
+                    else { booking.setDroppingPoint(p.getName()); booking.setDroppingTime(p.getArrivalTime()); }
+                });
+    }
+
     @PostMapping("/confirm-booking/{bookingId}")
     public ResponseEntity<?> confirmBookingAfterPayment(
             @PathVariable UUID bookingId,
@@ -566,6 +626,7 @@ public class PaymentController {
             booking.setStatus(BookingStatus.CONFIRMED);
             bookingRepository.save(booking);
             createTicketIfAbsent(booking);
+            countPromoUse(booking);
 
             if (booking.getUser() != null) {
                 notificationService.send(booking.getUser(),
@@ -746,6 +807,7 @@ public class PaymentController {
                 booking.setStatus(BookingStatus.CONFIRMED);
                 bookingRepository.save(booking);
                 createTicketIfAbsent(booking);
+                countPromoUse(booking);
 
                 // Update payment record
                 paymentRepository.findByProviderTransactionId(intent.getId())

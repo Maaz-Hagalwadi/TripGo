@@ -1,234 +1,235 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../shared/contexts/AuthContext';
-import OperatorLayout from '../../../shared/components/OperatorLayout';
-import { getRoutes, deleteRoute, updateRoute } from '../../../api/routeService';
 import { toast } from 'sonner';
+import OperatorLayout from '../../../shared/components/OperatorLayout';
+import { deleteRoute, getAllSchedules, getRoutes, setScheduleActive, updateRoute } from '../../../api/routeService';
 import { ROUTES } from '../../../shared/constants/routes';
-import CenterScreenLoader from '../../../shared/components/ui/CenterScreenLoader';
+import {
+  ActionButton, Card, ConfirmDialog, EmptyState, FilterTabs, PageHeader, SearchInput, SkeletonRows, StatCard, StatusPill,
+} from '../../../shared/components/console/ConsoleUI';
+import { headerPrimaryButton } from '../../../shared/components/console/consoleStyles';
+import { FREQUENCY_LABEL, istDate, istTime, TRIP_STATUS } from '../utils/operatorFormat';
+
+const INPUT = 'w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none focus:border-primary focus:ring-2 focus:ring-primary/15';
+const isUpcoming = (s) => new Date(s.arrivalTime) > new Date() && String(s.tripStatus).toUpperCase() !== 'COMPLETED';
 
 const Schedules = () => {
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
   const [routes, setRoutes] = useState([]);
-  const [loadingRoutes, setLoadingRoutes] = useState(true);
-  const [blockingLoader, setBlockingLoader] = useState(null);
-  const [deleteModal, setDeleteModal] = useState({ show: false, routeId: null });
-  const [editModal, setEditModal] = useState(null);
+  const [schedules, setSchedules] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState('routes');
+  const [search, setSearch] = useState('');
+  const [editing, setEditing] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [toDelete, setToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [toggling, setToggling] = useState(null);
 
-  useEffect(() => {
-    if (loading) return;
-    if (!user || user.role !== 'OPERATOR') { navigate('/'); return; }
-    fetchRoutes();
-  }, [user, loading, navigate]);
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [r, s] = await Promise.allSettled([getRoutes(), getAllSchedules()]);
+    if (r.status === 'rejected') toast.error('Couldn’t load your routes');
+    setRoutes(r.status === 'fulfilled' && Array.isArray(r.value) ? r.value : []);
+    setSchedules(s.status === 'fulfilled' && Array.isArray(s.value) ? s.value : []);
+    setLoading(false);
+  }, []);
 
-  const fetchRoutes = async () => {
+  useEffect(() => { load(); }, [load]);
+
+  const upcoming = useMemo(() => schedules.filter(isUpcoming).sort((a, b) => new Date(a.departureTime) - new Date(b.departureTime)), [schedules]);
+  const byRoute = useMemo(() => {
+    const map = {};
+    upcoming.forEach((s) => { const k = String(s.route?.id); (map[k] = map[k] || []).push(s); });
+    return map;
+  }, [upcoming]);
+
+  const q = search.trim().toLowerCase();
+  const routeRows = routes.filter((r) => !q || [r.name, r.origin, r.destination].some((v) => String(v || '').toLowerCase().includes(q)));
+  const departureRows = upcoming.filter((s) => !q || [s.route?.origin, s.route?.destination, s.bus?.name, s.driverName].some((v) => String(v || '').toLowerCase().includes(q)));
+  const onSale = upcoming.filter((s) => s.active !== false).length;
+
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    const { id, name, origin, destination } = editing;
+    if (![name, origin, destination].every((v) => String(v || '').trim())) return toast.error('Name, from and to are required');
+    setSavingEdit(true);
     try {
-      setLoadingRoutes(true);
-      const data = await getRoutes();
-      setRoutes(data || []);
-    } catch {
-      toast.error('Failed to load routes.');
+      await updateRoute(id, { name: name.trim(), origin: origin.trim(), destination: destination.trim() });
+      setRoutes((prev) => prev.map((r) => (r.id === id ? { ...r, name: name.trim(), origin: origin.trim(), destination: destination.trim() } : r)));
+      toast.success('Route updated');
+      setEditing(null);
+    } catch (err) {
+      toast.error(err.message || 'Couldn’t update the route');
     } finally {
-      setLoadingRoutes(false);
+      setSavingEdit(false);
     }
   };
 
-  const handleDelete = async () => {
-    setBlockingLoader('Deleting route...');
+  const remove = async () => {
+    setDeleting(true);
     try {
-      await deleteRoute(deleteModal.routeId);
-      setRoutes(prev => prev.filter(r => r.id !== deleteModal.routeId));
-      setDeleteModal({ show: false, routeId: null });
-      toast.success('Route deleted.');
-    } catch (e) {
-      toast.error(e.message || 'Failed to delete route.');
+      await deleteRoute(toDelete.id);
+      setRoutes((prev) => prev.filter((r) => r.id !== toDelete.id));
+      toast.success(`${toDelete.name} deleted`);
+      setToDelete(null);
+    } catch (err) {
+      toast.error(err.message || 'Couldn’t delete the route');
     } finally {
-      setBlockingLoader(null);
+      setDeleting(false);
     }
   };
 
-  const handleEditSave = async () => {
-    const { id, name, origin, destination } = editModal;
-    if (!name?.trim() || !origin?.trim() || !destination?.trim()) {
-      toast.error('All fields are required');
-      return;
-    }
-    setBlockingLoader('Updating route...');
+  const toggleSale = async (s) => {
+    setToggling(s.id);
     try {
-      const updated = await updateRoute(id, { name, origin, destination });
-      setRoutes(prev => prev.map(r => r.id === id ? { ...r, ...updated, name, origin, destination } : r));
-      setEditModal(null);
-      toast.success('Route updated.');
-    } catch (e) {
-      toast.error(e.message || 'Failed to update route.');
+      const next = s.active === false;
+      await setScheduleActive(s.id, next);
+      setSchedules((prev) => prev.map((x) => (x.id === s.id ? { ...x, active: next } : x)));
+      toast.success(next ? 'Back on sale' : 'Stopped selling — existing bookings are kept');
+    } catch (err) {
+      toast.error(err.message || 'Couldn’t update the schedule');
     } finally {
-      setBlockingLoader(null);
+      setToggling(null);
     }
   };
-
-  const goToDetail = (routeId) => navigate(`/operator/routes/${routeId}`);
 
   return (
-    <>
-      {blockingLoader && <CenterScreenLoader label={blockingLoader} description="Please wait..." />}
+    <OperatorLayout activeItem="schedules" title="Routes & schedules">
+      <div className="space-y-5">
+        <PageHeader
+          title="Routes & schedules"
+          subtitle="Your routes, their stops and fares, and every upcoming departure"
+          actions={<button onClick={() => navigate(ROUTES.OPERATOR_CREATE_ROUTE)} className={headerPrimaryButton}><span className="material-symbols-outlined text-[18px]">add_road</span>New route</button>}
+        />
 
-      <OperatorLayout activeItem="schedules" title="Routes & Schedules">
-
-        {/* Header */}
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h1 className="text-xl font-black text-slate-900">Routes & Schedules</h1>
-            <p className="text-xs text-slate-500 mt-0.5">{routes.length} route{routes.length !== 1 ? 's' : ''} configured</p>
-          </div>
-          <button
-            onClick={() => navigate(ROUTES.OPERATOR_CREATE_ROUTE)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#002046] text-white text-sm font-bold hover:bg-[#003a80] transition-colors shadow-sm"
-          >
-            <span className="material-symbols-outlined text-sm">add</span>
-            Create Route
-          </button>
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatCard icon="route" tone="navy" label="Routes" value={routes.length} loading={loading} onClick={() => setView('routes')} />
+          <StatCard icon="departure_board" tone="peach" label="Upcoming departures" value={upcoming.length} loading={loading} onClick={() => setView('departures')} />
+          <StatCard icon="sell" tone="green" label="On sale" value={onSale} sub={upcoming.length - onSale ? `${upcoming.length - onSale} switched off` : undefined} loading={loading} />
+          <StatCard icon="badge" tone="amber" label="Without a driver" value={upcoming.filter((s) => !s.driverName).length} sub="Assign one on the route page" loading={loading} />
         </div>
 
-        {/* Loading */}
-        {loadingRoutes ? (
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#002046]/20 border-t-[#002046] mx-auto mb-4" />
-              <p className="text-sm text-slate-500">Loading routes...</p>
-            </div>
-          </div>
-        ) : routes.length === 0 ? (
-          <div className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm p-16 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
-              <span className="material-symbols-outlined text-slate-400 text-3xl">route</span>
-            </div>
-            <h3 className="text-lg font-bold text-slate-800 mb-1">No Routes Created Yet</h3>
-            <p className="text-sm text-slate-500 mb-6">Create your first route to start scheduling trips</p>
-            <button
-              onClick={() => navigate(ROUTES.OPERATOR_CREATE_ROUTE)}
-              className="px-6 py-2.5 rounded-xl bg-[#002046] text-white font-bold text-sm hover:bg-[#003a80] transition-colors"
-            >
-              Create Your First Route
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {routes.map((route) => (
-              <div
-                key={route.id}
-                onClick={() => goToDetail(route.id)}
-                className="rounded-2xl bg-white ring-1 ring-slate-200 shadow-sm overflow-hidden cursor-pointer hover:shadow-md hover:ring-[#002046]/20 transition-all group"
-              >
-                {/* Navy hero */}
-                <div className="bg-gradient-to-br from-[#002046] via-[#003a80] to-[#001224] px-5 py-4 relative">
-                  <div className="absolute -top-1 -right-3 text-6xl opacity-[0.07] select-none pointer-events-none">★</div>
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-sm font-black text-white truncate mb-1.5">{route.name}</h3>
-                      <div className="flex items-center gap-1 text-white/65 text-xs">
-                        <span className="material-symbols-outlined text-xs">location_on</span>
-                        <span className="font-medium truncate">{route.origin}</span>
-                        <span className="material-symbols-outlined text-sm flex-shrink-0">arrow_forward</span>
-                        <span className="material-symbols-outlined text-xs flex-shrink-0">location_on</span>
-                        <span className="font-medium truncate">{route.destination}</span>
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+          <FilterTabs options={[{ value: 'routes', label: 'Routes', count: routes.length }, { value: 'departures', label: 'Upcoming departures', count: upcoming.length }]} value={view} onChange={setView} label="View" />
+          <SearchInput value={search} onChange={setSearch} placeholder={view === 'routes' ? 'Search routes or cities' : 'Search city, bus or driver'} className="lg:ml-auto lg:w-80" />
+        </div>
+
+        {view === 'routes' ? (
+          loading ? <Card><SkeletonRows rows={3} /></Card> : routeRows.length === 0 ? (
+            <Card>
+              <EmptyState icon="route" title={routes.length ? 'No routes match' : 'Create your first route'}
+                subtitle={routes.length ? 'Try a different search.' : 'Add the stops your bus serves and the fare for each part of the trip.'}
+                action={!routes.length && <button onClick={() => navigate(ROUTES.OPERATOR_CREATE_ROUTE)} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white">New route</button>} />
+            </Card>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {routeRows.map((r) => {
+                const list = byRoute[String(r.id)] || [];
+                const next = list[0];
+                return (
+                  <section key={r.id} className="flex flex-col rounded-2xl bg-white border border-slate-200/80 shadow-sm hover:border-[#FDBA74] transition-colors">
+                    <button onClick={() => navigate(`/operator/routes/${r.id}`)} className="flex-1 p-5 text-left">
+                      <p className="text-xs font-bold text-slate-400 truncate">{r.name}</p>
+                      <p className="mt-1 text-lg font-black text-slate-900">{r.origin} <span className="text-[#FF8A65]">→</span> {r.destination}</p>
+                      {r.totalDistanceKm ? <p className="text-xs text-slate-500">{r.totalDistanceKm} km</p> : null}
+                      <div className="mt-4 flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
+                        <span>
+                          <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Next departure</span>
+                          <span className="block text-sm font-bold text-slate-900">{next ? `${istDate(next.departureTime, { year: undefined, weekday: 'short' })} · ${istTime(next.departureTime)}` : 'None scheduled'}</span>
+                        </span>
+                        <span className="text-right">
+                          <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Upcoming</span>
+                          <span className="block text-sm font-bold text-slate-900">{list.length}</span>
+                        </span>
                       </div>
-                    </div>
-                    <div className="flex gap-1 flex-shrink-0">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setEditModal({ id: route.id, name: route.name, origin: route.origin, destination: route.destination }); }}
-                        className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/25 flex items-center justify-center transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-white text-sm">edit</span>
+                    </button>
+                    <div className="flex items-center gap-1.5 border-t border-slate-100 px-5 py-3">
+                      <button onClick={() => navigate(`/operator/routes/${r.id}`)} className="mr-auto inline-flex items-center gap-1 text-sm font-bold text-primary hover:text-[#FF8A65]">
+                        Schedules, stops & fares<span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                       </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setDeleteModal({ show: true, routeId: route.id }); }}
-                        className="w-7 h-7 rounded-lg bg-white/10 hover:bg-red-400/30 flex items-center justify-center transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-white text-sm">delete</span>
-                      </button>
+                      <ActionButton icon="edit" onClick={() => setEditing({ id: r.id, name: r.name, origin: r.origin, destination: r.destination })} aria-label={`Edit ${r.name}`} />
+                      <ActionButton icon="delete" tone="danger" onClick={() => setToDelete(r)} aria-label={`Delete ${r.name}`} />
                     </div>
-                  </div>
-                </div>
-
-                {/* Body */}
-                <div className="px-5 py-4">
-                  <div className="flex items-center gap-3 mb-4">
-                    {route.totalDistanceKm && (
-                      <span className="flex items-center gap-1 text-xs text-slate-500">
-                        <span className="material-symbols-outlined text-slate-400 text-sm">straighten</span>
-                        {route.totalDistanceKm} km
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-slate-400 font-medium">Click to manage schedules, fares & more</span>
-                    <span className="flex items-center gap-1 text-xs font-bold text-[#002046] group-hover:gap-2 transition-all">
-                      Open
-                      <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </OperatorLayout>
-
-      {/* Edit Route Modal */}
-      {editModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl ring-1 ring-slate-200 overflow-hidden">
-            <div className="flex items-center gap-3 px-6 py-4 border-b border-slate-100">
-              <div className="w-9 h-9 bg-[#002046]/10 rounded-xl flex items-center justify-center">
-                <span className="material-symbols-outlined text-[#002046] text-lg">edit_road</span>
-              </div>
-              <h3 className="font-extrabold text-base">Edit Route</h3>
+                  </section>
+                );
+              })}
             </div>
-            <div className="px-6 py-4 space-y-3">
-              {[
-                { label: 'Route Name *', field: 'name' },
-                { label: 'Origin *', field: 'origin' },
-                { label: 'Destination *', field: 'destination' },
-              ].map(({ label, field }) => (
-                <div key={field}>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">{label}</label>
-                  <input
-                    value={editModal[field]}
-                    onChange={e => setEditModal(prev => ({ ...prev, [field]: e.target.value }))}
-                    className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white outline-none focus:ring-1 focus:ring-[#002046]"
-                  />
-                </div>
+          )
+        ) : (
+          <Card>
+            {loading ? <SkeletonRows /> : departureRows.length === 0 ? (
+              <EmptyState icon="departure_board" title="No upcoming departures" subtitle="Open a route to add a schedule." />
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {departureRows.map((s) => {
+                  const status = TRIP_STATUS[String(s.tripStatus || 'SCHEDULED').toUpperCase()] || TRIP_STATUS.SCHEDULED;
+                  const selling = s.active !== false;
+                  return (
+                    <li key={s.id} className={`grid gap-3 px-5 py-4 md:grid-cols-[110px_minmax(0,1.4fr)_minmax(0,1fr)_auto] md:items-center ${selling ? '' : 'bg-slate-50/70'}`}>
+                      <div>
+                        <p className="text-sm font-black text-slate-900">{istTime(s.departureTime)}</p>
+                        <p className="text-xs text-slate-500">{istDate(s.departureTime, { year: undefined, weekday: 'short' })}</p>
+                      </div>
+                      <button onClick={() => s.route?.id && navigate(`/operator/routes/${s.route.id}`)} className="min-w-0 text-left">
+                        <p className="font-bold text-slate-900 truncate">{s.route?.origin} <span className="text-[#FF8A65]">→</span> {s.route?.destination}</p>
+                        <p className="text-xs text-slate-500 truncate">{s.bus?.name || 'No bus'} · {FREQUENCY_LABEL[String(s.frequency || 'ONCE').toUpperCase()] || s.frequency}</p>
+                      </button>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <StatusPill tone={status.tone}>{status.label}{s.delayMinutes ? ` · ${s.delayMinutes} min` : ''}</StatusPill>
+                        {s.driverName ? <span className="text-xs text-slate-500">Driver: {s.driverName}</span> : <StatusPill tone="amber">No driver</StatusPill>}
+                      </div>
+                      <label className="flex items-center gap-2 md:justify-end cursor-pointer">
+                        <span className="text-xs font-bold text-slate-600">{selling ? 'On sale' : 'Off'}</span>
+                        <button role="switch" aria-checked={selling} aria-label="On sale" disabled={toggling === s.id} onClick={() => toggleSale(s)}
+                          className={`relative h-6 w-11 flex-shrink-0 rounded-full transition-colors disabled:opacity-50 ${selling ? 'bg-green-600' : 'bg-slate-300'}`}>
+                          <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${selling ? 'left-[22px]' : 'left-0.5'}`} />
+                        </button>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Card>
+        )}
+      </div>
+
+      {editing && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="edit-route-title"
+          onClick={(e) => e.target === e.currentTarget && !savingEdit && setEditing(null)}>
+          <form onSubmit={saveEdit} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 id="edit-route-title" className="text-lg font-black text-slate-900">Edit route</h2>
+            <div className="mt-4 space-y-3">
+              {[['name', 'Route name'], ['origin', 'From'], ['destination', 'To']].map(([k, label]) => (
+                <label key={k} className="block">
+                  <span className="mb-1.5 block text-xs font-bold text-slate-600">{label}</span>
+                  <input className={INPUT} value={editing[k] || ''} onChange={(e) => setEditing((p) => ({ ...p, [k]: e.target.value }))} />
+                </label>
               ))}
             </div>
-            <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
-              <button onClick={() => setEditModal(null)} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
-              <button onClick={handleEditSave} disabled={Boolean(blockingLoader)} className="flex-1 py-2.5 rounded-xl bg-[#002046] text-white font-bold text-sm hover:bg-[#003a80] transition-colors disabled:opacity-60">Save Route</button>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={() => setEditing(null)} disabled={savingEdit} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50">Cancel</button>
+              <button type="submit" disabled={savingEdit} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-[#102A4C] disabled:opacity-50">{savingEdit ? 'Saving…' : 'Save'}</button>
             </div>
-          </div>
+          </form>
         </div>
       )}
 
-      {/* Delete Modal */}
-      {deleteModal.show && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl ring-1 ring-slate-200 overflow-hidden">
-            <div className="px-6 py-6 text-center">
-              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
-                <span className="material-symbols-outlined text-red-500 text-xl">delete</span>
-              </div>
-              <h3 className="text-base font-extrabold text-slate-900 mb-1">Delete Route</h3>
-              <p className="text-sm text-slate-500 mb-3">This action cannot be undone</p>
-              <p className="text-sm text-slate-600">All associated schedules, fares, and points will also be deleted.</p>
-            </div>
-            <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
-              <button onClick={() => setDeleteModal({ show: false, routeId: null })} className="flex-1 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
-              <button onClick={handleDelete} className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-bold text-sm hover:bg-red-600 transition-colors">Delete</button>
-            </div>
-          </div>
-        </div>
+      {toDelete && (
+        <ConfirmDialog
+          title={`Delete ${toDelete.name}?`}
+          message={(byRoute[String(toDelete.id)] || []).length
+            ? 'This route has upcoming departures. If any of them have bookings the delete will be refused — switch those schedules off instead.'
+            : 'Its schedules, stops and fares are removed permanently. Routes with bookings can’t be deleted.'}
+          confirmLabel="Delete route"
+          tone="danger"
+          busy={deleting}
+          onConfirm={remove}
+          onCancel={() => setToDelete(null)}
+        />
       )}
-    </>
+    </OperatorLayout>
   );
 };
 

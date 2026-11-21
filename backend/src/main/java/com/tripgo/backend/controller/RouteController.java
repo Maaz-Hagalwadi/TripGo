@@ -54,15 +54,14 @@ public class RouteController {
             Authentication auth
     ) {
         User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
-        return routeService.addSegment(routeId, req);
+        return routeService.addSegment(routeId, req, user);
     }
 
 
     @GetMapping("/{routeId}/fares")
     public List<FareResponse> listFares(@PathVariable UUID routeId, Authentication auth) {
         User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
-        Route route = routeRepository.findById(routeId)
-                .orElseThrow(() -> new RuntimeException("Route not found"));
+        Route route = routeService.requireOwnedRoute(routeId, user);
         return fareRepository.findByRouteOrderBySeatType(route).stream()
                 .map(f -> new FareResponse(
                         f.getId(),
@@ -73,21 +72,24 @@ public class RouteController {
                         f.getGstPercent(),
                         f.getBaseFare() != null && f.getGstPercent() != null
                                 ? f.getBaseFare().add(f.getBaseFare().multiply(f.getGstPercent().divide(java.math.BigDecimal.valueOf(100))))
-                                : f.getBaseFare()
+                                : f.getBaseFare(),
+                        f.getBus() != null ? f.getBus().getId() : null
                 ))
                 .toList();
     }
 
     @PostMapping("/{routeId}/fares")
     public FareResponse addFare(@PathVariable UUID routeId,
-                        @RequestBody AddFareRequest req) {
-        return routeService.addFare(routeId, req);
+                        @RequestBody AddFareRequest req, Authentication auth) {
+        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+        return routeService.addFare(routeId, req, user);
     }
 
     @PostMapping("/{routeId}/schedule")
     public RouteScheduleResponse createSchedule(@PathVariable UUID routeId,
-                                        @RequestBody CreateScheduleRequest req) {
-        return routeService.createSchedule(routeId, req);
+                                        @RequestBody CreateScheduleRequest req, Authentication auth) {
+        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+        return routeService.createSchedule(routeId, req, user);
     }
 
     @PatchMapping("/{routeId}/recompute-distance")
@@ -112,7 +114,8 @@ public class RouteController {
                                    @PathVariable UUID fareId,
                                    @RequestBody AddFareRequest req,
                                    Authentication auth) {
-        return routeService.updateFare(routeId, fareId, req);
+        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+        return routeService.updateFare(routeId, fareId, req, user);
     }
 
     @DeleteMapping("/{routeId}/fares/{fareId}")
@@ -120,6 +123,7 @@ public class RouteController {
                                            @PathVariable UUID fareId,
                                            Authentication auth) {
         User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+        routeService.requireOwnedRoute(routeId, user);
         Fare fare = fareRepository.findById(fareId)
                 .filter(f -> f.getRoute().getId().equals(routeId))
                 .orElseThrow(() -> new RuntimeException("Fare not found"));

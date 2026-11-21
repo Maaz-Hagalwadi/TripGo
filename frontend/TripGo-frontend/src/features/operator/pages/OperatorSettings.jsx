@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { isPasswordValid } from '../../../shared/utils/passwordRules';
 import { toast } from 'sonner';
 import OperatorLayout from '../../../shared/components/OperatorLayout';
 import { useAuth } from '../../../shared/contexts/AuthContext';
@@ -27,6 +28,7 @@ const OperatorSettings = () => {
   const fileInputRef = useRef(null);
   const [editModal, setEditModal] = useState({ open: false, firstName: '', lastName: '', phone: '' });
   const [savingPersonal, setSavingPersonal] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   useEffect(() => {
     if (loading) return;
@@ -140,9 +142,8 @@ const OperatorSettings = () => {
       toast.error('New password is required');
       return;
     }
-    const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    if (!passwordRegex.test(newPassword)) {
-      toast.error('Password must be at least 8 characters with letters, numbers, and symbols');
+    if (!isPasswordValid(newPassword)) {
+      toast.error('Use 8+ characters with upper and lower case letters, a number and one of @$!%*?&#');
       return;
     }
     if (newPassword !== confirmPassword) {

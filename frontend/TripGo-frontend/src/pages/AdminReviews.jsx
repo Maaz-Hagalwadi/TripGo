@@ -6,8 +6,8 @@ import { getAdminReviews, hideAdminReview, unhideAdminReview } from '../api/revi
 import {
   ActionButton, Avatar, Card, ConfirmDialog, EmptyState, FilterTabs, PageHeader, Pagination,
   SkeletonRows, StatusPill,
-} from '../features/admin/components/AdminUI';
-import { headerButton } from '../features/admin/components/adminStyles';
+} from '../shared/components/console/ConsoleUI';
+import { headerButton } from '../shared/components/console/consoleStyles';
 
 const PAGE_SIZE = 10;
 const EMPTY_FILTERS = { operatorId: '', busId: '', rating: '', from: '', to: '' };

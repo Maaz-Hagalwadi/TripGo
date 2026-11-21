@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 import { toast } from 'sonner';
-import UserLayout from '../../../shared/components/UserLayout';
+import CheckoutLayout from '../components/CheckoutLayout';
 import { ROUTES } from '../../../shared/constants/routes';
 import { STRIPE_PUBLISHABLE_KEY } from '../../../config/env';
 import { confirmBookingPayment, createPaymentIntent } from '../../../api/paymentService';
@@ -146,6 +146,11 @@ const buildPaymentPayload = (booking, totalAmount, gstAmount, payableAmount) => 
     gstAmount,
     payableAmount,
     guestEmail: booking?.contact?.email || '',
+    // Saved on the booking so the operator's passenger list shows where each traveller boards
+    boardingPointId: booking?.boardingPoint?.id || null,
+    droppingPointId: booking?.droppingPoint?.id || null,
+    // The server re-checks the code and takes the discount off what is charged
+    promoCode: booking?.promoResult?.code || null,
     passengers: seatNumbers.map((seatNumber, index) => {
       const passenger = passengerEntries.find((item) => item?.seatNumber === seatNumber) || passengerEntries[index] || {};
       const { firstName, lastName } = splitPassengerName(passenger?.name);
@@ -483,7 +488,7 @@ const DummyPayment = () => {
 
   if (!booking?.bus) {
     return (
-      <UserLayout activeItem="search" title="Payment" showHeaderSearch={false}>
+      <CheckoutLayout activeItem="search" title="Payment">
         <section className="rounded-2xl bg-white border border-slate-200/80 p-10 text-center">
           <span className="mx-auto mb-3 w-14 h-14 rounded-2xl bg-[#FDBA74]/20 flex items-center justify-center">
             <span className="material-symbols-outlined text-3xl text-orange-600">receipt_long</span>
@@ -494,7 +499,7 @@ const DummyPayment = () => {
             Search buses
           </button>
         </section>
-      </UserLayout>
+      </CheckoutLayout>
     );
   }
 
@@ -505,7 +510,7 @@ const DummyPayment = () => {
   const genderShort = { MALE: 'M', FEMALE: 'F', OTHER: 'O' };
 
   return (
-    <UserLayout activeItem="search" title="Payment" showHeaderSearch={false}>
+    <CheckoutLayout activeItem="search" title="Payment">
       <div className="space-y-5">
         <CheckoutHeader
           from={searchParams.from}
@@ -653,7 +658,7 @@ const DummyPayment = () => {
           </aside>
         </div>
       </div>
-    </UserLayout>
+    </CheckoutLayout>
   );
 };
 

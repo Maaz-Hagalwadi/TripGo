@@ -17,6 +17,8 @@ public class DiscountRequest {
     private BigDecimal maxDiscount;
     private BigDecimal minOrderAmount;
     private Integer usageLimit;
+    private Integer perCustomerLimit;
+    private Boolean firstBookingOnly;
     private LocalDate validFrom;
     private LocalDate validTo;
     private Boolean active;

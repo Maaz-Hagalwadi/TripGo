@@ -10,5 +10,6 @@ public record FareResponse(
         String seatType,
         BigDecimal baseFare,
         BigDecimal gstPercent,
-        BigDecimal totalFare
+        BigDecimal totalFare,
+        UUID busId  // null = applies to every bus on the route
 ) {}

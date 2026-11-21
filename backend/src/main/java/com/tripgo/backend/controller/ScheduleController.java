@@ -58,6 +58,13 @@ public class ScheduleController {
         routeService.deleteSchedule(scheduleId, user);
     }
 
+    // PATCH /operator/schedules/{id}/active  { "active": false } — stop or resume selling this schedule
+    @PatchMapping("/{scheduleId}/active")
+    public RouteScheduleResponse setActive(@PathVariable UUID scheduleId, @RequestBody Map<String, Boolean> body, Authentication auth) {
+        User user = ((CustomUserDetails) auth.getPrincipal()).getUser();
+        return routeService.setScheduleActive(scheduleId, Boolean.TRUE.equals(body.get("active")), user);
+    }
+
     @GetMapping("/{scheduleId}/points")
     public ResponseEntity<?> getPoints(@PathVariable UUID scheduleId, Authentication auth) {
         RouteSchedule schedule = getScheduleOwnedBy(scheduleId, auth);
@@ -79,9 +86,7 @@ public class ScheduleController {
                 .type(req.type())
                 .address(req.address())
                 .landmark(req.landmark())
-                .arrivalTime(req.arrivalTime() != null
-                        ? LocalTime.parse(req.arrivalTime(), DateTimeFormatter.ofPattern("HH:mm"))
-                        : null)
+                .arrivalTime(parsePointTime(req.arrivalTime()))
                 .build();
 
         return ResponseEntity.ok(BoardingDroppingPointResponse.from(pointRepository.save(point)));
@@ -89,6 +94,7 @@ public class ScheduleController {
 
     @GetMapping("/routes/{routeId}/points")
     public ResponseEntity<?> getRoutePoints(@PathVariable UUID routeId, Authentication auth) {
+        routeService.requireOwnedRoute(routeId, ((CustomUserDetails) auth.getPrincipal()).getUser());
         return ResponseEntity.ok(
                 pointRepository.findByRouteId(routeId)
                         .stream().map(BoardingDroppingPointResponse::from).toList()
@@ -197,11 +203,22 @@ public class ScheduleController {
         point.setType(req.type());
         point.setAddress(req.address());
         point.setLandmark(req.landmark());
-        point.setArrivalTime(req.arrivalTime() != null
-                ? LocalTime.parse(req.arrivalTime(), DateTimeFormatter.ofPattern("HH:mm"))
-                : null);
+        point.setArrivalTime(parsePointTime(req.arrivalTime()));
 
         return ResponseEntity.ok(BoardingDroppingPointResponse.from(pointRepository.save(point)));
+    }
+
+    /** A point's time of day ("HH:mm"); travellers pick boarding points by time, so it is required. */
+    private static LocalTime parsePointTime(String value) {
+        if (value == null || value.isBlank()) {
+            throw new com.tripgo.backend.exception.BadRequestException("Add the time the bus reaches this point");
+        }
+        try {
+            return LocalTime.parse(value.trim().length() > 5 ? value.trim().substring(0, 5) : value.trim(),
+                    DateTimeFormatter.ofPattern("HH:mm"));
+        } catch (java.time.format.DateTimeParseException e) {
+            throw new com.tripgo.backend.exception.BadRequestException("Time must look like 21:30");
+        }
     }
 
     private RouteSchedule getScheduleOwnedBy(UUID scheduleId, Authentication auth) {

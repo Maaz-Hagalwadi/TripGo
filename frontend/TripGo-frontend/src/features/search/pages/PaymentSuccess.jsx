@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import UserLayout from '../../../shared/components/UserLayout';
+import CheckoutLayout from '../components/CheckoutLayout';
 import { downloadTicketFromApi, getMyBookings } from '../../../api/bookingService';
 import { confirmBookingPayment } from '../../../api/paymentService';
 import { ROUTES } from '../../../shared/constants/routes';
@@ -17,6 +17,22 @@ const BOOKING_DRAFT_PREFIX = 'tripgo_booking_draft_';
 const toDraftKeyPart = (value) => String(value || '')
   .trim()
   .replace(/[^a-zA-Z0-9_-]+/g, '-');
+
+/**
+ * Forget everything about a finished checkout — including the seat-selection draft, which otherwise
+ * made the next booking of the same bus jump straight to passenger details with the old seats.
+ */
+const clearCheckout = (pendingPayment) => {
+  localStorage.removeItem(PAYMENT_STORAGE_KEY);
+  sessionStorage.removeItem(PAYMENT_INTENT_CACHE_KEY);
+  sessionStorage.removeItem(PAYMENT_FLOW_STORAGE_KEY);
+  localStorage.removeItem(CURRENT_BOOKING_STORAGE_KEY);
+  const bus = pendingPayment?.bus || pendingPayment?.bookingState?.bus;
+  const ids = [pendingPayment?.scheduleId, bus?.scheduleId, bus?.id].filter(Boolean).map(toDraftKeyPart);
+  Object.keys(localStorage)
+    .filter((k) => ids.some((id) => k.startsWith(`${BOOKING_DRAFT_PREFIX}${id}`)))
+    .forEach((k) => localStorage.removeItem(k));
+};
 
 const findMatchingBooking = (bookings, pendingPayment) => {
   if (!pendingPayment) return null;
@@ -124,10 +140,7 @@ const PaymentSuccess = () => {
           const fallbackBooking = buildLatestBookingFallback(pendingPayment, paymentIntentId);
           setBooking(fallbackBooking || null);
           setStatusMessage('Payment received. Your ticket will be sent to your email shortly.');
-          localStorage.removeItem(PAYMENT_STORAGE_KEY);
-          sessionStorage.removeItem(PAYMENT_INTENT_CACHE_KEY);
-          sessionStorage.removeItem(PAYMENT_FLOW_STORAGE_KEY);
-          localStorage.removeItem(CURRENT_BOOKING_STORAGE_KEY);
+          clearCheckout(pendingPayment);
           setLoading(false);
           return;
         }
@@ -145,18 +158,7 @@ const PaymentSuccess = () => {
             if (cancelled) return;
             setBooking(match);
             setStatusMessage(matchStatus === 'CONFIRMED' ? 'Booking confirmed successfully.' : 'Payment received. Booking is syncing to your account.');
-            if (matchStatus === 'CONFIRMED') {
-              localStorage.removeItem(PAYMENT_STORAGE_KEY);
-              sessionStorage.removeItem(PAYMENT_INTENT_CACHE_KEY);
-              sessionStorage.removeItem(PAYMENT_FLOW_STORAGE_KEY);
-              localStorage.removeItem(CURRENT_BOOKING_STORAGE_KEY);
-              if (pendingPayment?.scheduleId) {
-                localStorage.removeItem(`${BOOKING_DRAFT_PREFIX}${pendingPayment.scheduleId}`);
-                localStorage.removeItem(
-                  `${BOOKING_DRAFT_PREFIX}${toDraftKeyPart(pendingPayment.scheduleId)}_${toDraftKeyPart(pendingPayment?.travelDate || pendingPayment?.bookingState?.searchParams?.date || 'unscheduled')}`
-                );
-              }
-            }
+            if (matchStatus === 'CONFIRMED') clearCheckout(pendingPayment);
             setLoading(false);
             return;
           }
@@ -233,7 +235,7 @@ const PaymentSuccess = () => {
     setDownloading(true);
     const ok = await downloadTicketFromApi(bookingId, `TripGo-${bookingCode || 'ticket'}.pdf`);
     setDownloading(false);
-    if (!ok) toast.error('Your ticket is still being prepared. Try again in a minute, or find it in My bookings.');
+    if (!ok) toast.error(isGuest ? 'Your ticket is still being prepared. Try again in a minute — it’s also in your email.' : 'Your ticket is still being prepared. Try again in a minute, or find it in My bookings.');
   };
 
   const returnDate = (() => {
@@ -245,7 +247,7 @@ const PaymentSuccess = () => {
   const genderShort = { MALE: 'M', FEMALE: 'F', OTHER: 'O' };
 
   return (
-    <UserLayout activeItem="bookings" title="Booking status" showHeaderSearch={false}>
+    <CheckoutLayout activeItem="bookings" title="Booking status">
       <div className="mx-auto max-w-3xl space-y-5">
         {/* Hero */}
         <section className="relative overflow-hidden rounded-2xl bg-primary px-6 py-8 text-center text-white shadow-sm">
@@ -365,7 +367,7 @@ const PaymentSuccess = () => {
             {[
               ['mark_email_read', 'E-ticket by email', contactEmail ? `Sent to ${contactEmail}` : 'Sent to your email with a QR code'],
               ['share_location', 'Track your bus', isGuest ? 'Use the link in your ticket email on travel day' : 'Live location in My bookings on travel day'],
-              ['event_busy', 'Plans changed?', 'Cancel from My bookings — refunds follow the policy shown at booking'],
+              ['event_busy', 'Plans changed?', isGuest ? `Contact TripGo support with booking code ${bookingCode || 'from your email'} — refunds follow the policy shown at booking` : 'Cancel from My bookings — refunds follow the policy shown at booking'],
             ].map(([icon, title, sub]) => (
               <li key={title} className="flex gap-3">
                 <span className="w-9 h-9 flex-shrink-0 rounded-xl bg-[#FDBA74]/20 flex items-center justify-center">
@@ -420,7 +422,7 @@ const PaymentSuccess = () => {
           </button>
         </p>
       </div>
-    </UserLayout>
+    </CheckoutLayout>
   );
 };
 
